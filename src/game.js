@@ -1,0 +1,820 @@
+// ===================================================================
+// game.js — simulation core: economy, flags, spawning, victory.
+// ===================================================================
+import { World, toPx, toTile, MAP_W, MAP_H } from './world.js';
+import { TILE } from './art.js';
+import { Building, Lair, Unit, Projectile } from './entities.js';
+import { peasantBrain, heroBrain, guardBrain, monsterBrain } from './brains.js';
+import { Fx } from './fx.js';
+import {
+  BUILDINGS, CLASSES, MONSTERS, LAIRS, FLAGS, RES_RATE, START,
+  DAY_SECONDS, TAX_INTERVAL, RESURRECT_COST, HERO_CLASSES, PEACE_DAYS, STRUCTURE_DMG
+} from './data.js';
+import { makeRng, clamp, dist } from './util.js';
+
+const MONSTER_CAP = 32;
+const WILDLIFE_CAP = 10;
+
+export class Game {
+  constructor(seed, audio) {
+    this.seed = seed >>> 0;
+    this.rng = makeRng(this.seed ^ 0x9e3779b9);
+    this.audio = audio;
+    this.fx = new Fx();
+    this.world = new World(this.seed);
+
+    this.units = [];
+    this.buildings = [];
+    this.lairs = [];
+    this.projectiles = [];
+    this.flags = [];
+    this.graves = [];        // fallen heroes awaiting resurrection
+    this.notices = [];
+
+    this.res = { ...START };
+    this.reserved = 0;       // gold promised to reward flags
+    this.pop = 0;
+    this.popCap = 0;
+    this.day = 1;
+    this.time = 0;
+    this.taxIn = TAX_INTERVAL;
+    this.fogIn = 0;
+    this.waveIn = DAY_SECONDS * (PEACE_DAYS + 1.5);
+    this.wildIn = 25;
+    this.pathBudget = 0;
+    this.speed = 1;
+    this.paused = false;
+    this.over = null;        // 'win' | 'lose'
+    this.stats = { kills: 0, heroesLost: 0, lairsCleared: 0, goldEarned: 0, flagsPaid: 0 };
+    this.nextFlagId = 1;
+    this.peaceDays = PEACE_DAYS;
+    this.selection = [];
+    this.placing = null;
+
+    this.setup();
+  }
+
+  // -----------------------------------------------------------------
+  setup() {
+    const w = this.world;
+    const s = w.start;
+
+    // the lairs the world generator picked out
+    for (const spot of w.lairSpots) {
+      const l = new Lair(this, spot.kind, spot.x, spot.y);
+      this.lairs.push(l);
+      w.addProp(LAIRS[spot.kind].prop, spot.x, spot.y, { lairId: l.id });
+    }
+
+    // your city centre, already standing
+    const px = s.x - 1, py = s.y - 1;
+    const palace = new Building(this, 'palace', px, py, true);
+    this.buildings.push(palace);
+    this.palace = palace;
+    this.recomputePop();
+
+    // three peasants to start the whole machine
+    for (let i = 0; i < 3; i++) {
+      const t = w.nearestFree(s.x + (i - 1) * 2, s.y + 3, 6);
+      this.spawnUnit('peasant', toPx(t.x), toPx(t.y), 'realm');
+    }
+    this.revealAround(palace.x, palace.y, 13);
+    this.camera = { x: palace.x, y: palace.y };
+  }
+
+  // -----------------------------------------------------------------
+  // spawning
+  // -----------------------------------------------------------------
+  spawnUnit(kind, x, y, faction) {
+    const u = new Unit(this, kind, x, y, faction);
+    u.brain = faction === 'monster' ? monsterBrain
+      : kind === 'peasant' ? peasantBrain
+        : kind === 'guard' ? guardBrain : heroBrain;
+    u.homeX = x; u.homeY = y;
+    this.units.push(u);
+    this.fx.puff(x, y - 4, faction === 'monster' ? '#a06ecf' : '#d8cfe6', 5);
+    if (faction === 'realm') this.recomputePop();
+    return u;
+  }
+
+  spawnProjectile(from, to, dmg, kind) {
+    this.projectiles.push(new Projectile(this, from, to, dmg, kind));
+  }
+
+  /** How many monsters are currently marching on the realm. */
+  raidersOut() {
+    let n = 0;
+    for (const u of this.units) if (!u.dead && u.faction === 'monster' && u.raiding) n++;
+    return n;
+  }
+  get raidCap() { return clamp(3 + Math.floor((this.day - this.peaceDays) / 4), 3, 9); }
+
+  /**
+   * A lair only raids once your realm is close enough to bother it.
+   * Expanding toward a lair is what turns it hostile -- that is the pressure
+   * valve that keeps early game survivable and late game tense.
+   */
+  lairThreatensUs(lair, tiles = 22) {
+    if (!lair || lair.dead) return false;
+    const b = this.nearestBuilding(lair.x, lair.y, x => !x.dead, tiles * TILE);
+    return !!b;
+  }
+
+  monsterBudgetOk() {
+    let n = 0;
+    for (const u of this.units) if (!u.dead && u.faction === 'monster') n++;
+    return n < MONSTER_CAP;
+  }
+
+  // -----------------------------------------------------------------
+  // queries used by the AI
+  // -----------------------------------------------------------------
+  enemiesNear(x, y, range, myFaction) {
+    const out = [];
+    const r2 = range * range;
+    for (const u of this.units) {
+      if (u.dead || u.faction === myFaction) continue;
+      const dx = u.x - x, dy = u.y - y;
+      if (dx * dx + dy * dy <= r2) out.push(u);
+    }
+    if (myFaction === 'realm') {
+      for (const l of this.lairs) {
+        if (l.dead) continue;
+        if (dist(l.x, l.y, x, y) - l.radius <= range) out.push(l);
+      }
+    } else {
+      for (const b of this.buildings) {
+        if (b.dead) continue;
+        if (dist(b.x, b.y, x, y) - b.radius <= range) out.push(b);
+      }
+    }
+    return out;
+  }
+
+  /**
+   * Closest hostile within `range`. `includeStructures` brings in whatever
+   * counts as a building to the *other* side: lairs for the realm, your town
+   * for the monsters.
+   */
+  nearestEnemy(x, y, range, myFaction, includeStructures = false) {
+    let best = null, bestD = range;
+    for (const u of this.units) {
+      if (u.dead || u.faction === myFaction) continue;
+      const d = dist(u.x, u.y, x, y);
+      if (d < bestD) { bestD = d; best = u; }
+    }
+    if (includeStructures) {
+      const list = myFaction === 'monster' ? this.buildings : this.lairs;
+      for (const b of list) {
+        if (b.dead) continue;
+        const d = dist(b.x, b.y, x, y) - b.radius;
+        if (d < bestD) { bestD = d; best = b; }
+      }
+    }
+    return best;
+  }
+
+  nearestBuilding(x, y, pred, maxDist = 1e9) {
+    let best = null, bestD = maxDist;
+    for (const b of this.buildings) {
+      if (b.dead || (pred && !pred(b))) continue;
+      const d = dist(b.x, b.y, x, y);
+      if (d < bestD) { bestD = d; best = b; }
+    }
+    return best;
+  }
+
+  /** Is anything of the realm within `range` of this point? */
+  someoneNear(x, y, range) {
+    for (const u of this.units) {
+      if (u.dead || u.faction !== 'realm') continue;
+      if (dist(u.x, u.y, x, y) <= range) return true;
+    }
+    for (const b of this.buildings) {
+      if (b.dead) continue;
+      if (dist(b.x, b.y, x, y) - b.radius <= range) return true;
+    }
+    return false;
+  }
+
+  nearestDepot(x, y) {
+    return this.nearestBuilding(x, y, b => b.complete && b.def.depot);
+  }
+
+  /** Extra yield from a lumberyard / mining camp standing near a node. */
+  depotBoost(tx, ty, res) {
+    let boost = 0;
+    const x = toPx(tx), y = toPx(ty);
+    for (const b of this.buildings) {
+      if (b.dead || !b.complete || !b.def.boost) continue;
+      const add = b.def.boost[res];
+      if (!add) continue;
+      if (dist(b.x, b.y, x, y) <= b.def.radius * TILE) boost += add;
+    }
+    return boost;
+  }
+
+  healBuilding(x, y) {
+    return this.nearestBuilding(x, y, b => b.complete && (b.defId === 'temple' || b.def.shop === 'rest'))
+      || this.nearestBuilding(x, y, b => b.complete && b.def.guild)
+      || this.palace;
+  }
+
+  smithPrice(u) { return 80 + (u.upgrades || 0) * 70; }
+
+  /**
+   * A tile on the edge of the known world, within `maxTiles` of the hero's
+   * home. Anchoring to home is what stops a curious warrior from strolling
+   * forty tiles into an ogre den: to reach further you have to pay a flag.
+   */
+  frontierTile(homeX, homeY, maxTiles) {
+    const w = this.world;
+    const cx = toTile(homeX), cy = toTile(homeY);
+    for (let tries = 0; tries < 60; tries++) {
+      const a = this.rng() * Math.PI * 2;
+      const d = 5 + this.rng() * maxTiles;
+      const tx = Math.round(cx + Math.cos(a) * d);
+      const ty = Math.round(cy + Math.sin(a) * d);
+      if (!w.inside(tx, ty) || !w.passable(tx, ty)) continue;
+      if (w.fog[w.idx(tx, ty)] === 0) return { tx, ty };
+    }
+    return null;
+  }
+
+  /** What a raiding monster marches toward. */
+  raidTarget(u) {
+    const b = this.nearestBuilding(u.x, u.y, b => !b.dead, 2400);
+    if (b) return b;
+    let best = null, bestD = 2400;
+    for (const v of this.units) {
+      if (v.dead || v.faction !== 'realm') continue;
+      const d = dist(v.x, v.y, u.x, u.y);
+      if (d < bestD) { bestD = d; best = v; }
+    }
+    return best;
+  }
+
+  // -----------------------------------------------------------------
+  // damage & death
+  // -----------------------------------------------------------------
+  applyDamage(target, amount, src) {
+    if (!target || target.dead) return;
+    if (target.kindClass === 'unit') {
+      target.damageTaken(amount, src);
+      if (target.faction === 'realm' && !target.target && src && src.kindClass === 'unit') {
+        target.engage(src);   // fight back
+      }
+    } else {
+      amount *= STRUCTURE_DMG;
+      target.damage(amount, src);
+      if (target.faction === 'realm') this.reportAttack(target, src);
+    }
+    this.fx.damage(target.x, target.y - (target.radius || 6), amount);
+  }
+
+  onUnitDeath(u, src) {
+    this.fx.burst(u.x, u.y - 4, u.faction === 'monster' ? '#a03a3a' : '#c0a0d0', 10, 46, 0.6);
+    this.audio.play('die');
+    if (u.job && u.job.type === 'build' && u.job.site) u.job.site.builders--;
+
+    if (u.faction === 'monster') {
+      this.stats.kills++;
+      if (src && src.kindClass === 'unit' && src.faction === 'realm') {
+        src.kills++;
+        src.gainXp(u.def.xp);
+        if (src.isHero) {
+          src.gold += u.def.gold;
+          this.fx.coin(u.x, u.y - 10, u.def.gold);
+        }
+      }
+    } else if (u.isHero) {
+      this.stats.heroesLost++;
+      this.graves.push({
+        kind: u.kind, name: u.name, level: u.level, xp: u.xp,
+        upgrades: u.upgrades || 0, homeId: u.homeId, x: u.x, y: u.y
+      });
+      this.world.addProp('tomb', toTile(u.x), toTile(u.y));
+      this.notify(`${u.name} the ${u.title} has fallen`, 'bad');
+    } else if (u.kind === 'peasant') {
+      this.notify('A peasant was killed', 'bad');
+    }
+    this.recomputePop();
+  }
+
+  /** Shout once, not sixty times a second, when the town is being chewed on. */
+  reportAttack(b, src) {
+    if (this.time - (this.lastAttackCry || -99) < 9) return;
+    this.lastAttackCry = this.time;
+    this.notify(`${b.name} under attack!`, 'bad');
+    this.audio.play('warn');
+    this.alertAt = { x: b.x, y: b.y, t: this.time };
+  }
+
+  onBuildingComplete(b) {
+    this.audio.play('build');
+    this.fx.ring(b.x, b.bottom - 8, '#ffc94a', 16);
+    this.notify(`${b.name} completed`, 'good');
+    this.recomputePop();
+    this.revealAround(b.x, b.y, (b.def.sight || 7));
+    for (const u of this.units) {
+      if (u.job && u.job.type === 'build' && u.job.site === b) u.job = null;
+    }
+  }
+
+  onBuildingDestroyed(b, src) {
+    this.fx.burst(b.x, b.y, '#a03a3a', 24, 70, 1.0);
+    this.audio.play('crash');
+    this.notify(`${b.name} destroyed!`, 'bad');
+    this.world.addProp('rock', b.tx, b.ty);
+    this.recomputePop();
+    if (b === this.palace) this.endGame('lose');
+  }
+
+  onLairDestroyed(l, src) {
+    this.stats.lairsCleared++;
+    this.fx.burst(l.x, l.y, '#ffc94a', 30, 80, 1.2);
+    this.audio.play('crash');
+    const reward = l.def.reward;
+    this.addResource('gold', reward);
+    this.notify(`${l.name} destroyed! +${reward} gold`, 'good');
+    if (src && src.kindClass === 'unit' && src.isHero) src.gainXp(l.def.xp);
+    // its brood loses cohesion and wanders
+    for (const m of l.spawned) if (!m.dead) m.raiding = true;
+    const i = this.world.props.findIndex(p => p.lairId === l.id);
+    if (i >= 0) {
+      const p = this.world.props[i];
+      this.world.propAt[this.world.idx(p.tx, p.ty)] = -1;
+      this.world.props[i] = { ...p, kind: 'rock', lairId: null };
+    }
+    if (this.lairs.every(x => x.dead)) this.endGame('win');
+  }
+
+  endGame(result) {
+    if (this.over) return;
+    this.over = result;
+    this.audio.play(result === 'win' ? 'win' : 'lose');
+  }
+
+  // -----------------------------------------------------------------
+  // economy
+  // -----------------------------------------------------------------
+  addResource(res, n) {
+    this.res[res] = (this.res[res] || 0) + n;
+    if (res === 'gold' && n > 0) this.stats.goldEarned += n;
+  }
+  canAfford(cost) {
+    for (const k in cost) if ((this.res[k] || 0) < cost[k]) return false;
+    return true;
+  }
+  spend(cost) {
+    if (!this.canAfford(cost)) return false;
+    for (const k in cost) this.res[k] -= cost[k];
+    return true;
+  }
+  get spendableGold() { return this.res.gold; }
+
+  recomputePop() {
+    let cap = 0;
+    for (const b of this.buildings) if (!b.dead && b.complete && b.def.pop) cap += b.def.pop;
+    let pop = 0;
+    for (const u of this.units) if (!u.dead && u.faction === 'realm') pop += u.def.pop || 0;
+    this.popCap = cap; this.pop = pop;
+  }
+
+  collectTax() {
+    let total = 0;
+    for (const b of this.buildings) {
+      if (b.dead || !b.complete || !b.def.tax) continue;
+      total += b.def.tax;
+    }
+    if (total > 0) {
+      this.addResource('gold', total);
+      if (this.palace && !this.palace.dead) this.fx.coin(this.palace.x, this.palace.y - 26, total);
+    }
+  }
+
+  // -----------------------------------------------------------------
+  // player commands
+  // -----------------------------------------------------------------
+  canPlace(defId, tx, ty) {
+    const def = BUILDINGS[defId];
+    if (!def) return false;
+    if (!this.world.areaFree(tx, ty, def.fw, def.fh, true)) return false;
+    // must be on ground you have actually seen
+    for (let y = ty; y < ty + def.fh; y++)
+      for (let x = tx; x < tx + def.fw; x++)
+        if (!this.world.seen(x, y)) return false;
+    return true;
+  }
+
+  unlocked(defId) {
+    const def = BUILDINGS[defId];
+    if (!def || !def.needs) return true;
+    return def.needs.every(n => this.buildings.some(b => !b.dead && b.complete && b.defId === n));
+  }
+
+  placeBuilding(defId, tx, ty) {
+    const def = BUILDINGS[defId];
+    if (!this.unlocked(defId)) { this.notify(`Requires ${BUILDINGS[def.needs[0]].name}`, 'bad'); return null; }
+    if (!this.canPlace(defId, tx, ty)) { this.notify('Cannot build there', 'bad'); return null; }
+    if (!this.canAfford(def.cost)) { this.notify('Not enough resources', 'bad'); return null; }
+    this.spend(def.cost);
+    // clear scenery under the footprint
+    for (let y = ty; y < ty + def.fh; y++) {
+      for (let x = tx; x < tx + def.fw; x++) {
+        const i = this.world.idx(x, y);
+        const p = this.world.propAt[i];
+        if (p >= 0) { this.world.propAt[i] = -1; this.world.props[p].removed = true; }
+      }
+    }
+    const b = new Building(this, defId, tx, ty, false);
+    this.buildings.push(b);
+    this.audio.play('place');
+    this.notify(`${def.name} site laid — peasants will build it`, 'good');
+    this.sendBuilders(b, 2);
+    return b;
+  }
+
+  /** Put the nearest peasants on a site; miners remember what they were doing. */
+  sendBuilders(site, count) {
+    const pool = this.units
+      .filter(u => !u.dead && u.kind === 'peasant' && !(u.job && u.job.type === 'build'))
+      .sort((a, c) => {
+        // free hands first, then whoever is closest
+        const fa = a.job ? 1 : 0, fc = c.job ? 1 : 0;
+        if (fa !== fc) return fa - fc;
+        return dist(a.x, a.y, site.x, site.y) - dist(c.x, c.y, site.x, site.y);
+      });
+    let n = 0;
+    for (const p of pool) {
+      if (n >= count) break;
+      if (p.job) p.prevJob = p.job;
+      p.job = { type: 'build', site };
+      p.path = null; p.needPath = null;
+      site.builders++;
+      n++;
+    }
+    if (!n) this.notify('No peasants free to build — hire more', 'bad');
+    return n;
+  }
+
+  recruit(building, kind) {
+    const cls = CLASSES[kind];
+    if (!cls) return null;
+    if (this.pop + (cls.pop || 0) > this.popCap) { this.notify('Population cap reached — build huts', 'bad'); return null; }
+    if (building.def.guild) {
+      const alive = this.units.filter(u => !u.dead && u.homeId === building.id).length;
+      if (alive >= building.def.maxHeroes) { this.notify(`${building.name} is full`, 'bad'); return null; }
+    }
+    if (!this.canAfford(cls.cost)) { this.notify('Not enough gold', 'bad'); return null; }
+    this.spend(cls.cost);
+    const t = building.approach(null);
+    const u = this.spawnUnit(kind, toPx(t.x), toPx(t.y), 'realm');
+    u.homeId = building.id;
+    u.homeX = building.x; u.homeY = building.y;
+    if (u.isHero) {
+      u.gold = 25;
+      this.notify(`${u.name} the ${u.title} joins the realm`, 'good');
+    }
+    this.audio.play('recruit');
+    return u;
+  }
+
+  resurrect(graveIndex) {
+    const gr = this.graves[graveIndex];
+    if (!gr) return null;
+    const cls = CLASSES[gr.kind];
+    const temple = this.buildings.some(b => !b.dead && b.complete && b.defId === 'temple');
+    const price = Math.round(cls.cost.gold * RESURRECT_COST * (temple ? 0.5 : 1));
+    if (this.res.gold < price) { this.notify(`Need ${price} gold to raise ${gr.name}`, 'bad'); return null; }
+    if (this.pop + 1 > this.popCap) { this.notify('Population cap reached', 'bad'); return null; }
+    const guild = this.buildings.find(b => b.id === gr.homeId && !b.dead)
+      || this.buildings.find(b => !b.dead && b.complete && b.def.guild === gr.kind)
+      || this.palace;
+    this.res.gold -= price;
+    const t = guild.approach(null);
+    const u = this.spawnUnit(gr.kind, toPx(t.x), toPx(t.y), 'realm');
+    u.homeId = guild.id; u.homeX = guild.x; u.homeY = guild.y;
+    u.name = gr.name;
+    u.level = gr.level; u.xp = gr.xp; u.upgrades = gr.upgrades;
+    u.bonusDmg = gr.upgrades * 4;
+    u.hp = u.maxHpNow;
+    this.graves.splice(graveIndex, 1);
+    this.fx.ring(u.x, u.y - 8, '#7fd8a0', 16);
+    this.audio.play('level');
+    this.notify(`${u.name} walks again`, 'good');
+    return u;
+  }
+
+  assignWorkers(units, node) {
+    let n = 0;
+    for (const u of units) {
+      if (u.dead || u.kind !== 'peasant') continue;
+      if (u.job && u.job.type === 'build' && u.job.site) u.job.site.builders--;
+      u.job = { type: 'harvest', node };
+      u.prevJob = null;
+      u.state = 'walk';
+      u.path = null; u.needPath = null;
+      const t = this.world.approachTile(node.tx, node.ty, node.fw, node.fh, u.x, u.y);
+      u.goTo(t.x, t.y);
+      n++;
+    }
+    if (n) {
+      const what = node.kind === 'goldmine' ? 'the gold mine' : node.kind === 'quarry' ? 'the quarry' : 'the woods';
+      this.notify(`${n} peasant${n > 1 ? 's' : ''} sent to ${what}`, 'good');
+      this.audio.play('order');
+    }
+    return n;
+  }
+
+  moveWorkers(units, tx, ty) {
+    let n = 0;
+    for (const u of units) {
+      if (u.dead || u.kind !== 'peasant') continue;
+      if (u.job && u.job.type === 'build' && u.job.site) u.job.site.builders--;
+      u.job = null;
+      u.homeX = toPx(tx); u.homeY = toPx(ty);
+      u.goTo(tx, ty, 1);
+      n++;
+    }
+    if (n) this.audio.play('order');
+    return n;
+  }
+
+  // -----------------------------------------------------------------
+  // reward flags
+  // -----------------------------------------------------------------
+  placeFlag(type, x, y, bounty) {
+    const def = FLAGS[type];
+    if (!def) return null;
+    if (type !== 'fear') {
+      if (this.res.gold < bounty) { this.notify('Not enough gold for that bounty', 'bad'); return null; }
+      this.res.gold -= bounty;
+      this.reserved += bounty;
+    } else bounty = 0;
+
+    const f = {
+      id: this.nextFlagId++, type, x, y, bounty, paid: 0,
+      radius: type === 'explore' ? 4 : type === 'fear' ? 5 : 5,
+      done: false, claimed: null, age: 0
+    };
+    this.flags.push(f);
+    this.audio.play('flag');
+    this.notify(`${def.name} raised${bounty ? ` — ${bounty} gold offered` : ''}`);
+    return f;
+  }
+
+  removeFlag(f) {
+    const i = this.flags.indexOf(f);
+    if (i < 0) return;
+    if (!f.done && f.bounty > f.paid) {
+      const refund = f.bounty - f.paid;
+      this.res.gold += refund;
+      this.reserved -= refund;
+      this.notify(`Flag withdrawn — ${refund} gold returned`);
+    }
+    this.flags.splice(i, 1);
+    for (const u of this.units) if (u.flagId === f.id) u.flagId = null;
+  }
+
+  /** Called every think-tick while a hero stands inside a flag's circle. */
+  heroAtFlag(u, f, since) {
+    const r = f.radius * TILE;
+    switch (f.type) {
+      case 'explore': {
+        this.revealAround(f.x, f.y, f.radius + 4);
+        this.payFlag(f, u, f.bounty);
+        break;
+      }
+      case 'attack': {
+        const foe = this.nearestEnemy(f.x, f.y, r + 30, 'realm', true);
+        if (foe) { u.engage(foe); u.fight(since); return; }
+        const lair = this.lairs.find(l => !l.dead && dist(l.x, l.y, f.x, f.y) <= r + 24);
+        if (lair) { u.engage(lair); u.fight(since); return; }
+        this.payFlag(f, u, f.bounty);
+        break;
+      }
+      case 'defend': {
+        f.claimed = u.id;
+        const foe = this.nearestEnemy(f.x, f.y, r + 40, 'realm');
+        if (foe) { u.engage(foe); u.fight(since); }
+        const tick = Math.min(f.bounty - f.paid, (f.bounty / 45) * since);
+        if (tick > 0) {
+          f.paid += tick;
+          u.gold += tick;
+          this.reserved -= tick;
+          if (Math.random() < 0.12) this.fx.coin(u.x, u.y - 12, tick * 8);
+        }
+        if (f.paid >= f.bounty - 0.01) this.payFlag(f, u, 0);
+        break;
+      }
+    }
+  }
+
+  payFlag(f, u, amount) {
+    if (f.done) return;
+    f.done = true;
+    if (amount > 0) {
+      u.gold += amount;
+      this.reserved -= amount;
+      f.paid += amount;
+      this.fx.coin(u.x, u.y - 14, amount);
+      this.fx.text(f.x, f.y - 20, 'CLAIMED', '#ffc94a', 24);
+    }
+    this.stats.flagsPaid++;
+    this.audio.play('reward');
+    this.notify(`${u.name} claimed the ${FLAGS[f.type].name.toLowerCase()}${amount ? ` (+${Math.round(amount)}g)` : ''}`, 'good');
+    const i = this.flags.indexOf(f);
+    if (i >= 0) this.flags.splice(i, 1);
+    for (const h of this.units) if (h.flagId === f.id) h.flagId = null;
+  }
+
+  heroShops(u, b) {
+    u.shopCool = (u.shopCool || 0) - 0.3;
+    if (u.shopCool > 0) return;
+    u.shopCool = 1.4;
+    const kind = b.def.shop;
+    let price = 0;
+    if (kind === 'potion') {
+      price = 45;
+      if (u.gold < price || u.potions >= 2) { u.state = 'idle'; return; }
+      u.potions++;
+      this.fx.text(b.x, b.y - 18, 'potion', '#7fd8a0', 18);
+    } else if (kind === 'weapon') {
+      price = this.smithPrice(u);
+      if (u.gold < price) { u.state = 'idle'; return; }
+      u.upgrades = (u.upgrades || 0) + 1;
+      u.bonusDmg += 4;
+      this.fx.text(b.x, b.y - 18, 'weapon +' + u.upgrades, '#ffc94a', 20);
+    } else if (kind === 'rest') {
+      price = 25;
+      if (u.gold < price || u.hp > u.maxHpNow * 0.92) { u.state = 'idle'; return; }
+      u.heal(u.maxHpNow * 0.45);
+    } else return;
+
+    u.gold -= price;
+    const tax = Math.round(price * 0.7);
+    this.addResource('gold', tax);
+    this.fx.coin(b.x, b.y - b.radius - 6, tax);
+    this.audio.play('coin');
+  }
+
+  // -----------------------------------------------------------------
+  revealAround(x, y, rTiles) {
+    this.world.reveal(toTile(x), toTile(y), rTiles);
+  }
+
+  notify(msg, tone = '') {
+    this.notices.push({ msg, tone, t: 0 });
+    if (this.notices.length > 6) this.notices.shift();
+  }
+
+  exhaustNode(node) {
+    node.amount = 0;
+    const w = this.world;
+    for (let y = node.ty; y < node.ty + node.fh; y++)
+      for (let x = node.tx; x < node.tx + node.fw; x++)
+        if (w.inside(x, y)) w.blocked[w.idx(x, y)] = 0;
+    for (const u of this.units) if (u.job && u.job.node === node) u.job = null;
+  }
+
+  // -----------------------------------------------------------------
+  // main tick
+  // -----------------------------------------------------------------
+  update(dt) {
+    if (this.paused || this.over) { this.fx.update(dt); return; }
+    dt = Math.min(dt, 0.05) * this.speed;
+    this.time += dt;
+    this.pathBudget = 26;
+
+    // day clock
+    const newDay = 1 + Math.floor(this.time / DAY_SECONDS);
+    if (newDay !== this.day) {
+      this.day = newDay;
+      this.onNewDay();
+    }
+
+    // taxes
+    this.taxIn -= dt;
+    if (this.taxIn <= 0) { this.taxIn = TAX_INTERVAL; this.collectTax(); }
+
+    // fog: dim, then everything friendly lights its own patch
+    this.fogIn -= dt;
+    if (this.fogIn <= 0) {
+      this.fogIn = 0.25;
+      this.world.dimFog();
+      for (const u of this.units) {
+        if (u.dead || u.faction !== 'realm') continue;
+        this.world.reveal(u.tx, u.ty, u.def.sight);
+      }
+      for (const b of this.buildings) {
+        if (b.dead) continue;
+        this.world.reveal(toTile(b.x), toTile(b.y), b.def.sight || (b.complete ? (b.defId === 'palace' ? 12 : 8) : 5));
+      }
+    }
+
+    for (const b of this.buildings) if (!b.dead) b.update(dt);
+    for (const l of this.lairs) if (!l.dead) l.update(dt);
+    for (const u of this.units) if (!u.dead) u.update(dt);
+    for (const p of this.projectiles) if (!p.dead) p.update(dt);
+    this.separate();
+    this.fx.update(dt);
+
+    // wandering wildlife keeps the map from feeling empty
+    this.wildIn -= dt;
+    if (this.wildIn <= 0) {
+      this.wildIn = 22 + this.rng() * 26;
+      this.spawnWildlife();
+    }
+
+    // escalating raids
+    this.waveIn -= dt;
+    if (this.waveIn <= 0) {
+      this.waveIn = Math.max(80, 200 - this.day * 5);
+      if (this.day > PEACE_DAYS) this.launchRaid();
+    }
+
+    // sweep the dead
+    if (this.units.some(u => u.dead)) this.units = this.units.filter(u => !u.dead);
+    if (this.projectiles.length && this.projectiles.some(p => p.dead)) {
+      this.projectiles = this.projectiles.filter(p => !p.dead);
+    }
+    if (this.buildings.some(b => b.dead)) {
+      this.buildings = this.buildings.filter(b => !b.dead);
+      this.recomputePop();
+    }
+    this.selection = this.selection.filter(e => !e.dead);
+  }
+
+  /**
+   * Nudge overlapping units apart. Without this a mine looks like it is
+   * being worked by one very wide peasant.
+   */
+  separate() {
+    const arr = this.units;
+    const MIN = 7, MIN2 = MIN * MIN;
+    for (let i = 0; i < arr.length; i++) {
+      const a = arr[i];
+      if (a.dead) continue;
+      for (let j = i + 1; j < arr.length; j++) {
+        const b = arr[j];
+        if (b.dead) continue;
+        let dx = b.x - a.x, dy = b.y - a.y;
+        const d2 = dx * dx + dy * dy;
+        if (d2 >= MIN2) continue;
+        let d = Math.sqrt(d2);
+        if (d < 0.001) { dx = (Math.random() - 0.5); dy = (Math.random() - 0.5); d = 0.5; }
+        const push = (MIN - d) * 0.22 / d;
+        const ax = a.x - dx * push, ay = a.y - dy * push;
+        const bx = b.x + dx * push, by = b.y + dy * push;
+        if (this.world.passable(toTile(ax), toTile(ay))) { a.x = ax; a.y = ay; }
+        if (this.world.passable(toTile(bx), toTile(by))) { b.x = bx; b.y = by; }
+      }
+    }
+  }
+
+  onNewDay() {
+    if (this.day % 5 === 0) this.notify(`Day ${this.day}`);
+    // heroes idle in town slowly recover between adventures
+    for (const u of this.units) {
+      if (u.faction === 'realm' && u.isHero && !u.target) u.heal(u.maxHpNow * 0.1);
+    }
+  }
+
+  spawnWildlife() {
+    let wild = 0;
+    for (const u of this.units) if (!u.dead && u.faction === 'monster' && !u.lair) wild++;
+    if (wild >= WILDLIFE_CAP || !this.monsterBudgetOk()) return;
+    const w = this.world;
+    for (let t = 0; t < 40; t++) {
+      const x = this.rng.int(2, w.w - 3), y = this.rng.int(2, w.h - 3);
+      if (!w.passable(x, y)) continue;
+      const d = dist(toPx(x), toPx(y), this.palace.x, this.palace.y);
+      if (d < 22 * TILE) continue;
+      const kind = this.rng.chance(0.6) ? 'rat' : 'slime';
+      const m = this.spawnUnit(kind, toPx(x), toPx(y), 'monster');
+      m.raidIn = 1e9;   // wildlife never raids the town
+      return;
+    }
+  }
+
+  launchRaid() {
+    const live = this.lairs.filter(l => !l.dead && l.active && this.lairThreatensUs(l, 26));
+    if (!live.length || !this.monsterBudgetOk()) return;
+    // the further into the game, the nastier the visitors
+    const lair = this.rng.pick(live);
+    const size = clamp(1 + Math.floor((this.day - PEACE_DAYS) / 4), 1, 4);
+    let kind = lair.def.spawn;
+    if (this.day > 16 && this.rng.chance(0.3)) kind = 'demon';
+    for (let i = 0; i < size; i++) {
+      if (!this.monsterBudgetOk()) break;
+      const t = this.world.nearestFree(lair.tx + this.rng.int(-2, 2), lair.ty + this.rng.int(-2, 2), 6);
+      const m = this.spawnUnit(kind, toPx(t.x), toPx(t.y), 'monster');
+      m.lair = lair;
+      m.raiding = true;
+      m.raidIn = 0;
+    }
+    this.notify(`A ${MONSTERS[kind].name} raid marches on the realm!`, 'bad');
+    this.audio.play('warn');
+  }
+}

@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#1a1226">
+<meta name="description" content="Majesty-like fantasy kingdom sim: build a city centre, hire autonomous heroes, bribe them with reward flags, and send workers to the gold mines.">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Realm of Majesty &mdash; 16-bit Kingdom Sim</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' fill='%231a1226'/><path d='M3 11h10v2H3zM3 5l2 3 3-4 3 4 2-3v5H3z' fill='%23ffc94a'/></svg>">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<div id="boot">
+  <div class="boot-inner">
+    <h1>REALM OF MAJESTY</h1>
+    <p class="tag">a 16-bit kingdom of stubborn heroes</p>
+    <div class="boot-bar"><i id="bootbar"></i></div>
+    <p id="bootmsg">forging the realm&hellip;</p>
+  </div>
+</div>
+
+<div id="app" hidden>
+  <canvas id="view"></canvas>
+
+  <!-- ===== top resource bar ===== -->
+  <div id="topbar" class="panel">
+    <div class="res" title="Gold"><span class="ico ico-gold"></span><b id="r-gold">0</b><i id="r-gold-d"></i></div>
+    <div class="res" title="Wood"><span class="ico ico-wood"></span><b id="r-wood">0</b></div>
+    <div class="res" title="Stone"><span class="ico ico-stone"></span><b id="r-stone">0</b></div>
+    <div class="res" title="Population / cap"><span class="ico ico-pop"></span><b id="r-pop">0/0</b></div>
+    <div class="spacer"></div>
+    <div class="res clock" title="Day"><span class="ico ico-day"></span><b id="r-day">1</b></div>
+    <button id="btn-menu" class="iconbtn" aria-label="Menu">&#9776;</button>
+  </div>
+
+  <!-- ===== selection / info panel ===== -->
+  <div id="selpanel" class="panel" hidden></div>
+
+  <!-- ===== alerts ===== -->
+  <div id="alerts"></div>
+
+  <!-- ===== bottom command bar ===== -->
+  <div id="cmdbar" class="panel">
+    <button class="cmd" data-tab="build"><span class="ico ico-hammer"></span><span>Build</span></button>
+    <button class="cmd" data-tab="flags"><span class="ico ico-flag"></span><span>Flags</span></button>
+    <button class="cmd" data-tab="kingdom"><span class="ico ico-crown"></span><span>Realm</span></button>
+    <div class="cmd-sep"></div>
+    <button class="cmd" id="btn-speed"><span class="ico ico-speed"></span><span id="speedlbl">1x</span></button>
+    <button class="cmd" id="btn-zoom"><span class="ico ico-zoom"></span><span>Zoom</span></button>
+  </div>
+
+  <!-- ===== drawer (build menu / flags / kingdom) ===== -->
+  <div id="drawer" class="panel" hidden>
+    <div class="drawer-head">
+      <b id="drawer-title">Build</b>
+      <button id="drawer-close" class="iconbtn">&times;</button>
+    </div>
+    <div id="drawer-body"></div>
+  </div>
+
+  <!-- ===== placement banner ===== -->
+  <div id="placebar" class="panel" hidden>
+    <span id="placemsg"></span>
+    <button id="placecancel" class="btn small">Cancel</button>
+  </div>
+
+  <!-- ===== modal ===== -->
+  <div id="modal" hidden><div class="modal-box panel" id="modalbox"></div></div>
+</div>
+
+<script type="module" src="src/main.js"></script>
+</body>
+</html>

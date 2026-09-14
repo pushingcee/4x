@@ -1,0 +1,510 @@
+// ===================================================================
+// brains.js — the Majesty part.
+//
+// You never order a hero anywhere. You make places attractive and the
+// hero decides. Every hero scores the world every third of a second:
+// bounties pull, danger pushes, greed and courage weight both.
+// Peasants are the exception — those you may boss around directly.
+// ===================================================================
+import { toPx, toTile } from './world.js';
+import { TILE } from './art.js';
+import { RES_RATE, CLASSES, BUILDINGS } from './data.js';
+import { dist, clamp } from './util.js';
+
+const tileDist = (a, b) => dist(a.x, a.y, b.x, b.y) / TILE;
+
+/**
+ * Distance from a unit to the nearest edge of a tile footprint, in pixels.
+ * Centre-distance lies about diagonals and leaves workers pacing forever.
+ */
+function edgeDist(u, tx, ty, fw, fh) {
+  const x0 = tx * TILE, y0 = ty * TILE, x1 = x0 + fw * TILE, y1 = y0 + fh * TILE;
+  const dx = Math.max(x0 - u.x, 0, u.x - x1);
+  const dy = Math.max(y0 - u.y, 0, u.y - y1);
+  return Math.hypot(dx, dy);
+}
+const touching = (u, o, slack = 1.3) =>
+  edgeDist(u, o.tx, o.ty, o.fw || 1, o.fh || 1) <= slack * TILE;
+
+/** Send a unit to stand beside a footprint. */
+function walkTo(u, g, o) {
+  if (u.path || u.needPath) return;
+  const t = g.world.approachTile(o.tx, o.ty, o.fw || 1, o.fh || 1, u.x, u.y);
+  u.goTo(t.x, t.y);
+}
+
+// -------------------------------------------------------------------
+// PEASANTS — directly commandable workforce
+// -------------------------------------------------------------------
+export function peasantBrain(u, since) {
+  const g = u.game;
+
+  // 1. self-preservation beats any order
+  const foe = g.nearestEnemy(u.x, u.y, 58, 'realm');
+  if (foe) {
+    u.fleeing = 2.6;
+    u.state = 'flee';
+    const safe = g.nearestBuilding(u.x, u.y, b => b.complete) || g.palace;
+    if (safe && !touching(u, safe, 2)) walkTo(u, g, safe);
+    return;
+  }
+  if (u.fleeing > 0) return;
+
+  const job = u.job;
+
+  // 2. hauling a full load home
+  if (u.carry > 0 && (u.state === 'deliver' || !job)) return deliver(u, g);
+
+  if (job && job.type === 'harvest') return doHarvest(u, g, since);
+  if (job && job.type === 'build') return doBuild(u, g, since, job.site);
+
+  // 3. unassigned peasants make themselves useful
+  const site = g.nearestBuilding(u.x, u.y, b => !b.complete && b.builders < 4);
+  if (site) { u.job = { type: 'build', site }; site.builders++; return; }
+
+  const hurt = g.nearestBuilding(u.x, u.y, b => b.complete && b.hp < b.maxHp * 0.95, 220);
+  if (hurt) { u.state = 'repair'; return doRepair(u, g, since, hurt); }
+
+  idleAround(u, g, u.homeX, u.homeY, 5);
+}
+
+function carryCap(u) { return RES_RATE[u.job?.node?.kind]?.carry || 12; }
+
+function doHarvest(u, g, since) {
+  const node = u.job.node;
+  if (!node || node.amount <= 0) {
+    if (node) g.notify(`${node.kind === 'goldmine' ? 'Gold mine' : node.kind === 'quarry' ? 'Quarry' : 'Woods'} exhausted`, 'bad');
+    u.job = null; u.state = 'idle';
+    return;
+  }
+  const cap = RES_RATE[node.kind].carry;
+  if (u.carry >= cap) return deliver(u, g);
+
+  if (touching(u, node)) {
+    u.state = 'harvest';
+    u.path = null;
+    const info = RES_RATE[node.kind];
+    const boost = g.depotBoost(node.tx, node.ty, info.res);
+    const got = Math.min(info.rate * (1 + boost) * since, cap - u.carry, node.amount);
+    u.carry += got;
+    node.amount -= got;
+    u.carryRes = info.res;
+    if (Math.random() < 0.28) {
+      g.fx.puff(u.x + (Math.random() - .5) * 8, u.y - 4,
+        info.res === 'gold' ? '#ffc94a' : info.res === 'stone' ? '#b6bccb' : '#b4753a', 2);
+    }
+    if (node.amount <= 0) g.exhaustNode(node);
+  } else {
+    u.state = 'walk';
+    walkTo(u, g, node);
+  }
+}
+
+function deliver(u, g) {
+  u.state = 'deliver';
+  const depot = g.nearestDepot(u.x, u.y);
+  if (!depot) { u.state = 'idle'; return; }
+  if (touching(u, depot)) {
+    if (u.carry > 0) {
+      const amount = Math.floor(u.carry);
+      if (amount > 0) {
+        g.addResource(u.carryRes, amount);
+        g.fx.coin(depot.x, depot.y - depot.radius, amount);
+        g.audio.play('coin');
+      }
+      u.carry = 0;
+    }
+    u.state = u.job ? 'walk' : 'idle';
+    u.path = null;
+    if (u.job && u.job.type === 'harvest') walkTo(u, g, u.job.node);
+  } else {
+    walkTo(u, g, depot);
+  }
+}
+
+function doBuild(u, g, since, site) {
+  if (!site || site.dead || site.complete) {
+    if (site) site.builders = Math.max(0, site.builders - 1);
+    // back to the mine they were pulled off
+    u.job = u.prevJob && u.prevJob.node && u.prevJob.node.amount > 0 ? u.prevJob : null;
+    u.prevJob = null;
+    u.state = 'idle';
+    return;
+  }
+  if (touching(u, site, 1.5)) {
+    u.state = 'build';
+    u.path = null;
+    site.addProgress(since / site.def.build);
+    if (Math.random() < 0.4) g.fx.puff(site.x + (Math.random() - .5) * site.fw * TILE, site.bottom - 6, '#d8cfe6', 1);
+  } else {
+    u.state = 'walk';
+    walkTo(u, g, site);
+  }
+}
+
+function doRepair(u, g, since, b) {
+  if (touching(u, b, 1.5)) {
+    u.path = null;
+    b.hp = Math.min(b.maxHp, b.hp + b.maxHp * 0.06 * since);
+    if (Math.random() < 0.3) g.fx.puff(b.x, b.bottom - 8, '#ffd070', 1);
+  } else {
+    walkTo(u, g, b);
+  }
+}
+
+function idleAround(u, g, cx, cy, r) {
+  u.state = 'idle';
+  u.idleWander -= 0.3;
+  if (u.idleWander > 0 || u.path || u.needPath) return;
+  u.idleWander = 2 + Math.random() * 4;
+  const a = Math.random() * Math.PI * 2, d = Math.random() * r;
+  const t = g.world.nearestFree(toTile(cx) + Math.cos(a) * d, toTile(cy) + Math.sin(a) * d, 5);
+  u.goTo(t.x, t.y);
+}
+
+// -------------------------------------------------------------------
+// HEROES — they weigh the world and decide for themselves
+// -------------------------------------------------------------------
+
+/** Rough combat strength, used on both sides of every risk assessment. */
+function strength(e) {
+  if (e.kindClass !== 'unit') return e.maxHp * 0.35;
+  return e.power * 3.2 + e.hp * 0.7;
+}
+
+/**
+ * How scared is this hero of what is standing around (x,y)?
+ * Friends count whether they are already at the trouble or merely near the
+ * hero -- heroes are optimists about who will follow them.
+ */
+function dangerAt(g, x, y, radius, hero) {
+  let threat = 0;
+  for (const m of g.units) {
+    if (m.dead || m.faction !== 'monster') continue;
+    if (dist(m.x, m.y, x, y) > radius) continue;
+    threat += strength(m);
+  }
+  let mine = strength(hero) * (1 + (hero.level - 1) * 0.12);
+  for (const a of g.units) {
+    if (a.dead || a.faction !== 'realm' || a === hero) continue;
+    if (!a.isHero && a.kind !== 'guard') continue;
+    const withTrouble = dist(a.x, a.y, x, y) <= radius * 1.4;
+    const withMe = dist(a.x, a.y, hero.x, hero.y) <= 170;
+    if (!withTrouble && !withMe) continue;
+    mine += strength(a) * (withTrouble ? 0.8 : 0.55);
+  }
+  return { threat, mine };
+}
+
+function fearPenalty(g, x, y) {
+  let p = 1;
+  for (const f of g.flags) {
+    if (f.type !== 'fear') continue;
+    const d = dist(f.x, f.y, x, y);
+    if (d < f.radius * TILE) p *= 0.04;
+    else if (d < f.radius * TILE * 2) p *= 0.4;
+  }
+  return p;
+}
+
+export function heroBrain(u, since) {
+  const g = u.game;
+  const def = u.def;
+  const hpFrac = u.hp / u.maxHpNow;
+
+  // --- 1. stay alive ------------------------------------------------
+  if (hpFrac < 0.42 && u.potions > 0) {
+    u.potions--;
+    u.heal(u.maxHpNow * 0.5);
+    g.audio.play('drink');
+  }
+  const wounded = hpFrac < def.courage + 0.3;
+  if (wounded) {
+    const local = dangerAt(g, u.x, u.y, 110, u);
+    if (local.threat > local.mine * 0.55 || hpFrac < def.courage) {
+      u.target = null;
+      u.flagId = null;
+      u.state = 'flee';
+      u.fleeing = 1.2;
+      const refuge = g.healBuilding(u.x, u.y);
+      if (refuge) {
+        if (touching(u, refuge, 1.8)) {
+          u.path = null;
+          u.state = 'rest';
+          const rate = refuge.def.shop === 'rest' ? 0.16 : refuge.defId === 'temple' ? 0.2 : 0.09;
+          u.heal(u.maxHpNow * rate * since);
+          if (u.hp >= u.maxHpNow * 0.98) u.state = 'idle';
+        } else {
+          walkTo(u, g, refuge);
+        }
+        return;
+      }
+    }
+  }
+  // out of combat regeneration, slow
+  if (!u.target && u.hp < u.maxHpNow) u.heal(u.maxHpNow * 0.03 * since);
+
+  // --- 2. already swinging at something? ----------------------------
+  if (u.target && !u.target.dead) {
+    const d = u.distTo(u.target);
+    if (d < 260) {
+      // clerics prefer patching people up mid-fight
+      if (def.heal && tryHeal(u, g, since)) return;
+      u.state = 'fight';
+      u.fight(since);
+      return;
+    }
+    u.target = null;
+  }
+  if (def.heal && tryHeal(u, g, since)) return;
+
+  // --- 3. score the world -------------------------------------------
+  const best = chooseGoal(u, g);
+  u.goalKind = best ? best.kind : 'idle';
+
+  if (!best) { return heroIdle(u, g); }
+
+  switch (best.kind) {
+    case 'fight':
+      u.engage(best.target);
+      u.state = 'fight';
+      u.fight(since);
+      return;
+
+    case 'flag': {
+      const f = best.flag;
+      u.flagId = f.id;
+      u.state = 'quest';
+      const d = dist(u.x, u.y, f.x, f.y);
+      if (d > f.radius * TILE * 0.7) {
+        if (!u.path && !u.needPath) u.goTo(toTile(f.x), toTile(f.y), 1);
+      } else {
+        u.path = null;
+        g.heroAtFlag(u, f, since);
+      }
+      return;
+    }
+
+    case 'lair': {
+      const l = best.lair;
+      u.state = 'quest';
+      if (u.distTo(l) <= def.range) { u.engage(l); u.fight(since); }
+      else walkTo(u, g, l);
+      return;
+    }
+
+    case 'shop': {
+      const b = best.building;
+      u.state = 'shop';
+      if (touching(u, b, 1.6)) { u.path = null; g.heroShops(u, b); }
+      else walkTo(u, g, b);
+      return;
+    }
+
+    case 'explore': {
+      u.state = 'explore';
+      if (!u.path && !u.needPath) u.goTo(best.tx, best.ty, 2);
+      if (u.arrived) { u.arrived = false; u.exploreGoal = null; }
+      return;
+    }
+  }
+  heroIdle(u, g);
+}
+
+function tryHeal(u, g, since) {
+  const h = u.def.heal;
+  u.healCool = (u.healCool || 0) - since;
+  if (u.healCool > 0) return false;
+  let best = null, worst = 1;
+  for (const a of g.units) {
+    if (a.dead || a.faction !== 'realm' || a === u) continue;
+    const f = a.hp / a.maxHpNow;
+    if (f >= 0.72) continue;
+    if (dist(a.x, a.y, u.x, u.y) > h.range) continue;
+    if (f < worst) { worst = f; best = a; }
+  }
+  if (!best) return false;
+  u.healCool = h.rate;
+  best.heal(h.amount * (1 + (u.level - 1) * 0.2));
+  g.fx.ring(best.x, best.y - 6, '#7fd8a0', 9);
+  g.audio.play('heal');
+  u.state = 'heal';
+  return true;
+}
+
+/** Everything a hero might want, scored on one scale. */
+function chooseGoal(u, g) {
+  const def = u.def;
+  const opts = [];
+  const greed = def.greed;
+
+  // (a) monsters they can see
+  for (const m of g.units) {
+    if (m.dead || m.faction !== 'monster') continue;
+    const d = dist(u.x, u.y, m.x, m.y);
+    const sightPx = def.sight * TILE + 40;
+    if (d > sightPx) continue;
+    if (!g.world.visible(toTile(m.x), toTile(m.y)) && d > def.range * 1.5) continue;
+    const { threat, mine } = dangerAt(g, m.x, m.y, 90, u);
+    const odds = mine / Math.max(1, threat);
+    if (odds < 1 - def.courage) continue;
+    let value = (m.def.gold * 1.4 + m.def.xp * 1.2) * (0.6 + greed);
+    // defend the town: monsters near our buildings are urgent
+    const nearTown = g.nearestBuilding(m.x, m.y, b => b.complete, 150);
+    if (nearTown) value *= 3.2;
+    value *= clamp(odds, 0.3, 2.2);
+    opts.push({ kind: 'fight', target: m, score: value / (1 + (d / TILE) * 0.16) * fearPenalty(g, m.x, m.y) });
+  }
+
+  // (b) reward flags — the whole point of the game
+  for (const f of g.flags) {
+    if (f.type === 'fear' || f.done) continue;
+    const d = dist(u.x, u.y, f.x, f.y);
+    const { threat, mine } = dangerAt(g, f.x, f.y, f.radius * TILE + 30, u);
+    const odds = mine / Math.max(1, threat);
+    if (f.type === 'attack' && odds < 0.85 - def.courage) continue;
+    let value = f.bounty * (0.45 + greed * 1.25);
+    if (f.type === 'explore') value *= def.id === 'ranger' ? 1.7 : 0.85;
+    if (f.type === 'defend') value *= 1.0 + (f.claimed === u.id ? 0.7 : 0);
+    if (f.claimed && f.claimed !== u.id && f.type !== 'attack') value *= 0.35;
+    opts.push({ kind: 'flag', flag: f, score: value / (1 + (d / TILE) * 0.1) * fearPenalty(g, f.x, f.y) });
+  }
+
+  // (c) monster lairs they know about, within their patch of the realm
+  const homeX = u.homeX, homeY = u.homeY;
+  for (const l of g.lairs) {
+    if (l.dead) continue;
+    if (!g.world.seen(l.tx, l.ty)) continue;
+    if (dist(l.x, l.y, homeX, homeY) > def.wander * 1.6 * TILE) continue;
+    const d = dist(u.x, u.y, l.x, l.y);
+    const { threat, mine } = dangerAt(g, l.x, l.y, 120, u);
+    if (mine < threat * (1.15 - def.courage)) continue;
+    const value = l.def.reward * 0.5 * (0.5 + greed) * (0.6 + u.level * 0.25);
+    opts.push({ kind: 'lair', lair: l, score: value / (1 + (d / TILE) * 0.14) * fearPenalty(g, l.x, l.y) });
+  }
+
+  // (d) spend the loot — heroes are terrible savers, and your taxes love it
+  if (u.gold >= 50) {
+    for (const b of g.buildings) {
+      if (!b.complete || !b.def.shop) continue;
+      if (b.def.shop === 'weapon' && u.gold < g.smithPrice(u)) continue;
+      if (b.def.shop === 'potion' && u.potions >= 2) continue;
+      if (b.def.shop === 'rest' && u.hp > u.maxHpNow * 0.9) continue;
+      const d = dist(u.x, u.y, b.x, b.y);
+      const value = (b.def.shop === 'weapon' ? 90 : 55) * (0.6 + greed);
+      opts.push({ kind: 'shop', building: b, score: value / (1 + (d / TILE) * 0.2) });
+    }
+  }
+
+  // (e) restlessness: every hero drifts outward, rangers most of all
+  const wanderlust = { ranger: 1.7, warrior: 0.8, cleric: 0.5, wizard: 0.45 }[def.id] || 0.6;
+  const t = u.exploreGoal && !g.world.seen(u.exploreGoal.tx, u.exploreGoal.ty)
+    ? u.exploreGoal : (u.exploreGoal = g.frontierTile(u.homeX, u.homeY, def.wander));
+  if (t) {
+    const gx = toPx(t.tx), gy = toPx(t.ty);
+    const d = dist(u.x, u.y, gx, gy);
+    // curiosity stops at the edge of a known lair's territory
+    let lairShy = 1;
+    for (const l of g.lairs) {
+      if (l.dead || !g.world.seen(l.tx, l.ty)) continue;
+      if (dist(l.x, l.y, gx, gy) < 9 * TILE) { lairShy = 0.15; break; }
+    }
+    opts.push({
+      kind: 'explore', tx: t.tx, ty: t.ty,
+      score: 30 * wanderlust * lairShy / (1 + (d / TILE) * 0.09) * fearPenalty(g, gx, gy)
+    });
+  }
+
+  if (!opts.length) return null;
+  opts.sort((a, b) => b.score - a.score);
+  return opts[0];
+}
+
+function heroIdle(u, g) {
+  const home = g.buildings.find(b => b.id === u.homeId && !b.dead) || g.palace;
+  const cx = home ? home.x : u.homeX, cy = home ? home.y : u.homeY;
+  idleAround(u, g, cx, cy, u.def.wander);
+}
+
+// -------------------------------------------------------------------
+// GUARDS — the only soldiers who do as they are told
+// -------------------------------------------------------------------
+export function guardBrain(u, since) {
+  const g = u.game;
+  const leash = u.def.leash || 150;
+  if (u.target && !u.target.dead && dist(u.x, u.y, u.homeX, u.homeY) < leash * 1.4) {
+    u.state = 'fight'; u.fight(since); return;
+  }
+  const foe = g.nearestEnemy(u.homeX, u.homeY, leash, 'realm');
+  if (foe) { u.engage(foe); u.state = 'fight'; u.fight(since); return; }
+  if (u.hp < u.maxHpNow) u.heal(u.maxHpNow * 0.02 * since);
+  idleAround(u, g, u.homeX, u.homeY, 3);
+}
+
+// -------------------------------------------------------------------
+// MONSTERS
+// -------------------------------------------------------------------
+export function monsterBrain(u, since) {
+  const g = u.game;
+  const def = u.def;
+
+  // a monster that is not raiding stays near its lair: no endless pursuit
+  const anchorX = u.lair && !u.lair.dead ? u.lair.x : u.homeX;
+  const anchorY = u.lair && !u.lair.dead ? u.lair.y : u.homeY;
+  const strayed = !u.raiding && dist(u.x, u.y, anchorX, anchorY) > 9 * TILE;
+
+  if (!strayed && u.target && !u.target.dead && u.distTo(u.target) < def.aggro) {
+    u.state = 'fight'; u.fight(since); return;
+  }
+  u.target = null;
+  if (strayed) {
+    u.state = 'return';
+    if (!u.path && !u.needPath) u.goTo(toTile(anchorX), toTile(anchorY), 2);
+    return;
+  }
+
+  const mayRaid = def.raid && g.day > g.peaceDays
+    && (!u.lair || (u.lair.active && g.lairThreatensUs(u.lair)))
+    && (u.raiding || g.raidersOut() < g.raidCap);
+
+  // anything of the realm close enough to smell. Buildings are only fair
+  // game once the peace is over -- early rats pester people, not walls.
+  const prey = g.nearestEnemy(u.x, u.y, def.aggro, 'monster', mayRaid);
+  if (prey) { u.engage(prey); u.state = 'fight'; u.fight(since); return; }
+
+  // raiders periodically march on the town, then give up and go home
+  u.raidIn = (u.raidIn === undefined ? 55 + Math.random() * 80 : u.raidIn) - since;
+  if (u.raiding) {
+    u.raidLeft = (u.raidLeft === undefined ? 75 : u.raidLeft) - since;
+    if (u.raidLeft <= 0) {
+      u.raiding = false;
+      u.raidLeft = undefined;
+      u.raidIn = 70 + Math.random() * 90;
+      u.target = null;
+    }
+  }
+  if ((mayRaid && u.raidIn <= 0) || u.raiding) {
+    if (!u.raiding) { u.raiding = true; u.raidLeft = 75; }
+    const objective = g.raidTarget(u);
+    if (objective) {
+      u.state = 'raid';
+      if (u.distTo(objective) <= def.range) { u.engage(objective); u.fight(since); }
+      else if (objective.kindClass === 'unit') {
+        if (!u.path && !u.needPath) u.goTo(toTile(objective.x), toTile(objective.y), 0);
+      } else walkTo(u, g, objective);
+      return;
+    }
+    u.raiding = false;
+    u.raidIn = 45 + Math.random() * 60;
+  }
+
+  // otherwise prowl around the lair
+  if (dist(u.x, u.y, anchorX, anchorY) > 10 * TILE) {
+    u.state = 'return';
+    if (!u.path && !u.needPath) u.goTo(toTile(anchorX), toTile(anchorY), 2);
+    return;
+  }
+  idleAround(u, g, anchorX, anchorY, 4);
+}
+
+export const BRAINS = { peasant: peasantBrain, guard: guardBrain, hero: heroBrain, monster: monsterBrain };
