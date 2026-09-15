@@ -52,9 +52,9 @@ a unit with straight fives behaves exactly as its raw definition says.
 
 | Attribute | Effect |
 |---|---|
-| **Strength** | +5% melee damage per 5 points |
-| **Agility** | +5% attack speed per 5 points |
-| **Constitution** | +4 health per point |
+| **Strength** | +8% melee damage per 5 points |
+| **Agility** | +6% attack speed per 5 points |
+| **Constitution** | +6 health per point |
 | **Intelligence** | +4 mana per point, and +3% critical chance per 5 points |
 
 Peasants start at 5 across the board; hero classes start lopsided (a warrior is strong
@@ -77,6 +77,11 @@ mining and then woodcutting ends up at STR 15. Veterans are worth keeping.
 
 Tap any peasant and their sheet shows all four tracks at once — mastered, part-done,
 and never started — so you can see exactly what a given villager has become.
+
+**Warriors grow by rank instead.** They cap at **level 5**, and every level grants
+**+3 to every attribute** — the only thing levels do, so a hero's numbers come from one
+place. A fresh warrior beats a skeleton and loses to an ogre; a level-5 one kills the
+ogre with a third of its health left.
 
 Every load walks back to the City Centre, so **distance is the whole economy**. Where
 the seams fell on your map decides how rich you are.
@@ -105,10 +110,10 @@ Still deliberately small while the core is built out: City Centre, Barracks, pea
 warriors and flags. The shops, towers, huts and the other three hero classes are
 defined but switched off behind `BUILD_ORDER_FULL` in `src/data.js`.
 
-Monster lairs breed and their broods prowl their own ground, but they do not yet march
-on your town — `RAIDS_ENABLED` in `src/data.js` turns that on once the realm can field
-enough warriors to meet a raid. A peasant sent to a seam next to a nest is still a
-peasant you may not see again, so **where** you send them matters.
+Raids are on. After a few days of peace, lairs close enough to your buildings send
+parties at the town — so expanding toward a nest is what makes it hostile. Build a
+Barracks and warriors will meet them in the field; build nothing and your peasants get
+picked off around day 17 and the City Centre erodes from there.
 
 ## Running it locally
 

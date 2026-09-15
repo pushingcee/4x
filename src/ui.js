@@ -5,7 +5,7 @@
 import { TILE, buildingSprite, unitSprite, propSprite, flagSprite, makeCanvas, PAL } from './art.js';
 import {
   BUILDINGS, BUILD_ORDER, CLASSES, FLAGS, MONSTERS, LAIRS, RES_RATE, RESURRECT_COST,
-  MISSIONS, MISSION_ORDER, STATS, STAT_ORDER, TRAIN_MAX
+  MISSIONS, MISSION_ORDER, STATS, STAT_ORDER, TRAIN_MAX, MAX_LEVEL
 } from './data.js';
 import { toTile, toPx } from './world.js';
 import { fmt, clamp, dist } from './util.js';
@@ -42,11 +42,12 @@ function costText(cost, game) {
 
 /** The four attributes, with what this unit's calling has added so far. */
 function attrBlock(u) {
-  const st = u.stats, gained = u.trained;
+  const st = u.stats, gained = u.trained, lvl = u.levelBonus;
   return `<div class="attrs" data-live="attrs">` + STAT_ORDER.map(k => {
     const s = STATS[k];
+    const bonus = gained[k] + lvl;
     return `<div class="attr" style="--as:${s.colour}" title="${s.name}: ${s.desc}">
-      <b>${st[k]}${gained[k] ? `<i>+${gained[k]}</i>` : ''}</b><span>${s.short}</span></div>`;
+      <b>${st[k]}${bonus ? `<i>+${bonus}</i>` : ''}</b><span>${s.short}</span></div>`;
   }).join('') + `</div>`;
 }
 
@@ -507,7 +508,7 @@ export class UI {
         <span class="pic"></span>
         <div class="grow">
           <h3>${u.name}</h3>
-          <div class="meta" data-live="meta">${u.title}${u.isHero ? ` &middot; level ${u.level}` : ''} &middot; ${job}</div>
+          <div class="meta" data-live="meta">${u.title}${u.isHero ? ` &middot; level ${u.level}/${MAX_LEVEL}` : ''} &middot; ${job}</div>
           <div class="hp"><i data-live="hp" class="${cls}" style="width:${hpF * 100}%"></i></div>
         </div>
       </div>
@@ -545,13 +546,14 @@ export class UI {
         bar.className = f > 0.5 ? '' : f > 0.25 ? 'mid' : 'low';
       }
       const meta = el.querySelector('[data-live="meta"]');
-      if (meta) meta.textContent = `${u.title}${u.isHero ? ` · level ${u.level}` : ''} · ${this.unitJobText(u)}`;
+      if (meta) meta.textContent = `${u.title}${u.isHero ? ` · level ${u.level}/${MAX_LEVEL}` : ''} · ${this.unitJobText(u)}`;
       const attrs = el.querySelector('[data-live="attrs"]');
       if (attrs) {
-        const st = u.stats, gained = u.trained;
+        const st = u.stats, gained = u.trained, lvl = u.levelBonus;
         STAT_ORDER.forEach((k, i) => {
           const cell = attrs.children[i];
-          if (cell) cell.querySelector('b').innerHTML = `${st[k]}${gained[k] ? `<i>+${gained[k]}</i>` : ''}`;
+          const bonus = gained[k] + lvl;
+          if (cell) cell.querySelector('b').innerHTML = `${st[k]}${bonus ? `<i>+${bonus}</i>` : ''}`;
         });
       }
       const train = el.querySelector('[data-live="train"]');
@@ -1167,7 +1169,8 @@ export class UI {
       earn is theirs for good, so a veteran who has done two jobs is worth keeping.</p>
       <p><b>What the attributes do.</b> Strength adds melee damage, agility attack speed,
       constitution health, and intelligence both mana and critical chance &mdash; all in
-      steps of five points.</p>
+      steps of five points. Warriors instead gain <b>+3 to everything</b> per level, up to
+      level 5.</p>
       <p><b>Warriors.</b> Build a <b>Barracks</b> and train some. They take no orders at all &mdash;
       they roam, explore and pick their own fights. To steer them, raise a <b>flag</b> and put
       gold on it; the gold waits in escrow until somebody earns it.</p>

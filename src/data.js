@@ -11,11 +11,11 @@ export const COST_KEYS = ['gold', 'wood', 'stone'];
  */
 export const STATS = {
   str: { key: 'str', name: 'Strength', short: 'STR', colour: '#e07a50',
-    desc: '+5% melee damage per 5 points' },
+    desc: '+8% melee damage per 5 points' },
   agi: { key: 'agi', name: 'Agility', short: 'AGI', colour: '#7fd8a0',
-    desc: '+5% attack speed per 5 points' },
+    desc: '+6% attack speed per 5 points' },
   con: { key: 'con', name: 'Constitution', short: 'CON', colour: '#ff9db0',
-    desc: '+4 health per point' },
+    desc: '+6 health per point' },
   int: { key: 'int', name: 'Intelligence', short: 'INT', colour: '#6fb6ff',
     desc: '+4 mana per point, +3% critical chance per 5 points' }
 };
@@ -23,9 +23,9 @@ export const STAT_ORDER = ['str', 'agi', 'con', 'int'];
 
 /** How each attribute cashes out. One place to retune all of it. */
 export const STAT_EFFECT = {
-  dmgPer5: 0.05,      // strength
-  speedPer5: 0.05,    // agility
-  hpPerPoint: 4,      // constitution
+  dmgPer5: 0.08,      // strength
+  speedPer5: 0.06,    // agility
+  hpPerPoint: 6,      // constitution
   manaPerPoint: 4,    // intelligence
   critPer5: 0.03,
   critCap: 0.45,
@@ -179,11 +179,10 @@ export const BUILD_ORDER_FULL = ['hut', 'lumberyard', 'mining_camp', 'marketplac
   'warriors_guild', 'rangers_guild', 'temple', 'wizards_guild', 'guardhouse', 'tower'];
 
 /**
- * Lairs still breed and their broods still prowl their own ground, but they do
- * not march on the town yet. Flip this on once the realm can field enough
- * warriors to meet a raid.
+ * Lairs near your buildings send raiding parties once the peace ends. Distance
+ * still gates it: expanding toward a lair is what makes it hostile.
  */
-export const RAIDS_ENABLED = false;
+export const RAIDS_ENABLED = true;
 
 /**
  * Hero and unit classes.
@@ -235,9 +234,14 @@ export const CLASSES = {
 export const HERO_CLASSES = ['warrior', 'ranger', 'wizard', 'cleric'];
 
 /** XP needed for each level beyond the first. */
-export const XP_TABLE = [0, 30, 80, 165, 290, 460, 690, 1000, 1400, 1900];
-export const LEVEL_HP = 0.22;   // +22% max hp per level
-export const LEVEL_DMG = 0.18;  // +18% damage per level
+/**
+ * XP thresholds for levels 2..5. Levels no longer apply their own flat
+ * multipliers -- they hand out attribute points instead, so a hero's numbers
+ * come from exactly one place and the class system stays legible.
+ */
+export const XP_TABLE = [0, 25, 70, 140, 240];
+export const MAX_LEVEL = XP_TABLE.length;   // 5
+export const LEVEL_STATS = 3;               // +3 to every attribute per level
 
 export const MONSTERS = {
   rat: {
@@ -249,17 +253,17 @@ export const MONSTERS = {
     sight: 6, gold: 12, xp: 9, sprite: 'slime', aggro: 100, desc: 'Slow, acidic, weirdly persistent.'
   },
   goblin: {
-    id: 'goblin', name: 'Goblin', hp: 50, dmg: 9, rate: 0.95, range: 13, speed: 34,
+    id: 'goblin', name: 'Goblin', hp: 62, dmg: 10, rate: 0.95, range: 13, speed: 34,
     sight: 8, gold: 16, xp: 12, sprite: 'goblin', aggro: 170, raid: true,
     desc: 'Raids buildings in packs. Will burn your huts given the chance.'
   },
   skeleton: {
-    id: 'skeleton', name: 'Skeleton', hp: 76, dmg: 13, rate: 1.05, range: 13, speed: 29,
+    id: 'skeleton', name: 'Skeleton', hp: 98, dmg: 15, rate: 1.05, range: 13, speed: 29,
     sight: 9, gold: 30, xp: 24, sprite: 'skeleton', aggro: 200, raid: true,
     desc: 'Tireless undead soldier. Feels no fear and takes no prisoners.'
   },
   ogre: {
-    id: 'ogre', name: 'Ogre', hp: 200, dmg: 27, rate: 1.5, range: 16, speed: 25,
+    id: 'ogre', name: 'Ogre', hp: 270, dmg: 30, rate: 1.5, range: 16, speed: 25,
     sight: 9, gold: 85, xp: 70, sprite: 'ogre', aggro: 220, raid: true, big: true,
     desc: 'One hit flattens a peasant. Bring wizards.'
   },
@@ -321,9 +325,9 @@ export const RES_RATE = {
 export const START = { gold: 420, wood: 260, stone: 140 };
 export const DAY_SECONDS = 60;      // one in-game day
 export const TAX_INTERVAL = 12;     // seconds between tax collections
-export const RESURRECT_COST = 0.6;
+export const RESURRECT_COST = 0.6;  // fraction of hire cost to raise a dead hero
 /**
  * Swinging at a building is not the same as swinging at a throat. Halving
  * structure damage gives sieges -- in both directions -- time to matter.
  */
-export const STRUCTURE_DMG = 0.5;  // fraction of hire cost to raise a dead hero
+export const STRUCTURE_DMG = 0.5;

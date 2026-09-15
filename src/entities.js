@@ -5,7 +5,7 @@
 import { TILE } from './art.js';
 import { toPx, toTile } from './world.js';
 import {
-  BUILDINGS, CLASSES, MONSTERS, LAIRS, XP_TABLE, LEVEL_HP, LEVEL_DMG,
+  BUILDINGS, CLASSES, MONSTERS, LAIRS, XP_TABLE, MAX_LEVEL, LEVEL_STATS,
   MISSIONS, STAT_ORDER, STAT_EFFECT, TRAIN_MAX
 } from './data.js';
 import { clamp, dist, heroName, peasantName } from './util.js';
@@ -291,10 +291,13 @@ export class Unit {
     return out;
   }
 
-  /** Base attributes plus everything the calling taught them. */
+  /** Points granted purely by rank: +3 to everything per level gained. */
+  get levelBonus() { return (this.level - 1) * LEVEL_STATS; }
+
+  /** Base attributes, plus what the calling taught them, plus their rank. */
   get stats() {
-    const t = this.trained, b = this.baseStats;
-    return { str: b.str + t.str, agi: b.agi + t.agi, con: b.con + t.con, int: b.int + t.int };
+    const t = this.trained, b = this.baseStats, l = this.levelBonus;
+    return { str: b.str + t.str + l, agi: b.agi + t.agi + l, con: b.con + t.con + l, int: b.int + t.int + l };
   }
 
   /**
@@ -322,7 +325,7 @@ export class Unit {
 
   get power() {
     const strBonus = 1 + Math.floor((this.stats.str - 5) / 5) * STAT_EFFECT.dmgPer5;
-    return (this.dmg * (1 + (this.level - 1) * LEVEL_DMG) + this.bonusDmg) * strBonus;
+    return (this.dmg + this.bonusDmg) * strBonus;
   }
 
   /** Seconds between swings, quickened by agility. */
@@ -463,19 +466,20 @@ export class Unit {
 
   get maxHpNow() {
     const con = (this.stats.con - 5) * STAT_EFFECT.hpPerPoint;
-    return Math.round((this.maxHp + con) * (1 + (this.level - 1) * LEVEL_HP));
+    return Math.round(this.maxHp + con);
   }
 
   gainXp(n) {
     if (!this.isHero) return;
     this.xp += n;
-    while (this.level < XP_TABLE.length && this.xp >= XP_TABLE[this.level]) {
+    while (this.level < MAX_LEVEL && this.xp >= XP_TABLE[this.level]) {
       this.level++;
-      this.hp = this.maxHpNow;
+      this.hp = this.maxHpNow;              // the new constitution is usable at once
       this.game.fx.text(this.x, this.y - 16, 'LEVEL ' + this.level, '#ffc94a', 26);
+      this.game.fx.text(this.x, this.y - 28, `+${LEVEL_STATS} ALL`, '#7fd8a0', 22);
       this.game.fx.ring(this.x, this.y - 6, '#ffc94a', 12);
       this.game.audio.play('level');
-      this.game.notify(`${this.name} reached level ${this.level}`, 'good');
+      this.game.notify(`${this.name} reached level ${this.level} (+${LEVEL_STATS} to every attribute)`, 'good');
     }
   }
 
