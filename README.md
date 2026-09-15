@@ -88,17 +88,37 @@ the seams fell on your map decides how rich you are.
 
 ## Warriors and flags
 
-Build a **Barracks** and you can arm Warriors — but a warrior is not conjured out of
+Build a **Barracks** (Warriors) or a **Rangers Guild** (fast archers who see further)
+and you can knight villagers into soldiers — but a soldier is never conjured out of
 gold. One of your **villagers** puts down the pick and takes up a sword, so every
-soldier costs you a worker as well as coin. Set a villager's calling to **War**, or use
-the Barracks' own button and it calls up whoever is idle.
+soldier costs you a worker as well as coin. Set a villager's calling to **War** or
+**Scout**, or use the guild's own button and it calls up whoever is idle.
 
-Everything the work taught them comes along: a villager who mastered mining becomes a
-STR 18 / CON 17 warrior with 202 health, where one straight off the farm starts at
-13 / 12 and 172. Veterans make better soldiers.
+A class is a **layer, not a replacement**. Knighting keeps everything a villager already
+was — their baseline and everything the work taught them — and adds the class bonus on
+top, so nothing can ever go *down* by being promoted:
 
-Unlike peasants, warriors then take no orders at all — they patrol, explore the dark,
-and pick their own fights. The only way to steer them is to put money on the map:
+| | STR | AGI | CON | INT |
+|---|---|---|---|---|
+| Warrior | +8 | +2 | +7 | — |
+| Ranger | +2 | +9 | +3 | +1 |
+
+A villager who mastered mining becomes a STR 18 / CON 17 warrior with 202 health, where
+one straight off the farm starts at 13 / 12 and 172. Veterans make better soldiers.
+
+### Stances
+
+Soldiers take no orders, but they do have a standing posture, set per soldier:
+
+- **Defend** (the default) — holds the realm. Walks a beat between the buildings and the
+  working villagers, and **drops everything to sprint** at anything attacking a worker
+  anywhere in the kingdom.
+- **Roam** — wanders off into the dark, scouts, and picks fights with lairs on its own.
+
+A defender averages about 6 tiles from home where a roamer drifts past 25. Flags still
+tempt either of them — that is what flags are for.
+
+Beyond the stance, the only way to steer them is to put money on the map:
 
 - **Attack** — paid when the area is cleared of monsters and lairs.
 - **Explore** — paid on arrival; the fog lifts around it.

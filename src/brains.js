@@ -8,7 +8,7 @@
 // ===================================================================
 import { toPx, toTile } from './world.js';
 import { TILE } from './art.js';
-import { RES_RATE, CLASSES, BUILDINGS, MISSIONS } from './data.js';
+import { RES_RATE, CLASSES, BUILDINGS, MISSIONS, STANCES } from './data.js';
 import { dist, clamp } from './util.js';
 
 const tileDist = (a, b) => dist(a.x, a.y, b.x, b.y) / TILE;
@@ -306,6 +306,26 @@ export function heroBrain(u, since) {
   // out of combat regeneration, slow
   if (!u.target && u.hp < u.maxHpNow) u.heal(u.maxHpNow * 0.03 * since);
 
+  // --- 1b. a worker is screaming -----------------------------------
+  // This has to come BEFORE the "already busy" check: a soldier locked onto
+  // something else would otherwise never re-evaluate and never hear the call.
+  if (u.stance === 'defend') {
+    const victim = g.distressed();
+    if (victim) {
+      const foe = (victim.lastAttacker && !victim.lastAttacker.dead
+        && dist(victim.lastAttacker.x, victim.lastAttacker.y, victim.x, victim.y) < 160)
+        ? victim.lastAttacker
+        : g.nearestEnemy(victim.x, victim.y, 140, 'realm', false);
+      if (foe) {
+        u.rushing = 1.2;
+        u.state = 'rescue';
+        u.engage(foe);
+        u.fight(since);
+        return;
+      }
+    }
+  }
+
   // --- 2. already swinging at something? ----------------------------
   // A wall does not bite back. If we are hitting a lair or a building while
   // something alive is within reach, deal with the living thing first.
@@ -333,6 +353,9 @@ export function heroBrain(u, since) {
   if (!best) { return heroIdle(u, g); }
 
   switch (best.kind) {
+    case 'guard':
+      return standWatch(u, g);
+
     case 'fight':
       u.engage(best.target);
       u.state = 'fight';
@@ -405,6 +428,11 @@ function chooseGoal(u, g) {
   const def = u.def;
   const opts = [];
   const greed = def.greed;
+  const holding = u.stance === 'defend';
+
+  // (0) Standing watch is a positive choice, not what is left over. Without
+  // this a defender always found some frontier tile worth more than home.
+  if (holding) opts.push({ kind: 'guard', score: 20 });
 
   // (a) monsters they can see
   for (const m of g.units) {
@@ -419,7 +447,7 @@ function chooseGoal(u, g) {
     let value = (m.def.gold * 1.4 + m.def.xp * 1.2) * (0.6 + greed);
     // defend the town: monsters near our buildings are urgent
     const nearTown = g.nearestBuilding(m.x, m.y, b => b.complete, 150);
-    if (nearTown) value *= 3.2;
+    if (nearTown) value *= holding ? 5 : 3.2;
     value *= clamp(odds, 0.3, 2.2);
     opts.push({ kind: 'fight', target: m, score: value / (1 + (d / TILE) * 0.16) * fearPenalty(g, m.x, m.y) });
   }
@@ -447,7 +475,7 @@ function chooseGoal(u, g) {
     const d = dist(u.x, u.y, l.x, l.y);
     const { threat, mine } = dangerAt(g, l.x, l.y, 120, u);
     if (mine < threat * (1.15 - def.courage)) continue;
-    const value = l.def.reward * 0.5 * (0.5 + greed) * (0.6 + u.level * 0.25);
+    const value = l.def.reward * 0.5 * (0.5 + greed) * (0.6 + u.level * 0.25) * (holding ? 0.3 : 1);
     opts.push({ kind: 'lair', lair: l, score: value / (1 + (d / TILE) * 0.14) * fearPenalty(g, l.x, l.y) });
   }
 
@@ -479,7 +507,8 @@ function chooseGoal(u, g) {
     }
     opts.push({
       kind: 'explore', tx: t.tx, ty: t.ty,
-      score: 30 * wanderlust * lairShy / (1 + (d / TILE) * 0.09) * fearPenalty(g, gx, gy)
+      score: 30 * wanderlust * lairShy * (holding ? 0.1 : 1)
+        / (1 + (d / TILE) * 0.09) * fearPenalty(g, gx, gy)
     });
   }
 
@@ -488,7 +517,28 @@ function chooseGoal(u, g) {
   return opts[0];
 }
 
+/**
+ * Walking the beat: pick a building or a working villager, loiter near them
+ * for a while, then move on to somebody else.
+ */
+function standWatch(u, g) {
+  const home = g.buildings.find(b => b.id === u.homeId && !b.dead) || g.palace;
+  u.postFor = (u.postFor || 0) - 0.3;
+  if (!u.post || u.post.dead || u.postFor <= 0) {
+    const anchors = [
+      ...g.buildings.filter(b => !b.dead),
+      ...g.units.filter(x => !x.dead && x.kind === 'peasant')
+    ];
+    u.post = anchors.length ? anchors[(Math.random() * anchors.length) | 0] : home;
+    u.postFor = 7 + Math.random() * 8;
+  }
+  const p = u.post && !u.post.dead ? u.post : home;
+  idleAround(u, g, p ? p.x : u.homeX, p ? p.y : u.homeY, 4);
+  u.state = 'guard';           // idleAround sets 'idle'; we are on the beat
+}
+
 function heroIdle(u, g) {
+  if (u.stance === 'defend') return standWatch(u, g);
   const home = g.buildings.find(b => b.id === u.homeId && !b.dead) || g.palace;
   const cx = home ? home.x : u.homeX, cy = home ? home.y : u.homeY;
   idleAround(u, g, cx, cy, u.def.wander);

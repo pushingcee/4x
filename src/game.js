@@ -9,7 +9,7 @@ import { Fx } from './fx.js';
 import {
   BUILDINGS, CLASSES, MONSTERS, LAIRS, FLAGS, RES_RATE, START,
   DAY_SECONDS, TAX_INTERVAL, RESURRECT_COST, HERO_CLASSES, PEACE_DAYS, STRUCTURE_DMG,
-  MISSIONS, RAIDS_ENABLED, CALLING_ORDER
+  MISSIONS, RAIDS_ENABLED, CALLING_ORDER, DISTRESS_WINDOW
 } from './data.js';
 import { makeRng, clamp, dist } from './util.js';
 
@@ -453,36 +453,62 @@ export class Game {
   }
 
   /**
-   * Turn a villager into a warrior. Warriors are not conjured out of gold --
-   * somebody's miner puts down the pick and picks up a sword, and everything
-   * the work taught them comes along.
+   * Knight a villager into a soldier class. Soldiers are not conjured out of
+   * gold -- somebody's miner puts down the pick. They keep who they were:
+   * their baseline and everything the work taught them carry over, and the
+   * class bonus is laid on top rather than replacing any of it.
    */
-  trainWarrior(u, barracks) {
+  knightVillager(u, kind, hall) {
     if (!u || u.dead || u.kind !== 'peasant') return null;
-    const hall = barracks
-      || this.nearestBuilding(u.x, u.y, b => b.complete && b.def.guild === 'warrior');
-    if (!hall) { this.notify('Build a Barracks first', 'bad'); return null; }
-    if (!hall.complete) { this.notify(`${hall.name} is not finished yet`, 'bad'); return null; }
-    const alive = this.units.filter(x => !x.dead && x.homeId === hall.id).length;
-    if (alive >= hall.def.maxHeroes) { this.notify(`${hall.name} is full`, 'bad'); return null; }
-    const cost = CLASSES.warrior.cost;
-    if (!this.canAfford(cost)) { this.notify('Not enough gold to arm a villager', 'bad'); return null; }
-    this.spend(cost);
+    const cls = CLASSES[kind];
+    if (!cls) return null;
+    const home = hall
+      || this.nearestBuilding(u.x, u.y, b => b.complete && b.def.guild === kind);
+    if (!home) {
+      const need = Object.values(BUILDINGS).find(d => d.guild === kind);
+      this.notify(`Build a ${need ? need.name : 'guild'} first`, 'bad');
+      return null;
+    }
+    if (!home.complete) { this.notify(`${home.name} is not finished yet`, 'bad'); return null; }
+    const alive = this.units.filter(x => !x.dead && x.homeId === home.id).length;
+    if (alive >= home.def.maxHeroes) { this.notify(`${home.name} is full`, 'bad'); return null; }
+    if (!this.canAfford(cls.cost)) { this.notify(`Not enough gold to train a ${cls.name}`, 'bad'); return null; }
+    this.spend(cls.cost);
 
-    const w = this.spawnUnit('warrior', u.x, u.y, 'realm');
+    const w = this.spawnUnit(kind, u.x, u.y, 'realm');
     w.name = u.name;
-    w.training = { ...u.training };     // a veteran miner makes a tougher warrior
+    w.baseStats = { ...u.baseStats };   // they are still themselves
+    w.training = { ...u.training };     // and still know what the work taught them
     w.hp = w.maxHpNow;
     w.gold = 20;
-    w.homeId = hall.id; w.homeX = hall.x; w.homeY = hall.y;
+    w.stance = 'defend';
+    w.homeId = home.id; w.homeX = home.x; w.homeY = home.y;
     this.retireUnit(u);
     this.recomputePop();
-    this.fx.ring(w.x, w.y - 8, '#e07a50', 15);
-    this.fx.text(w.x, w.y - 20, 'TAKES UP ARMS', '#e07a50', 24);
+    this.fx.ring(w.x, w.y - 8, MISSIONS[kind] ? MISSIONS[kind].colour : '#e07a50', 15);
+    this.fx.text(w.x, w.y - 20, kind === 'ranger' ? 'TAKES THE BOW' : 'TAKES UP ARMS', '#e07a50', 24);
     this.audio.play('recruit');
-    this.notify(`${w.name} takes up arms`, 'good');
+    this.notify(`${w.name} becomes a ${cls.name}`, 'good');
     this.lastTrained = w;
     return w;
+  }
+
+  /** Kept for older call sites; warriors are just one kind of knighting. */
+  trainWarrior(u, hall) { return this.knightVillager(u, 'warrior', hall); }
+
+  /**
+   * The most recent worker to be attacked, if the cry is still fresh.
+   * Soldiers on Defend drop everything for this.
+   */
+  distressed() {
+    let best = null, latest = -1;
+    for (const u of this.units) {
+      if (u.dead || u.faction !== 'realm' || u.kind !== 'peasant') continue;
+      const hit = u.lastHit || -1e9;
+      if (this.time - hit > DISTRESS_WINDOW) continue;
+      if (hit > latest) { latest = hit; best = u; }
+    }
+    return best;
   }
 
   /** Put the nearest peasants on a site; miners remember what they were doing. */
@@ -517,7 +543,7 @@ export class Game {
       // a guild arms a villager rather than summoning a stranger
       const trainee = this.pickTrainee(building.x, building.y);
       if (!trainee) { this.notify('No villager free to train', 'bad'); return null; }
-      return this.trainWarrior(trainee, building);
+      return this.knightVillager(trainee, kind, building);
     }
     if (building.def.guild) {
       const alive = this.units.filter(u => !u.dead && u.homeId === building.id).length;
@@ -582,7 +608,7 @@ export class Game {
     // "Warrior" is not a job you do in the fields -- it changes what you are
     if (m.becomes) {
       const made = [];
-      for (const u of units) { const w = this.trainWarrior(u); if (w) made.push(w); }
+      for (const u of units) { const w = this.knightVillager(u, m.becomes); if (w) made.push(w); }
       this.lastTrained = made[made.length - 1] || null;
       this.trainedBatch = made;
       return made.length;
@@ -727,6 +753,9 @@ export class Game {
   payFlag(f, u, amount) {
     if (f.done) return;
     f.done = true;
+    // defend flags trickle out, so release whatever rounding left behind
+    const residue = Math.max(0, f.bounty - f.paid - amount);
+    if (residue > 0) { this.res.gold += residue; this.reserved -= residue; }
     if (amount > 0) {
       u.gold += amount;
       this.reserved -= amount;

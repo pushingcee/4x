@@ -21,6 +21,28 @@ export const STATS = {
 };
 export const STAT_ORDER = ['str', 'agi', 'con', 'int'];
 
+/**
+ * A class is a LAYER, not a replacement. Knighting a villager keeps everything
+ * they already are -- their baseline and everything the work taught them --
+ * and adds the class bonus on top, so a veteran makes a better soldier and
+ * nobody ever gets worse at something by being promoted.
+ */
+
+/** What a soldier is trying to do with their day. */
+export const STANCES = {
+  defend: {
+    id: 'defend', name: 'Defend', short: 'Defend', colour: '#6fb6ff',
+    desc: 'Holds the realm. Loiters among the buildings and the workers, and sprints to anyone attacked.'
+  },
+  roam: {
+    id: 'roam', name: 'Roam', short: 'Roam', colour: '#ffc94a',
+    desc: 'Wanders off into the dark, scouts, and picks fights with lairs on its own initiative.'
+  }
+};
+export const STANCE_ORDER = ['defend', 'roam'];
+export const RUSH_SPEED = 1.45;     // answering a worker's distress call
+export const DISTRESS_WINDOW = 5;   // seconds a cry for help stays live
+
 /** How each attribute cashes out. One place to retune all of it. */
 export const STAT_EFFECT = {
   dmgPer5: 0.08,      // strength
@@ -75,6 +97,11 @@ export const MISSIONS = {
     id: 'warrior', name: 'Warrior', short: 'War', colour: '#e07a50',
     becomes: 'warrior', at: 'barracks',
     desc: 'Takes up arms at the Barracks. Everything they learned as a villager goes with them -- and from then on they answer flags, not orders.'
+  },
+  ranger: {
+    id: 'ranger', name: 'Ranger', short: 'Scout', colour: '#3a8a5a',
+    becomes: 'ranger', at: 'rangers_guild',
+    desc: 'Trained at the Rangers Guild into a fast archer who sees further than anyone and wanders further still.'
   }
 };
 
@@ -82,7 +109,7 @@ export const MISSIONS = {
 export const MISSION_ORDER = ['miner', 'woodcutter', 'quarrier', 'builder', 'none'];
 
 /** Everything you can set a villager to, including leaving the fields for good. */
-export const CALLING_ORDER = ['miner', 'woodcutter', 'quarrier', 'builder', 'warrior', 'none'];
+export const CALLING_ORDER = ['miner', 'woodcutter', 'quarrier', 'builder', 'warrior', 'ranger', 'none'];
 
 /**
  * Buildings. `fw/fh` footprint in tiles. `needs` gates the build menu.
@@ -148,8 +175,8 @@ export const BUILDINGS = {
   rangers_guild: {
     id: 'rangers_guild', name: 'Rangers Guild', fw: 2, fh: 2, hp: 520,
     cost: { gold: 160, wood: 110, stone: 10 }, build: 15, needs: ['palace'],
-    guild: 'ranger', maxHeroes: 3,
-    desc: 'Recruits Rangers: fast, greedy scouts who will chase any flag for coin.'
+    guild: 'ranger', maxHeroes: 3, sight: 10,
+    desc: 'Turns a villager into a Ranger: fast, sharp-eyed, deadly at range and never where you left them.'
   },
   wizards_guild: {
     id: 'wizards_guild', name: 'Wizards Guild', fw: 2, fh: 2, hp: 500,
@@ -182,7 +209,7 @@ export const BUILDINGS = {
  * so it can be switched back on a line at a time as features come back --
  * for now the game is deliberately just a City Centre and its peasants.
  */
-export const BUILD_ORDER = ['barracks'];
+export const BUILD_ORDER = ['barracks', 'rangers_guild'];
 
 /** The full menu, kept for when the rest of the realm is reinstated. */
 export const BUILD_ORDER_FULL = ['hut', 'lumberyard', 'mining_camp', 'marketplace', 'inn', 'blacksmith',
@@ -212,31 +239,31 @@ export const CLASSES = {
   warrior: {
     id: 'warrior', name: 'Warrior', hp: 130, dmg: 14, rate: 0.85, range: 14, speed: 33,
     sight: 8, cost: { gold: 115 }, greed: 0.55, courage: 0.22, wander: 17, pop: 0,
-    stats: { str: 13, agi: 7, con: 12, int: 4 },
+    knight: { str: 8, agi: 2, con: 7, int: 0 },
     xpMul: 1, desc: 'Melee bruiser. Brave to the point of stupidity.'
   },
   ranger: {
     id: 'ranger', name: 'Ranger', hp: 84, dmg: 11, rate: 1.0, range: 86, speed: 44,
     sight: 11, cost: { gold: 105 }, greed: 0.9, courage: 0.4, wander: 30, pop: 0,
-    stats: { str: 7, agi: 14, con: 8, int: 6 },
+    knight: { str: 2, agi: 9, con: 3, int: 1 },
     ranged: true, desc: 'Scout and archer. Explores on her own, loves a bounty.'
   },
   wizard: {
     id: 'wizard', name: 'Wizard', hp: 66, dmg: 26, rate: 1.7, range: 100, speed: 29,
     sight: 9, cost: { gold: 180 }, greed: 0.7, courage: 0.55, wander: 14, pop: 0,
-    stats: { str: 4, agi: 6, con: 6, int: 16 },
+    knight: { str: 0, agi: 1, con: 1, int: 11 },
     ranged: true, splash: 26, desc: 'Fireballs from afar. Flees early, and rightly so.'
   },
   cleric: {
     id: 'cleric', name: 'Cleric', hp: 96, dmg: 9, rate: 1.2, range: 16, speed: 33,
     sight: 9, cost: { gold: 150 }, greed: 0.3, courage: 0.35, wander: 16, pop: 0,
-    stats: { str: 6, agi: 6, con: 9, int: 13 },
+    knight: { str: 1, agi: 1, con: 4, int: 8 },
     heal: { amount: 24, range: 80, rate: 2.0 }, desc: 'Heals wounded allies, smites the odd skeleton.'
   },
   guard: {
     id: 'guard', name: 'Guard', hp: 115, dmg: 11, rate: 1.0, range: 14, speed: 30,
     sight: 8, cost: { gold: 0 }, greed: 0, courage: 0.15, wander: 5, pop: 0,
-    stats: { str: 9, agi: 6, con: 11, int: 4 },
+    knight: { str: 4, agi: 1, con: 6, int: 0 },
     leash: 150, desc: 'Garrison soldier. Stays where you put him.'
   }
 };

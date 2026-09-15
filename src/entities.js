@@ -6,7 +6,7 @@ import { TILE } from './art.js';
 import { toPx, toTile } from './world.js';
 import {
   BUILDINGS, CLASSES, MONSTERS, LAIRS, XP_TABLE, MAX_LEVEL, LEVEL_STATS,
-  MISSIONS, STAT_ORDER, STAT_EFFECT, TRAIN_MAX
+  MISSIONS, STAT_ORDER, STAT_EFFECT, TRAIN_MAX, RUSH_SPEED
 } from './data.js';
 import { clamp, dist, heroName, peasantName } from './util.js';
 
@@ -234,7 +234,11 @@ export class Unit {
     // a unit with 5s behaves exactly as its raw definition says; points above
     // or below that are what actually move anything.
     this.baseStats = { str: 5, agi: 5, con: 5, int: 5, ...(def.stats || {}) };
+    // A class is a layer on top of whoever you already were, never a rewrite.
+    this.classBonus = { str: 0, agi: 0, con: 0, int: 0, ...(def.knight || {}) };
     this.training = {};        // mission id -> work done toward its stat track
+    this.stance = 'defend';    // soldiers only: defend the realm, or roam it
+    this.rushing = 0;          // seconds left of answering a distress call
     this.maxHp = def.hp;
     this.speed = def.speed;
     this.dmg = def.dmg;
@@ -294,10 +298,19 @@ export class Unit {
   /** Points granted purely by rank: +3 to everything per level gained. */
   get levelBonus() { return (this.level - 1) * LEVEL_STATS; }
 
-  /** Base attributes, plus what the calling taught them, plus their rank. */
+  /**
+   * Everything a unit is: their baseline, what the work taught them, the class
+   * laid on top, and their rank. Every term adds -- nothing here replaces
+   * anything else, so a promotion can never make you worse at something.
+   */
   get stats() {
-    const t = this.trained, b = this.baseStats, l = this.levelBonus;
-    return { str: b.str + t.str + l, agi: b.agi + t.agi + l, con: b.con + t.con + l, int: b.int + t.int + l };
+    const t = this.trained, b = this.baseStats, c = this.classBonus, l = this.levelBonus;
+    return {
+      str: b.str + t.str + c.str + l,
+      agi: b.agi + t.agi + c.agi + l,
+      con: b.con + t.con + c.con + l,
+      int: b.int + t.int + c.int + l
+    };
   }
 
   /**
@@ -381,8 +394,9 @@ export class Unit {
     const gx = toPx(wp.x), gy = toPx(wp.y);
     const dx = gx - this.x, dy = gy - this.y;
     const d = Math.hypot(dx, dy);
-    // adrenaline: a hero in flight is faster than the thing chasing it
-    const step = this.speed * (this.fleeing > 0 ? 1.3 : 1) * dt;
+    // adrenaline in flight; and a soldier answering a worker's scream runs
+    const haste = this.fleeing > 0 ? 1.3 : this.rushing > 0 ? RUSH_SPEED : 1;
+    const step = this.speed * haste * dt;
     this.moving = true;
     if (d <= step) {
       this.x = gx; this.y = gy;
@@ -501,6 +515,7 @@ export class Unit {
     if (this.hitFlash > 0) this.hitFlash -= dt;
     if (this.cool > 0) this.cool -= dt;
     if (this.fleeing > 0) this.fleeing -= dt;
+    if (this.rushing > 0) this.rushing -= dt;
     this.thinkIn -= dt;
     this.thinkAcc = (this.thinkAcc || 0) + dt;
     if (this.thinkIn <= 0) {

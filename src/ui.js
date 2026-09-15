@@ -5,7 +5,8 @@
 import { TILE, buildingSprite, unitSprite, propSprite, flagSprite, makeCanvas, PAL } from './art.js';
 import {
   BUILDINGS, BUILD_ORDER, CLASSES, FLAGS, MONSTERS, LAIRS, RES_RATE, RESURRECT_COST,
-  MISSIONS, MISSION_ORDER, CALLING_ORDER, STATS, STAT_ORDER, TRAIN_MAX, MAX_LEVEL
+  MISSIONS, MISSION_ORDER, CALLING_ORDER, STATS, STAT_ORDER, TRAIN_MAX, MAX_LEVEL,
+  STANCES, STANCE_ORDER
 } from './data.js';
 import { toTile, toPx } from './world.js';
 import { fmt, clamp, dist } from './util.js';
@@ -41,12 +42,18 @@ function costText(cost, game) {
 }
 
 /** The four attributes, with what this unit's calling has added so far. */
+/** Everything above the baseline of 5: training, class and rank together. */
+function earned(u, k) {
+  return u.trained[k] + (u.classBonus ? u.classBonus[k] : 0) + u.levelBonus;
+}
+
 function attrBlock(u) {
-  const st = u.stats, gained = u.trained, lvl = u.levelBonus;
+  const st = u.stats;
   return `<div class="attrs" data-live="attrs">` + STAT_ORDER.map(k => {
     const s = STATS[k];
-    const bonus = gained[k] + lvl;
-    return `<div class="attr" style="--as:${s.colour}" title="${s.name}: ${s.desc}">
+    const bonus = earned(u, k);
+    return `<div class="attr" style="--as:${s.colour}"
+      title="${s.name}: ${s.desc}${bonus ? ` (${bonus} earned above the baseline of 5)` : ''}">
       <b>${st[k]}${bonus ? `<i>+${bonus}</i>` : ''}</b><span>${s.short}</span></div>`;
   }).join('') + `</div>`;
 }
@@ -74,6 +81,15 @@ function trainBlock(u) {
       <span class="tbar" style="--tc:${m.colour}"><i style="width:${done * 100}%"></i></span>
       <span class="tp">${points}/${TRAIN_MAX}</span>
     </div>`;
+  }).join('') + `</div>`;
+}
+
+/** What a soldier does when nothing is shouting at them. */
+function stancePicker(current) {
+  return `<div class="missions stances">` + STANCE_ORDER.map(id => {
+    const st = STANCES[id];
+    return `<button class="btn small mbtn ${current === id ? 'on' : ''}"
+      style="--mc:${st.colour}" data-stance="${id}">${st.short}</button>`;
   }).join('') + `</div>`;
 }
 
@@ -487,6 +503,8 @@ export class UI {
     // what is on their back beats what they are heading toward
     if (u.state === 'deliver' && u.carry > 0 && u.carryRes) return `hauling ${u.carryRes}`;
     if (u.state === 'defend') return 'fighting back';
+    if (u.state === 'rescue') return 'to the rescue';
+    if (u.state === 'guard') return 'on watch';
     if (u.job && u.job.type === 'build') return 'building';
     if (u.job && u.job.type === 'harvest' && u.job.node) {
       const k = u.job.node.kind;
@@ -526,13 +544,14 @@ export class UI {
         ${u.carry > 0 ? `<span>CARRYING <b>${Math.floor(u.carry)} ${u.carryRes}</b></span>` : ''}
       </div>
       ${u.kind === 'peasant' ? `${missionPicker(u.mission)}${trainBlock(u)}` : ''}
+      ${u.isHero ? `${stancePicker(u.stance)}` : ''}
       <div class="acts">
         <button class="btn small ${following ? 'danger' : 'primary'}" data-act="follow">${following ? 'Stop following' : 'Follow'}</button>
         <button class="btn small" data-act="center">Centre</button>
         <button class="btn small" data-act="clear">Close</button>
       </div>
-      ${u.isHero ? `<div class="hint">Heroes take no orders. Raise a <b>flag</b> near what you want
-        done and pay enough to tempt them.</div>` : ''}
+      ${u.isHero ? `<div class="hint">${STANCES[u.stance].desc} They still take no orders &mdash;
+        raise a <b>flag</b> and pay enough to tempt them.</div>` : ''}
       ${u.kind === 'peasant' ? `<div class="hint">${MISSIONS[u.mission].desc}</div>` : ''}`;
     el.querySelector('.pic').replaceWith(spriteEl(unitSprite(u.sprite, 0, 1), 16, 16, 36));
     this.wireSelActions(el, u);
@@ -549,10 +568,10 @@ export class UI {
       if (meta) meta.textContent = `${u.title}${u.isHero ? ` · level ${u.level}/${MAX_LEVEL}` : ''} · ${this.unitJobText(u)}`;
       const attrs = el.querySelector('[data-live="attrs"]');
       if (attrs) {
-        const st = u.stats, gained = u.trained, lvl = u.levelBonus;
+        const st = u.stats;
         STAT_ORDER.forEach((k, i) => {
           const cell = attrs.children[i];
-          const bonus = gained[k] + lvl;
+          const bonus = earned(u, k);
           if (cell) cell.querySelector('b').innerHTML = `${st[k]}${bonus ? `<i>+${bonus}</i>` : ''}`;
         });
       }
@@ -763,6 +782,19 @@ export class UI {
         }
       });
     });
+    el.querySelectorAll('[data-stance]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const heroes = g.selection.filter(x => x.kindClass === 'unit' && x.isHero);
+        const targets = heroes.length ? heroes : (e && e.isHero ? [e] : []);
+        if (!targets.length) return;
+        for (const h of targets) h.stance = btn.dataset.stance;
+        this.notify(targets.length === 1
+          ? `${targets[0].name} will ${STANCES[btn.dataset.stance].name.toLowerCase()}`
+          : `${targets.length} soldiers will ${STANCES[btn.dataset.stance].name.toLowerCase()}`);
+        this.audio.play('order');
+        this.renderSelection(true);
+      });
+    });
     el.querySelectorAll('[data-mission]').forEach(btn => {
       btn.addEventListener('click', () => {
         const peasants = g.selection.filter(x => x.kindClass === 'unit' && x.kind === 'peasant');
@@ -901,7 +933,8 @@ export class UI {
   warriorStatus(list) {
     if (!list.length) return 'nobody under arms';
     const verb = { fight: 'fighting', quest: 'on a flag', explore: 'scouting', flee: 'retreating',
-      rest: 'recovering', shop: 'shopping', idle: 'patrolling', walk: 'marching' };
+      rest: 'recovering', shop: 'shopping', idle: 'patrolling', walk: 'marching',
+      guard: 'on watch', rescue: 'to the rescue' };
     const busy = {};
     for (const w of list) { const v = verb[w.state] || w.state; busy[v] = (busy[v] || 0) + 1; }
     return Object.entries(busy).map(([k, n]) => `${n} ${k}`).join(', ');
@@ -927,7 +960,8 @@ export class UI {
     // Rebuilding this list every frame would swallow taps on the +/- buttons,
     // so only rebuild when the crew actually changes.
     const sig = peasants.map(p => p.id + ':' + p.mission).join(',') + '|' + canHire
-      + '|w' + g.units.filter(u => !u.dead && u.isHero).length;
+      + '|' + CALLING_ORDER.filter(id => MISSIONS[id].becomes)
+        .map(id => g.units.filter(u => !u.dead && u.kind === MISSIONS[id].becomes).length).join('.');
     if (!force && sig === this.peasantSig && this.peasantRefresh) { this.peasantRefresh(); return; }
     this.peasantSig = sig;
 
@@ -958,22 +992,26 @@ export class UI {
         </div>`;
     }
 
-    // warriors are former villagers, so they belong on the same roster
-    const warriors = g.units.filter(u => !u.dead && u.isHero);
-    const wm = MISSIONS.warrior;
-    html += `
-      <div class="mrow">
-        <span class="swatch" style="background:${wm.colour}"></span>
-        <div class="grow" data-pickwar>
-          <span class="nm">${wm.name}</span>
-          <span class="sub" data-warstatus>${this.warriorStatus(warriors)}</span>
-        </div>
-        <span class="cnt">${warriors.length}</span>
-        <span class="pm">
-          <button disabled title="A warrior cannot go back to the fields">&minus;</button>
-          <button data-arm>+</button>
-        </span>
-      </div>`;
+    // soldiers are former villagers, so they belong on the same roster
+    const soldierKinds = CALLING_ORDER.filter(id => MISSIONS[id].becomes);
+    const troops = (id) => g.units.filter(u => !u.dead && u.kind === MISSIONS[id].becomes);
+    for (const id of soldierKinds) {
+      const m = MISSIONS[id];
+      const crew = troops(id);
+      html += `
+        <div class="mrow">
+          <span class="swatch" style="background:${m.colour}"></span>
+          <div class="grow" data-picktroop="${id}">
+            <span class="nm">${m.name}</span>
+            <span class="sub" data-troopstatus="${id}">${this.warriorStatus(crew)}</span>
+          </div>
+          <span class="cnt">${crew.length}</span>
+          <span class="pm">
+            <button disabled title="A soldier cannot go back to the fields">&minus;</button>
+            <button data-arm="${id}">+</button>
+          </span>
+        </div>`;
+    }
 
     // Every peasant by name: the whole point is being able to single one out
     // and give them a calling of their own.
@@ -993,18 +1031,24 @@ export class UI {
 
     body.innerHTML = html;
 
-    body.querySelector('[data-arm]')?.addEventListener('click', () => {
-      const hall = g.nearestBuilding(g.palace.x, g.palace.y, b => b.complete && b.def.guild === 'warrior');
-      if (!hall) { this.notify('Build a Barracks first', 'bad'); return; }
+    body.querySelectorAll('[data-arm]').forEach(btn => btn.addEventListener('click', () => {
+      const kind = MISSIONS[btn.dataset.arm].becomes;
+      const hall = g.nearestBuilding(g.palace.x, g.palace.y, b => b.complete && b.def.guild === kind);
+      if (!hall) {
+        const need = Object.values(BUILDINGS).find(d => d.guild === kind);
+        this.notify(`Build a ${need ? need.name : 'guild'} first`, 'bad');
+        return;
+      }
       const t = g.pickTrainee(hall.x, hall.y);
       if (!t) { this.notify('No villager free to train', 'bad'); return; }
-      if (g.trainWarrior(t, hall)) { this.renderDrawer(); this.renderTopbar(); }
-    });
-    body.querySelector('[data-pickwar]')?.addEventListener('click', () => {
-      if (!warriors.length) { this.notify('No warriors yet'); return; }
-      this.setSelection(warriors);
+      if (g.knightVillager(t, kind, hall)) { this.renderDrawer(); this.renderTopbar(); }
+    }));
+    body.querySelectorAll('[data-picktroop]').forEach(row => row.addEventListener('click', () => {
+      const crew = troops(row.dataset.picktroop);
+      if (!crew.length) { this.notify(`No ${MISSIONS[row.dataset.picktroop].name.toLowerCase()}s yet`); return; }
+      this.setSelection(crew);
       this.audio.play('ui');
-    });
+    }));
 
     body.querySelectorAll('[data-who]').forEach(row => row.addEventListener('click', () => {
       const u = g.units.find(x => x.id === +row.dataset.who && !x.dead);
@@ -1025,8 +1069,10 @@ export class UI {
         const el = body.querySelector(`[data-who-sub="${p.id}"]`);
         if (el) el.textContent = this.peasantLine(p);
       }
-      const ws = body.querySelector('[data-warstatus]');
-      if (ws) ws.textContent = this.warriorStatus(g.units.filter(u => !u.dead && u.isHero));
+      for (const id of soldierKinds) {
+        const el = body.querySelector(`[data-troopstatus="${id}"]`);
+        if (el) el.textContent = this.warriorStatus(troops(id));
+      }
     };
 
     body.querySelector('[data-hire]')?.addEventListener('click', () => {
@@ -1219,10 +1265,13 @@ export class UI {
       constitution health, and intelligence both mana and critical chance &mdash; all in
       steps of five points. Warriors instead gain <b>+3 to everything</b> per level, up to
       level 5.</p>
-      <p><b>Warriors.</b> Build a <b>Barracks</b>, then set a villager's calling to <b>War</b>.
-      Soldiers are not conjured &mdash; a villager takes up arms, so each one costs you a worker
-      as well as gold, and everything the work taught them comes with them. From then on they
-      take no orders: raise a <b>flag</b> and put gold on it to tempt them.</p>
+      <p><b>Soldiers.</b> Build a <b>Barracks</b> or a <b>Rangers Guild</b>, then set a villager's
+      calling to <b>War</b> or <b>Scout</b>. Soldiers are not conjured &mdash; a villager takes up
+      arms, so each costs you a worker as well as gold. The class is added on top of who they
+      already were, so a veteran makes a better soldier and nothing ever goes down.</p>
+      <p><b>Stances.</b> A soldier set to <b>Defend</b> walks a beat around your buildings and
+      workers and sprints to anyone under attack; one set to <b>Roam</b> wanders off to scout and
+      hunt lairs. Either way they take no orders &mdash; raise a <b>flag</b> and pay enough.</p>
       <p><b>Peasants are not helpless.</b> They run from a monster they can see, but anything
       already biting them gets hit back &mdash; until they are badly hurt, at which point they
       sensibly leave.</p>

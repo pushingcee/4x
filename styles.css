@@ -215,6 +215,7 @@ canvas{image-rendering:pixelated;image-rendering:crisp-edges}
 
 /* mission picker */
 .missions{display:grid;grid-template-columns:repeat(3,1fr);gap:5px;margin:7px 0}
+.missions.stances{grid-template-columns:repeat(2,1fr)}
 .missions .mbtn{min-width:0;text-align:center;position:relative;padding-left:18px;font-size:13px}
 .missions .mbtn::before{
   content:'';position:absolute;left:6px;top:50%;transform:translateY(-50%);
