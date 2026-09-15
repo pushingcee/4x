@@ -5,7 +5,7 @@
 import { TILE } from './art.js';
 import { toPx, toTile } from './world.js';
 import { BUILDINGS, CLASSES, MONSTERS, LAIRS, XP_TABLE, LEVEL_HP, LEVEL_DMG } from './data.js';
-import { clamp, dist, heroName } from './util.js';
+import { clamp, dist, heroName, peasantName } from './util.js';
 
 let NEXT_ID = 1;
 export const newId = () => NEXT_ID++;
@@ -250,7 +250,8 @@ export class Unit {
     this.dead = false;
     this.hitFlash = 0;
     this.selected = false;
-    this.job = null;          // peasants: harvest / build assignment
+    this.mission = 'none';    // peasants: the calling you gave them
+    this.job = null;          // the concrete task that calling produced
     this.carry = 0;
     this.carryRes = null;
     this.homeId = null;       // guild or guard house
@@ -259,8 +260,10 @@ export class Unit {
     this.fleeing = 0;
     this.restIn = 0;
     this.idleWander = 0;
-    this.name = (faction === 'realm' && kind !== 'peasant' && kind !== 'guard')
-      ? heroName(game.rng) : def.name;
+    this.name = faction !== 'realm' ? def.name
+      : kind === 'peasant' ? peasantName(game.rng)
+        : kind === 'guard' ? def.name
+          : heroName(game.rng);
     this.title = def.name;
   }
 

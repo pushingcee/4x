@@ -8,7 +8,7 @@
 // ===================================================================
 import { toPx, toTile } from './world.js';
 import { TILE } from './art.js';
-import { RES_RATE, CLASSES, BUILDINGS } from './data.js';
+import { RES_RATE, CLASSES, BUILDINGS, MISSIONS } from './data.js';
 import { dist, clamp } from './util.js';
 
 const tileDist = (a, b) => dist(a.x, a.y, b.x, b.y) / TILE;
@@ -39,7 +39,7 @@ function walkTo(u, g, o) {
 export function peasantBrain(u, since) {
   const g = u.game;
 
-  // 1. self-preservation beats any order
+  // 1. self-preservation outranks any calling
   const foe = g.nearestEnemy(u.x, u.y, 58, 'realm');
   if (foe) {
     u.fleeing = 2.6;
@@ -50,38 +50,74 @@ export function peasantBrain(u, since) {
   }
   if (u.fleeing > 0) return;
 
-  const job = u.job;
+  const mission = MISSIONS[u.mission] || MISSIONS.none;
 
-  // 2. hauling a full load home
-  if (u.carry > 0 && (u.state === 'deliver' || !job)) return deliver(u, g);
+  // 2. line up the next seam before anything else, so a peasant hauling a
+  //    load home already knows where they are going back to
+  if (mission.nodes && !findWork(u, g, mission)) return missionStalled(u, g, mission);
 
-  if (job && job.type === 'harvest') return doHarvest(u, g, since);
-  if (job && job.type === 'build') return doBuild(u, g, since, job.site);
+  // 3. a full pack goes home first, whatever the mission
+  if (u.carry > 0 && (u.state === 'deliver' || !u.job)) return deliver(u, g);
 
-  // 3. unassigned peasants make themselves useful
+  if (mission.nodes) return doHarvest(u, g, since);
+
+  // 4. builders, and idlers who happen to see something half-finished
+  if (u.job && u.job.type === 'build') return doBuild(u, g, since, u.job.site);
+
   const site = g.nearestBuilding(u.x, u.y, b => !b.complete && b.builders < 4);
   if (site) { u.job = { type: 'build', site }; site.builders++; return; }
 
-  const hurt = g.nearestBuilding(u.x, u.y, b => b.complete && b.hp < b.maxHp * 0.95, 220);
+  const hurt = g.nearestBuilding(u.x, u.y, b => b.complete && b.hp < b.maxHp * 0.95, 260);
   if (hurt) { u.state = 'repair'; return doRepair(u, g, since, hurt); }
 
+  if (mission.build) return missionStalled(u, g, mission);
+  idleAround(u, g, u.homeX, u.homeY, 5);
+}
+
+/**
+ * Keep the peasant pointed at a valid seam for their mission.
+ * A pinned node (you tapped a specific mine) is honoured until it runs out;
+ * after that they go looking for the next nearest one on their own.
+ */
+function findWork(u, g, mission) {
+  const cur = u.job && u.job.type === 'harvest' ? u.job.node : null;
+  if (cur && cur.amount > 0 && !cur.removed && mission.nodes.includes(cur.kind)) return true;
+
+  const next = g.world.nearestHarvestable(mission.nodes, u.x, u.y);
+  if (!next) { u.job = null; return false; }
+  if (cur) g.notify(`${u.name} moves on to the next ${mission.res === 'wood' ? 'stand of trees' : 'seam'}`);
+  u.job = { type: 'harvest', node: next };
+  // don't yank someone off a delivery run just because their seam changed
+  if (u.carry <= 0) {
+    u.state = 'walk';
+    u.path = null; u.needPath = null;
+  }
+  return true;
+}
+
+/** Nothing left to do for this calling: say so once, then wait near home. */
+function missionStalled(u, g, mission) {
+  if (!u.stalledOn || u.stalledOn !== mission.id) {
+    u.stalledOn = mission.id;
+    g.notify(mission.build
+      ? `${u.name} has nothing to build`
+      : `${u.name} can find no ${mission.res} to gather`, 'bad');
+  }
+  u.state = 'idle';
   idleAround(u, g, u.homeX, u.homeY, 5);
 }
 
 function carryCap(u) { return RES_RATE[u.job?.node?.kind]?.carry || 12; }
 
 function doHarvest(u, g, since) {
-  const node = u.job.node;
-  if (!node || node.amount <= 0) {
-    if (node) g.notify(`${node.kind === 'goldmine' ? 'Gold mine' : node.kind === 'quarry' ? 'Quarry' : 'Woods'} exhausted`, 'bad');
-    u.job = null; u.state = 'idle';
-    return;
-  }
+  const node = u.job && u.job.node;
+  if (!node || node.amount <= 0) { u.job = null; u.state = 'idle'; return; }
   const cap = RES_RATE[node.kind].carry;
   if (u.carry >= cap) return deliver(u, g);
 
   if (touching(u, node)) {
     u.state = 'harvest';
+    u.stalledOn = null;
     u.path = null;
     const info = RES_RATE[node.kind];
     const boost = g.depotBoost(node.tx, node.ty, info.res);
@@ -463,7 +499,7 @@ export function monsterBrain(u, since) {
     return;
   }
 
-  const mayRaid = def.raid && g.day > g.peaceDays
+  const mayRaid = g.raidsEnabled && def.raid && g.day > g.peaceDays
     && (!u.lair || (u.lair.active && g.lairThreatensUs(u.lair)))
     && (u.raiding || g.raidersOut() < g.raidCap);
 

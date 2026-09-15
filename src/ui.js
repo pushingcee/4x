@@ -3,7 +3,10 @@
 // Designed thumb-first: one-finger pan, tap to select, big buttons.
 // ===================================================================
 import { TILE, buildingSprite, unitSprite, propSprite, flagSprite, makeCanvas, PAL } from './art.js';
-import { BUILDINGS, BUILD_ORDER, CLASSES, FLAGS, MONSTERS, LAIRS, RES_RATE, RESURRECT_COST } from './data.js';
+import {
+  BUILDINGS, BUILD_ORDER, CLASSES, FLAGS, MONSTERS, LAIRS, RES_RATE, RESURRECT_COST,
+  MISSIONS, MISSION_ORDER
+} from './data.js';
 import { toTile, toPx } from './world.js';
 import { fmt, clamp, dist } from './util.js';
 
@@ -35,6 +38,15 @@ function costText(cost, game) {
     bits.push(`<span class="${lack ? 'no' : ''}">${cost[k]}${short}</span>`);
   }
   return bits.join(' ') || 'free';
+}
+
+/** The row of calling buttons shown wherever peasants are selected. */
+function missionPicker(currentId) {
+  return `<div class="missions">` + MISSION_ORDER.map(id => {
+    const m = MISSIONS[id];
+    return `<button class="btn small mbtn ${currentId === id ? 'on' : ''}"
+      style="--mc:${m.colour}" data-mission="${id}">${m.short}</button>`;
+  }).join('') + `</div>`;
 }
 
 export class UI {
@@ -220,8 +232,7 @@ export class UI {
       if (u) this.startFollow(u); else this.stopFollow();
     }
     if (e.key === ' ') { e.preventDefault(); g.paused = !g.paused; this.notify(g.paused ? 'Paused' : 'Resumed'); }
-    if (e.key === 'b' || e.key === 'B') this.openDrawer('build');
-    if (e.key === 'f' || e.key === 'F') this.openDrawer('flags');
+    if (e.key === 'b' || e.key === 'B') this.openDrawer('peasants');
     if (e.key === 'k' || e.key === 'K') this.openDrawer('kingdom');
     if (e.key === 'p' || e.key === 'P') this.selectAllPeasants();
     if (e.key === '+' || e.key === '=') { this.r.setScale(this.r.scaleF + 1); this.syncZoomLabel(); }
@@ -352,13 +363,11 @@ export class UI {
     for (const f of g.flags) {
       if (Math.abs(f.x - x) < 10 && Math.abs(f.y - y) < 20) return Object.assign(f, { kindClass: 'flag' });
     }
-    // forests are harvestable too
+    // woodland is a node in its own right now
     const pi = w.propAt[w.idx(tx, ty)];
     if (pi >= 0 && w.seen(tx, ty)) {
       const p = w.props[pi];
-      if ((p.kind === 'tree' || p.kind === 'pine') && !p.removed) {
-        return Object.assign(p, { kindClass: 'node', fw: 1, fh: 1, amount: p.wood, max: p.wood || 1 });
-      }
+      if (p.kindClass === 'node' && !p.removed && p.amount > 0) return p;
     }
     return null;
   }
@@ -392,11 +401,15 @@ export class UI {
     el.hidden = false;
 
     if (sel.length > 1) {
-      const peas = sel.filter(u => u.kind === 'peasant').length;
+      const peasants = sel.filter(u => u.kind === 'peasant');
+      const shared = peasants.length && peasants.every(p => p.mission === peasants[0].mission)
+        ? peasants[0].mission : null;
       el.innerHTML = `
         <div class="sel-head"><div><h3>${sel.length} selected</h3>
-        <div class="meta">${peas} peasant${peas === 1 ? '' : 's'}</div></div></div>
-        <div class="hint">Tap a <b>gold mine</b>, <b>quarry</b> or <b>forest</b> to put them to work. Tap open ground to move them.</div>
+        <div class="meta">${peasants.length} peasant${peasants.length === 1 ? '' : 's'}</div></div></div>
+        ${peasants.length ? `<div class="hint" style="padding-bottom:0">Give them all the same calling:</div>
+        ${missionPicker(shared)}` : ''}
+        <div class="hint">Or tap a <b>mine</b>, <b>quarry</b> or <b>tree</b> to start them there. Tap open ground to move them.</div>
         <div class="acts">
           <button class="btn small" data-act="idle">Select idle only</button>
           <button class="btn small" data-act="clear">Clear</button>
@@ -443,12 +456,15 @@ export class UI {
         ${u.carry > 0 ? `<span>CARRYING <b>${Math.floor(u.carry)} ${u.carryRes}</b></span>` : ''}
       </div>
       ${u.isHero ? `<div class="hint">Heroes take no orders. Raise a <b>flag</b> near what you want done and pay enough to tempt them.</div>` : ''}
-      ${u.kind === 'peasant' ? `<div class="hint">Tap a <b>gold mine</b>, <b>quarry</b> or <b>forest</b> to assign this worker.</div>` : ''}
+      ${u.kind === 'peasant' ? `
+        <div class="hint" style="padding-bottom:0">Give them a calling &mdash; they will find the work themselves.</div>
+        ${missionPicker(u.mission)}
+        <div class="hint" style="padding-top:0">${MISSIONS[u.mission].desc}
+        Or tap a specific <b>mine</b>, <b>quarry</b> or <b>tree</b> to start them there.</div>` : ''}
       <div class="acts">
         <button class="btn small ${following ? 'danger' : 'primary'}" data-act="follow">${following ? 'Stop following' : 'Follow'}</button>
         <button class="btn small" data-act="center">Centre</button>
         ${u.kind === 'peasant' ? `<button class="btn small" data-act="allpeasants">Select all peasants</button>` : ''}
-        ${u.kind === 'peasant' && u.job ? `<button class="btn small" data-act="unassign">Stop work</button>` : ''}
         <button class="btn small" data-act="clear">Close</button>
       </div>`;
     el.querySelector('.pic').replaceWith(spriteEl(unitSprite(u.sprite, 0, 1), 16, 16, 36));
@@ -616,6 +632,16 @@ export class UI {
         }
       });
     });
+    el.querySelectorAll('[data-mission]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const peasants = g.selection.filter(x => x.kindClass === 'unit' && x.kind === 'peasant');
+        const targets = peasants.length ? peasants : (e && e.kind === 'peasant' ? [e] : []);
+        if (!targets.length) return;
+        g.assignMission(targets, btn.dataset.mission);
+        this.renderSelection();
+        if (this.tab === 'peasants') this.renderDrawer();
+      });
+    });
     el.querySelectorAll('[data-recruit]').forEach(btn => {
       btn.addEventListener('click', () => {
         const u = g.recruit(e, btn.dataset.recruit);
@@ -645,7 +671,9 @@ export class UI {
     $('#drawer').hidden = false;
     $('#selpanel').hidden = true;
     for (const b of document.querySelectorAll('.cmd[data-tab]')) b.classList.toggle('on', b.dataset.tab === tab);
-    $('#drawer-title').textContent = tab === 'build' ? 'Build' : tab === 'flags' ? 'Reward Flags' : 'Realm';
+    $('#drawer-title').textContent =
+      tab === 'build' ? 'Build' : tab === 'flags' ? 'Reward Flags'
+        : tab === 'peasants' ? 'Peasants' : 'Realm';
     this.renderDrawer();
   }
   closeDrawer() {
@@ -660,6 +688,7 @@ export class UI {
     const body = $('#drawer-body');
     if (this.tab === 'build') this.renderBuild(body);
     else if (this.tab === 'flags') this.renderFlags(body);
+    else if (this.tab === 'peasants') this.renderPeasants(body);
     else this.renderRealm(body);
   }
 
@@ -722,6 +751,79 @@ export class UI {
     }
   }
 
+  /** The Peasants tab: hire, and move people between callings. */
+  renderPeasants(body) {
+    const g = this.game;
+    const peasants = g.units.filter(u => !u.dead && u.kind === 'peasant');
+    const cost = CLASSES.peasant.cost.gold;
+    const canHire = g.res.gold >= cost && g.pop < g.popCap;
+    const byMission = (id) => peasants.filter(p => p.mission === id);
+
+    const verb = { walk: 'walking', harvest: 'working', deliver: 'hauling', build: 'building',
+      repair: 'mending', flee: 'fleeing', idle: 'waiting' };
+
+    let html = `
+      <div class="hint">You are the god here, and peasants actually listen. Give each one a
+      <b>calling</b> and they will hunt down their own work &mdash; when a seam runs dry they
+      walk to the next one without being told.</div>
+      <div class="mrow">
+        <div class="grow"><span class="nm">Peasants</span>
+        <span class="sub">${peasants.length} of ${g.popCap} housed &middot; ${g.res.gold} gold in the treasury</span></div>
+        <button class="btn small primary" data-hire ${canHire ? '' : 'disabled'}>Hire ${cost}g</button>
+      </div>`;
+
+    for (const id of MISSION_ORDER) {
+      const m = MISSIONS[id];
+      const crew = byMission(id);
+      const busy = {};
+      for (const p of crew) { const v = verb[p.state] || p.state; busy[v] = (busy[v] || 0) + 1; }
+      const detail = crew.length
+        ? Object.entries(busy).map(([k, n]) => `${n} ${k}`).join(', ')
+        : m.res ? `no one gathering ${m.res}` : 'nobody assigned';
+      html += `
+        <div class="mrow">
+          <span class="swatch" style="background:${m.colour}"></span>
+          <div class="grow" data-pick="${id}">
+            <span class="nm">${m.name}</span>
+            <span class="sub">${detail}</span>
+          </div>
+          <span class="cnt">${crew.length}</span>
+          <span class="pm">
+            <button data-minus="${id}" ${crew.length ? '' : 'disabled'}>&minus;</button>
+            <button data-plus="${id}">+</button>
+          </span>
+        </div>`;
+    }
+
+    html += `<div class="hint">Tap a calling's name to select everyone doing it.
+      <b>+</b> promotes an idle peasant, or hires one if nobody is free.</div>`;
+    body.innerHTML = html;
+
+    body.querySelector('[data-hire]')?.addEventListener('click', () => {
+      if (g.recruit(g.palace, 'peasant')) { this.renderDrawer(); this.renderTopbar(); }
+    });
+    body.querySelectorAll('[data-pick]').forEach(el => el.addEventListener('click', () => {
+      const crew = byMission(el.dataset.pick);
+      if (!crew.length) { this.notify('Nobody has that calling yet'); return; }
+      this.setSelection(crew);
+      this.audio.play('ui');
+    }));
+    body.querySelectorAll('[data-minus]').forEach(b => b.addEventListener('click', () => {
+      const crew = byMission(b.dataset.minus);
+      if (!crew.length) return;
+      g.assignMission([crew[crew.length - 1]], 'none');
+      this.renderDrawer();
+    }));
+    body.querySelectorAll('[data-plus]').forEach(b => b.addEventListener('click', () => {
+      const id = b.dataset.plus;
+      const free = id === 'none' ? [] : byMission('none');   // +Idle means hire
+      if (free.length) g.assignMission([free[0]], id);
+      else if (!g.recruit(g.palace, 'peasant', id)) return;
+      this.renderDrawer();
+      this.renderTopbar();
+    }));
+  }
+
   renderRealm(body) {
     const g = this.game;
     const heroes = g.units.filter(u => !u.dead && u.isHero);
@@ -739,7 +841,8 @@ export class UI {
       <button class="btn small" data-act="selall">All</button></div>`;
 
     if (!heroes.length) {
-      html += `<div class="hint">No heroes yet. Build a <b>Warriors Guild</b> or <b>Rangers Guild</b>, then hire from it.</div>`;
+      html += `<div class="hint">No heroes in this realm yet &mdash; guilds and the rest of the
+        kingdom are switched off while the peasant economy is built out.</div>`;
     }
     for (const h of heroes) {
       const f = clamp(h.hp / h.maxHpNow, 0, 1);
@@ -762,9 +865,11 @@ export class UI {
           <button class="btn small primary" data-raise="${i}">Raise ${price}g</button></div>`;
       });
     }
+    const mining = peasants.filter(p => p.mission !== 'none').length;
     html += `<div class="hint" style="margin-top:8px">
-      <b>How this works.</b> Peasants obey you. Heroes do not &mdash; they chase bounties, loot and shiny swords.
-      Build shops so they spend their gold at home; you tax every purchase.</div>`;
+      <b>Where the money comes from.</b> ${mining} peasant${mining === 1 ? '' : 's'} on a calling,
+      plus ${g.buildings.filter(b => !b.dead && b.complete && b.def.tax).length} building's taxes
+      every ${12} seconds. Assign callings in the <b>Peasants</b> tab.</div>`;
 
     body.innerHTML = html;
     body.querySelectorAll('[data-unit]').forEach(s => s.replaceWith(unitIcon(s.dataset.unit)));
@@ -867,13 +972,16 @@ export class UI {
     const g = this.game;
     this.showModal(`
       <h2>Realm of Majesty</h2>
-      <p><b>You are the sovereign, not the general.</b> Peasants obey you directly. Heroes never do &mdash; they
-      wander, loot and pick their own fights. To steer them you raise <b>reward flags</b> and put gold on them.</p>
-      <p><b>Workers.</b> Tap a peasant (or a gold mine, quarry or forest) and use <b>Send</b> to put them to work.
-      They haul to the nearest depot &mdash; the City Centre, a Lumberyard or a Mining Camp.</p>
-      <p><b>Money.</b> Taxes tick in from your buildings, mines feed the treasury, and heroes hand their
-      loot straight back when they shop at your Marketplace, Blacksmith and Inn.</p>
-      <p><b>Goal.</b> Destroy every monster lair. Lose your City Centre and the realm falls.</p>
+      <p><b>You are a small god with a small valley.</b> Peasants are the one thing that
+      actually listens to you. Give each a <b>calling</b> &mdash; Miner, Woodcutter, Quarrier,
+      Builder &mdash; and they go and find the work themselves.</p>
+      <p><b>Callings stick.</b> A miner walks to the nearest gold seam, works it out, and then
+      walks to the next one without being asked. Tap a specific mine, quarry or tree to start
+      someone in a particular spot instead.</p>
+      <p><b>Assigning.</b> Tap a peasant for their calling buttons, or open the
+      <b>Peasants</b> tab to move your whole workforce around at once.</p>
+      <p><b>Careful where you send them.</b> Monsters still prowl near their lairs, and a peasant
+      is no fighter. They will run, but not always fast enough.</p>
       <p><b>Camera.</b> Drag to pan, pinch to zoom, or tap <b>Zoom</b> for Close / Mid / Far / Wide.
       Tap the corner map to open the full realm and jump anywhere. Select a unit and hit
       <b>Follow</b> to have the camera track it.</p>
@@ -912,6 +1020,7 @@ export class UI {
       this.renderTopbar();
       if (this.game.selection.length) this.renderSelection();
       if (this.tab === 'kingdom') this.renderRealm($('#drawer-body'));
+      else if (this.tab === 'peasants') this.renderPeasants($('#drawer-body'));
     }
     // a fresh attack puts a jump-to-trouble button on screen
     const a = this.game.alertAt;

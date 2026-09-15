@@ -1,11 +1,11 @@
 # Realm of Majesty
 
-A 16-bit fantasy kingdom sim in the spirit of **Majesty: The Fantasy Kingdom Sim**,
-written as a single dependency-free web page. Built to be played with a thumb on a phone.
+A 16-bit kingdom sim, written as a single dependency-free web page and built to be
+played with a thumb on a phone.
 
-**The premise:** you are the sovereign, not the general. Peasants obey you.
-Heroes do not. They wander off, pick their own fights, buy their own swords and
-die in ditches. The only way to steer them is to put money on the map.
+**The premise:** you are a small god with a valley full of peasants. You do not
+micromanage them. You tell each one **what they are for**, and they go and find the
+work themselves.
 
 ![the realm](docs/screenshot.png)
 
@@ -15,57 +15,46 @@ die in ditches. The only way to steer them is to put money on the map.
 - **Zoom** steps through Close / Mid / Far / Wide. Tap the corner map to open the whole
   realm, then tap anywhere on it to jump there.
 - Select any unit and hit **Follow** to lock the camera onto it; drag the map to let go.
-- **Tap your City Centre** → *Hire Peasant*. Peasants are your entire economy.
-- **Tap a gold mine, quarry or forest** → *Send 1 / Send 3 / Send all idle*.
-  They walk there, dig, and haul the load back to the nearest depot.
-  (Or select peasants first and tap the resource — either works.)
-- **Build** a guild, hire a hero from it, then **raise an attack flag** on a monster
-  lair. The bounty is held in escrow and paid to whichever hero actually does the job.
-- **Destroy every lair to win.** Lose your City Centre and the realm falls.
+- **Tap your City Centre** → *Hire Peasant*.
+- **Tap a peasant** and pick a calling: **Mine**, **Wood**, **Stone**, **Build** or **Idle**.
+- Or open the **Peasants** tab to move the whole workforce between callings at once.
 
-Keyboard, if you are at a desk: `B` build, `F` flags, `K` realm, `P` select peasants,
+Keyboard, if you are at a desk: `B` peasants, `K` realm, `P` select peasants,
 `M` full map, `C` follow the selected unit, `space` pause, arrows pan, `+`/`-` zoom,
 shift-drag to box-select.
 
-## How the kingdom actually works
+## Callings
 
-**Peasants** mine gold, quarry stone, cut wood, raise buildings and repair them.
-They flee from anything with teeth. They are the only units that take orders.
+A calling is permanent until you change it, and it is a *standing instruction*, not a
+destination. A Miner walks to the nearest gold seam, works it until it is empty, and
+then walks to the next nearest one without being asked. When there is genuinely nothing
+left they say so by name and wait near home rather than milling about pretending.
 
-**Heroes** score the whole world several times a second — bounties, visible monsters,
-known lairs, shops worth visiting, unexplored ground — weighted by their class's
-greed and courage, and discounted by distance and by the danger already standing there.
-Then they do whatever scored highest. That is the entire game:
-
-| Class | Temperament |
+| Calling | What they do |
 |---|---|
-| Warrior | Tough, brave, cheap to please. Charges almost anything. |
-| Ranger | Fast, greedy, roams widest. Will chase any flag for coin. |
-| Wizard | Devastating at range, fragile, flees early and sensibly. |
-| Cleric | Heals the wounded, and the Temple halves resurrection costs. |
+| **Miner** | Finds the nearest gold mine and works it out, then the next. |
+| **Woodcutter** | Fells the nearest woodland tree by tree; felled trees disappear. |
+| **Quarrier** | Cuts stone at the nearest quarry and moves on when it is spent. |
+| **Builder** | Runs to whatever is half-built or damaged. |
+| **Idle** | Loiters near home and lends a hand with construction. |
 
-Heroes stay within their own patch of the realm unless a bounty tempts them further —
-so **flags are how you project force**, not orders.
+You can still override a calling by tapping a **specific** mine, quarry or tree — that
+sets the matching calling *and* starts them on the seam you picked.
 
-**Reward flags** are your only lever on them:
+Every load walks back to the City Centre, so **distance is the whole economy**. Where
+the seams fell on your map decides how rich you are.
 
-- **Attack** — paid when the area is cleared of monsters and lairs.
-- **Explore** — paid on arrival; the fog lifts around it.
-- **Defend** — pays out gradually while a hero holds the ground.
-- **Fear** — free, and makes heroes avoid a place entirely.
+## Current scope
 
-Gold you put on a flag is held in escrow (shown in brackets beside your treasury) and
-refunded in full if you withdraw the flag.
+The game is deliberately stripped back to the peasant economy while that loop is built
+out. Only the City Centre exists; the guilds, shops, towers and the heroes who used to
+take reward-flag bounties are switched off — the code is all still there, behind
+`BUILD_ORDER_FULL` and `RAIDS_ENABLED` in `src/data.js`, waiting to come back a piece
+at a time.
 
-**The money loop** is the one Majesty players will recognise: heroes keep the loot
-they earn, then spend it at your Marketplace, Blacksmith and Inn — and you tax
-every purchase at 70%. An armed, well-supplied hero is a revenue stream.
-
-**Monster lairs** sleep until you come near them or the calendar catches up, and
-they fill with defenders the moment they wake — so an undefended nest is never free
-loot. Lairs only send raiders once your buildings are close enough to bother them,
-which means *expanding toward a lair is what makes it hostile*. The first few days
-are peaceful on purpose: get a mine running and a guild up.
+Monster lairs still breed and their broods still prowl their own ground. They will not
+march on your town, but a peasant sent to a seam next to a nest is a peasant you may not
+see again — so **where** you send them matters.
 
 ## Running it locally
 
@@ -92,14 +81,14 @@ styles.css          16-bit UI skin, mobile-first
 src/
   main.js           boot, frame loop, onboarding
   game.js           simulation core: economy, flags, spawning, victory
-  brains.js         peasant / hero / guard / monster AI
+  brains.js         peasant callings, plus the dormant hero / guard / monster AI
   entities.js       units, buildings, lairs, projectiles
   world.js          map generation, fog of war, A*
   render.js         camera, depth-sorted drawing, pixel font, minimap
   ui.js             DOM panels and all pointer input
   art.js            every sprite, generated at runtime from code
   audio.js          WebAudio chiptune SFX and music
-  data.js           all balance numbers in one place
+  data.js           missions, balance numbers, and what is switched on
   fx.js             particles and floating text
   util.js           RNG, math, binary heap
 ```

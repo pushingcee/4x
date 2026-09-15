@@ -154,7 +154,12 @@ export class World {
           if (this.blocked[i] || this.tiles[i] === T.SAND) continue;
           if (Math.hypot(x - this.start.x, y - this.start.y) < 6) continue;
           if (!rng.chance(0.55)) continue;
-          this.addProp(pine ? 'pine' : 'tree', x, y, { wood: 120 + rng.int(0, 90) });
+          // Woodland is a resource node, not scenery: a woodcutter has to be
+          // able to find the next tree without the UI patching one together.
+          const wood = 120 + rng.int(0, 90);
+          this.addProp(pine ? 'pine' : 'tree', x, y, {
+            kindClass: 'node', fw: 1, fh: 1, amount: wood, max: wood
+          });
         }
       }
     }
@@ -170,7 +175,7 @@ export class World {
   placeResources(rng) {
     const { w, h } = this;
     this.nodes = [];
-    const tryNode = (kind, minD, maxD, amount) => {
+    const tryNode = (kind, minD, maxD, amount, relaxed = false) => {
       for (let t = 0; t < 500; t++) {
         const x = rng.int(3, w - 5), y = rng.int(3, h - 5);
         const d = Math.hypot(x - this.start.x, y - this.start.y);
@@ -178,7 +183,7 @@ export class World {
         if (!this.areaFree(x, y, 2, 2)) continue;
         // gold likes hills, stone likes rock
         const near = this.countNear(x, y, 3, T.ROCK) + this.countNear(x, y, 3, T.DIRT);
-        if (kind !== 'goldmine' && near < 2) continue;
+        if (!relaxed && kind !== 'goldmine' && near < 2) continue;
         const node = {
           id: this.nodes.length, kind, tx: x, ty: y, fw: 2, fh: 2,
           amount, max: amount, workers: []
@@ -191,11 +196,43 @@ export class World {
       }
       return null;
     };
-    // a couple of starter nodes close to home, then plenty further out
-    tryNode('goldmine', 5, 11, 3000);
-    tryNode('quarry', 5, 12, 2400);
+    // Starter seams close to home are not optional: the whole game is peasants
+    // walking to them. If picky terrain rules fail, place them anyway.
+    tryNode('goldmine', 5, 11, 3000) || tryNode('goldmine', 4, 16, 3000, true);
+    tryNode('quarry', 5, 12, 2400) || tryNode('quarry', 4, 18, 2400, true);
     for (let i = 0; i < 9; i++) tryNode('goldmine', 9, 46, 2200 + rng.int(0, 2600));
     for (let i = 0; i < 7; i++) tryNode('quarry', 9, 46, 2000 + rng.int(0, 2200));
+  }
+
+  /**
+   * Nearest resource node of any of `kinds` that still has something in it.
+   * Mines and quarries live in `nodes`; woodland lives among the props.
+   */
+  nearestHarvestable(kinds, px, py, skip) {
+    let best = null, bestD = Infinity;
+    const consider = (n) => {
+      if (!n || n.amount <= 0 || n.removed) return;
+      if (!kinds.includes(n.kind)) return;
+      if (skip && skip.has(n)) return;
+      const dx = n.tx * 16 + 8 - px, dy = n.ty * 16 + 8 - py;
+      const d = dx * dx + dy * dy;
+      if (d < bestD) { bestD = d; best = n; }
+    };
+    if (kinds.some(k => k === 'goldmine' || k === 'quarry')) {
+      for (const n of this.nodes) consider(n);
+    }
+    if (kinds.some(k => k === 'tree' || k === 'pine')) {
+      for (const p of this.props) consider(p);
+    }
+    return best;
+  }
+
+  /** Take a spent node off the map entirely. */
+  removeProp(p) {
+    if (!p || p.removed) return;
+    p.removed = true;
+    const i = this.idx(p.tx, p.ty);
+    if (this.inside(p.tx, p.ty) && this.propAt[i] === p.id) this.propAt[i] = -1;
   }
 
   countNear(x, y, r, type) {

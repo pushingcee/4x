@@ -89,6 +89,11 @@ export function heroName(rng) {
   return `${rng.pick(FIRST)} ${rng.pick(LAST)}`;
 }
 
+/** Peasants get a plain given name. You are assigning them a life, after all. */
+export function peasantName(rng) {
+  return rng.pick(FIRST);
+}
+
 export const fmt = (n) => {
   n = Math.floor(n);
   return n >= 10000 ? (n / 1000).toFixed(1) + 'k' : String(n);

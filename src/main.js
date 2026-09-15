@@ -51,12 +51,12 @@ async function start() {
     try { localStorage.setItem('realm.seen', '1'); } catch (_) { /* private mode */ }
     ui.showModal(`
       <h2>Welcome, sovereign</h2>
-      <p>This is a kingdom sim in the Majesty tradition: <b>you do not command your heroes.</b>
-      You build, you tax, and you dangle gold in front of them.</p>
-      <p><b>1.</b> Tap your <b>City Centre</b> and hire peasants.</p>
-      <p><b>2.</b> Tap a <b>gold mine</b>, <b>quarry</b> or <b>forest</b>, then <b>Send</b> peasants to work it.</p>
-      <p><b>3.</b> <b>Build</b> a guild, hire a hero, then raise an <b>attack flag</b> on a monster lair
-      and watch the greedy fools charge in.</p>
+      <p>You are a small god with a valley full of peasants. You do not micromanage them &mdash;
+      you tell them <b>what they are for</b>, and they go and do it.</p>
+      <p><b>1.</b> Tap your <b>City Centre</b> and hire a few peasants.</p>
+      <p><b>2.</b> Tap one and choose a calling: <b>Mine</b>, <b>Wood</b>, <b>Stone</b> or <b>Build</b>.
+      They will hunt down the nearest seam themselves and keep at it forever.</p>
+      <p><b>3.</b> Use the <b>Peasants</b> tab to move your whole workforce between callings.</p>
       <p><b>Getting around.</b> One finger pans, two fingers pinch to zoom, and
       <b>Zoom</b> steps through Close / Mid / Far / Wide. Tap the little map in the corner
       to open the whole realm, then tap anywhere on it to jump there.</p>

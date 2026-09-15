@@ -5,6 +5,41 @@
 export const COST_KEYS = ['gold', 'wood', 'stone'];
 
 /**
+ * Peasant missions. You do not tell a peasant which rock to hit -- you tell
+ * them what they are for, and they go find the work themselves, forever,
+ * moving on to the next seam when one runs dry.
+ *
+ * `nodes` lists the resource kinds the mission will hunt for.
+ */
+export const MISSIONS = {
+  none: {
+    id: 'none', name: 'Idle', short: 'Idle', colour: '#a596c4',
+    desc: 'Loiters near home and lends a hand with whatever is being built.'
+  },
+  miner: {
+    id: 'miner', name: 'Miner', short: 'Mine', colour: '#ffc94a',
+    nodes: ['goldmine'], res: 'gold',
+    desc: 'Seeks out the nearest gold mine and works it until it is empty, then finds another.'
+  },
+  woodcutter: {
+    id: 'woodcutter', name: 'Woodcutter', short: 'Wood', colour: '#b4753a',
+    nodes: ['tree', 'pine'], res: 'wood',
+    desc: 'Fells the nearest woodland, tree by tree, and hauls the timber home.'
+  },
+  quarrier: {
+    id: 'quarrier', name: 'Quarrier', short: 'Stone', colour: '#b6bccb',
+    nodes: ['quarry'], res: 'stone',
+    desc: 'Cuts stone at the nearest quarry and keeps going once it is exhausted.'
+  },
+  builder: {
+    id: 'builder', name: 'Builder', short: 'Build', colour: '#7fd8a0',
+    build: true,
+    desc: 'Runs to whatever is half-built or damaged and works on it.'
+  }
+};
+export const MISSION_ORDER = ['miner', 'woodcutter', 'quarrier', 'builder', 'none'];
+
+/**
  * Buildings. `fw/fh` footprint in tiles. `needs` gates the build menu.
  * `role` drives behaviour: depot, guild, shop, defence, housing.
  */
@@ -12,7 +47,7 @@ export const BUILDINGS = {
   palace: {
     id: 'palace', name: 'City Centre', fw: 3, fh: 3, hp: 2400,
     cost: { gold: 0, wood: 0, stone: 0 }, build: 0, unique: true,
-    pop: 6, depot: true, tax: 2, sight: 12,
+    pop: 14, depot: true, tax: 2, sight: 12,
     attack: { dmg: 11, range: 86, rate: 1.7 },
     recruit: ['peasant'],
     desc: 'Heart of the realm. Hires peasants, stores every resource, pays the taxes.'
@@ -91,8 +126,23 @@ export const BUILDINGS = {
   }
 };
 
-export const BUILD_ORDER = ['hut', 'lumberyard', 'mining_camp', 'marketplace', 'inn', 'blacksmith',
+/**
+ * What the player can actually put down. Everything else stays defined above
+ * so it can be switched back on a line at a time as features come back --
+ * for now the game is deliberately just a City Centre and its peasants.
+ */
+export const BUILD_ORDER = [];
+
+/** The full menu, kept for when the rest of the realm is reinstated. */
+export const BUILD_ORDER_FULL = ['hut', 'lumberyard', 'mining_camp', 'marketplace', 'inn', 'blacksmith',
   'warriors_guild', 'rangers_guild', 'temple', 'wizards_guild', 'guardhouse', 'tower'];
+
+/**
+ * With no guilds there are no heroes, and with no heroes a monster raid is
+ * just a slow execution. Lairs still breed and their broods still prowl, so
+ * where you send a peasant still matters -- they simply do not march on town.
+ */
+export const RAIDS_ENABLED = false;
 
 /**
  * Hero and unit classes.
@@ -210,11 +260,15 @@ export const FLAGS = {
   }
 };
 
+/**
+ * With the City Centre as the only depot, every load walks the whole way
+ * home. Bigger packs keep the ratio of working to trudging sane.
+ */
 export const RES_RATE = {
-  goldmine: { res: 'gold', rate: 1.1, carry: 12 },
-  quarry: { res: 'stone', rate: 1.0, carry: 12 },
-  tree: { res: 'wood', rate: 1.35, carry: 12 },
-  pine: { res: 'wood', rate: 1.35, carry: 12 }
+  goldmine: { res: 'gold', rate: 1.5, carry: 20 },
+  quarry: { res: 'stone', rate: 1.4, carry: 20 },
+  tree: { res: 'wood', rate: 1.8, carry: 20 },
+  pine: { res: 'wood', rate: 1.8, carry: 20 }
 };
 
 export const START = { gold: 420, wood: 260, stone: 140 };

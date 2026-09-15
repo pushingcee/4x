@@ -9,7 +9,7 @@ import {
 } from './art.js';
 import { toPx, toTile } from './world.js';
 import { clamp } from './util.js';
-import { BUILDINGS, FLAGS } from './data.js';
+import { BUILDINGS, FLAGS, MISSIONS } from './data.js';
 
 // ---- 3x5 pixel font ------------------------------------------------
 const G = {
@@ -417,6 +417,16 @@ export class Renderer {
     } else {
       ctx.drawImage(s, x, y);
     }
+    // a badge so you can read the whole workforce at a glance
+    if (u.kind === 'peasant' && u.mission && u.mission !== 'none') {
+      const m = MISSIONS[u.mission];
+      if (m) {
+        ctx.fillStyle = PAL.outline;
+        ctx.fillRect(x + 5, y - 6, 6, 5);
+        ctx.fillStyle = m.colour;
+        ctx.fillRect(x + 6, y - 5, 4, 3);
+      }
+    }
     // a peasant with a full pack
     if (u.carry > 0.5) {
       const col = u.carryRes === 'gold' ? PAL.gold : u.carryRes === 'stone' ? PAL.stone : PAL.woodL;
@@ -428,7 +438,9 @@ export class Renderer {
   drawUnitBar(ctx, u) {
     const hurt = u.hp < u.maxHpNow - 0.5;
     if (!hurt && !u.selected) return;
-    const w = 12, x = Math.round(u.x - w / 2), y = Math.round(u.y - 19);
+    // clear the mission badge when there is one
+    const badged = u.kind === 'peasant' && u.mission && u.mission !== 'none';
+    const w = 12, x = Math.round(u.x - w / 2), y = Math.round(u.y - (badged ? 25 : 19));
     ctx.fillStyle = '#120c1c'; ctx.fillRect(x - 1, y - 1, w + 2, 4);
     const f = clamp(u.hp / u.maxHpNow, 0, 1);
     ctx.fillStyle = u.faction === 'monster' ? '#e05050' : f > 0.5 ? '#6ecf8e' : f > 0.25 ? '#ffc94a' : '#e05050';

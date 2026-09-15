@@ -8,7 +8,8 @@ import { peasantBrain, heroBrain, guardBrain, monsterBrain } from './brains.js';
 import { Fx } from './fx.js';
 import {
   BUILDINGS, CLASSES, MONSTERS, LAIRS, FLAGS, RES_RATE, START,
-  DAY_SECONDS, TAX_INTERVAL, RESURRECT_COST, HERO_CLASSES, PEACE_DAYS, STRUCTURE_DMG
+  DAY_SECONDS, TAX_INTERVAL, RESURRECT_COST, HERO_CLASSES, PEACE_DAYS, STRUCTURE_DMG,
+  MISSIONS, RAIDS_ENABLED
 } from './data.js';
 import { makeRng, clamp, dist } from './util.js';
 
@@ -48,6 +49,7 @@ export class Game {
     this.stats = { kills: 0, heroesLost: 0, lairsCleared: 0, goldEarned: 0, flagsPaid: 0 };
     this.nextFlagId = 1;
     this.peaceDays = PEACE_DAYS;
+    this.raidsEnabled = RAIDS_ENABLED;
     this.selection = [];
     this.placing = null;
 
@@ -458,7 +460,7 @@ export class Game {
     return n;
   }
 
-  recruit(building, kind) {
+  recruit(building, kind, mission) {
     const cls = CLASSES[kind];
     if (!cls) return null;
     if (this.pop + (cls.pop || 0) > this.popCap) { this.notify('Population cap reached — build huts', 'bad'); return null; }
@@ -470,6 +472,7 @@ export class Game {
     this.spend(cls.cost);
     const t = building.approach(null);
     const u = this.spawnUnit(kind, toPx(t.x), toPx(t.y), 'realm');
+    if (kind === 'peasant' && mission) u.mission = mission;
     u.homeId = building.id;
     u.homeX = building.x; u.homeY = building.y;
     if (u.isHero) {
@@ -506,13 +509,52 @@ export class Game {
     return u;
   }
 
+  /** Which calling a given resource implies. */
+  missionForNode(kind) {
+    return kind === 'goldmine' ? 'miner'
+      : kind === 'quarry' ? 'quarrier'
+        : (kind === 'tree' || kind === 'pine') ? 'woodcutter' : 'none';
+  }
+
+  /**
+   * Give peasants a calling. They keep it until you change it, finding their
+   * own work and moving on when a seam runs dry.
+   */
+  assignMission(units, missionId) {
+    const m = MISSIONS[missionId];
+    if (!m) return 0;
+    let n = 0;
+    for (const u of units) {
+      if (!u || u.dead || u.kind !== 'peasant') continue;
+      if (u.job && u.job.type === 'build' && u.job.site) u.job.site.builders--;
+      u.mission = missionId;
+      u.job = null;
+      u.prevJob = null;
+      u.stalledOn = null;
+      u.state = 'idle';
+      u.path = null; u.needPath = null;
+      n++;
+    }
+    if (n) {
+      this.notify(n === 1
+        ? `${units.find(u => u && u.kind === 'peasant').name} is now a ${m.name}`
+        : `${n} peasants are now ${m.name}s`, 'good');
+      this.audio.play('order');
+    }
+    return n;
+  }
+
+  /** Tapping a specific seam: same calling, but start on the one you picked. */
   assignWorkers(units, node) {
     let n = 0;
+    const mission = this.missionForNode(node.kind);
     for (const u of units) {
       if (u.dead || u.kind !== 'peasant') continue;
       if (u.job && u.job.type === 'build' && u.job.site) u.job.site.builders--;
+      u.mission = mission;
       u.job = { type: 'harvest', node };
       u.prevJob = null;
+      u.stalledOn = null;
       u.state = 'walk';
       u.path = null; u.needPath = null;
       const t = this.world.approachTile(node.tx, node.ty, node.fw, node.fh, u.x, u.y);
@@ -533,6 +575,7 @@ export class Game {
       if (u.dead || u.kind !== 'peasant') continue;
       if (u.job && u.job.type === 'build' && u.job.site) u.job.site.builders--;
       u.job = null;
+      u.mission = 'none';
       u.homeX = toPx(tx); u.homeY = toPx(ty);
       u.goTo(tx, ty, 1);
       n++;
@@ -672,9 +715,15 @@ export class Game {
   exhaustNode(node) {
     node.amount = 0;
     const w = this.world;
-    for (let y = node.ty; y < node.ty + node.fh; y++)
-      for (let x = node.tx; x < node.tx + node.fw; x++)
-        if (w.inside(x, y)) w.blocked[w.idx(x, y)] = 0;
+    // a felled tree vanishes; a spent mine leaves its hole behind but stops
+    // blocking the ground it stood on
+    if (node.kind === 'tree' || node.kind === 'pine') w.removeProp(node);
+    else {
+      for (let y = node.ty; y < node.ty + node.fh; y++)
+        for (let x = node.tx; x < node.tx + node.fw; x++)
+          if (w.inside(x, y)) w.blocked[w.idx(x, y)] = 0;
+    }
+    // whoever was working it simply looks for the next one on their next think
     for (const u of this.units) if (u.job && u.job.node === node) u.job = null;
   }
 
@@ -731,7 +780,7 @@ export class Game {
     this.waveIn -= dt;
     if (this.waveIn <= 0) {
       this.waveIn = Math.max(80, 200 - this.day * 5);
-      if (this.day > PEACE_DAYS) this.launchRaid();
+      if (this.raidsEnabled && this.day > PEACE_DAYS) this.launchRaid();
     }
 
     // sweep the dead

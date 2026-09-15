@@ -182,6 +182,27 @@ canvas{image-rendering:pixelated;image-rendering:crisp-edges}
 .hp i.mid{background:var(--gold)}
 .hp i.low{background:var(--bad)}
 
+/* mission picker */
+.missions{display:flex;flex-wrap:wrap;gap:4px;margin:5px 0}
+.missions .mbtn{flex:1 1 52px;min-width:52px;text-align:center;position:relative;padding-left:14px}
+.missions .mbtn::before{
+  content:'';position:absolute;left:5px;top:50%;transform:translateY(-50%);
+  width:6px;height:6px;background:var(--mc,#a596c4);box-shadow:0 0 0 1px var(--edge-dk);
+}
+.missions .mbtn.on{background:var(--gold);color:var(--ink);border-color:#6b4a08}
+.mrow{display:flex;align-items:center;gap:6px;padding:5px 4px;border-bottom:1px solid var(--edge-dk)}
+.mrow .swatch{width:9px;height:9px;flex:none;box-shadow:0 0 0 1px var(--edge-dk)}
+.mrow .grow{flex:1;min-width:0}
+.mrow .nm{display:block;font-size:11px}
+.mrow .sub{display:block;font-size:8.5px;color:var(--txt-dim);line-height:1.35}
+.mrow .cnt{font-size:13px;color:var(--gold);min-width:20px;text-align:right;font-variant-numeric:tabular-nums}
+.mrow .pm{display:flex;gap:3px}
+.mrow .pm button{font:inherit;font-size:12px;line-height:1;width:26px;height:26px;
+  background:var(--panel-lit);color:var(--txt);border:2px solid var(--edge-dk);
+  box-shadow:inset 0 0 0 1px var(--edge-lt);cursor:pointer}
+.mrow .pm button:active{background:var(--gold);color:var(--ink)}
+.mrow .pm button[disabled]{opacity:.35;pointer-events:none}
+
 .hint{font-size:9.5px;color:var(--txt-dim);line-height:1.5;padding:4px 2px}
 .hint b{color:var(--gold)}
 
