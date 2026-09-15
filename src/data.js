@@ -95,15 +95,18 @@ export const MISSIONS = {
   },
   warrior: {
     id: 'warrior', name: 'Warrior', short: 'War', colour: '#e07a50',
-    becomes: 'warrior', at: 'barracks',
-    desc: 'Takes up arms at the Barracks. Everything they learned as a villager goes with them -- and from then on they answer flags, not orders.'
+    becomes: 'warrior', at: 'barracks', drill: 50,
+    desc: 'Drills at the Barracks, standing guard over the other villagers until ready. Everything they learned in the fields goes with them -- and from then on they answer flags, not orders.'
   },
   ranger: {
     id: 'ranger', name: 'Ranger', short: 'Scout', colour: '#3a8a5a',
-    becomes: 'ranger', at: 'rangers_guild',
-    desc: 'Trained at the Rangers Guild into a fast archer who sees further than anyone and wanders further still.'
+    becomes: 'ranger', at: 'rangers_guild', drill: 42,
+    desc: 'Drills at the Rangers Guild, guarding the village meanwhile, then takes to the woods as a fast archer who sees further than anyone.'
   }
 };
+
+/** A villager under arms but not yet knighted: militia, and a little tougher. */
+export const RECRUIT_DMG = 3;
 
 /** The work callings: what the Folk tab counts and what training tracks exist. */
 export const MISSION_ORDER = ['miner', 'woodcutter', 'quarrier', 'builder', 'none'];

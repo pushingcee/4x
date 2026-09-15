@@ -90,9 +90,16 @@ the seams fell on your map decides how rich you are.
 
 Build a **Barracks** (Warriors) or a **Rangers Guild** (fast archers who see further)
 and you can knight villagers into soldiers — but a soldier is never conjured out of
-gold. One of your **villagers** puts down the pick and takes up a sword, so every
-soldier costs you a worker as well as coin. Set a villager's calling to **War** or
-**Scout**, or use the guild's own button and it calls up whoever is idle.
+gold, and never on the spot. Set a villager's calling to **War** or **Scout** and they
+are **called up**: they down tools, take up a spear, and drill for the best part of a
+minute before they are knighted. The guild's own button calls up whoever is idle, and
+only pulls somebody off a job if nobody is standing around.
+
+**A recruit is already useful.** While drilling they stop gathering and become militia —
+they walk among the people still working, hit harder than an ordinary villager, and go
+for anything that threatens a worker. Change their calling before the drill finishes and
+they go back to the fields with the fee refunded. Recruits hold a place in their guild's
+roster, so three drilling villagers fill a three-soldier Barracks.
 
 A class is a **layer, not a replacement**. Knighting keeps everything a villager already
 was — their baseline and everything the work taught them — and adds the class bonus on

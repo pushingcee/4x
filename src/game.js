@@ -9,7 +9,7 @@ import { Fx } from './fx.js';
 import {
   BUILDINGS, CLASSES, MONSTERS, LAIRS, FLAGS, RES_RATE, START,
   DAY_SECONDS, TAX_INTERVAL, RESURRECT_COST, HERO_CLASSES, PEACE_DAYS, STRUCTURE_DMG,
-  MISSIONS, RAIDS_ENABLED, CALLING_ORDER, DISTRESS_WINDOW
+  MISSIONS, RAIDS_ENABLED, CALLING_ORDER, DISTRESS_WINDOW, RECRUIT_DMG
 } from './data.js';
 import { makeRng, clamp, dist } from './util.js';
 
@@ -439,10 +439,12 @@ export class Game {
 
   /** Who to call up: idle hands first, then whoever is closest. */
   pickTrainee(x, y) {
-    const pool = this.units.filter(u => !u.dead && u.kind === 'peasant');
+    const pool = this.units.filter(u => !u.dead && u.kind === 'peasant' && !u.knightKind);
     if (!pool.length) return null;
-    const rank = (u) => (u.mission === 'none' ? 0 : 1e6) + dist(u.x, u.y, x, y);
-    return pool.sort((a, b) => rank(a) - rank(b))[0];
+    const idle = pool.filter(u => u.mission === 'none');
+    // only pull somebody off a job if nobody is standing around
+    const from = idle.length ? idle : pool;
+    return from.sort((a, b) => dist(a.x, a.y, x, y) - dist(b.x, b.y, x, y))[0];
   }
 
   /** Take a unit off the board without the fanfare of a death. */
@@ -470,10 +472,15 @@ export class Game {
       return null;
     }
     if (!home.complete) { this.notify(`${home.name} is not finished yet`, 'bad'); return null; }
-    const alive = this.units.filter(x => !x.dead && x.homeId === home.id).length;
-    if (alive >= home.def.maxHeroes) { this.notify(`${home.name} is full`, 'bad'); return null; }
-    if (!this.canAfford(cls.cost)) { this.notify(`Not enough gold to train a ${cls.name}`, 'bad'); return null; }
-    this.spend(cls.cost);
+    // the drilling villager already paid and already holds their place
+    if (!u.knightKind && this.guildRoll(home, kind) >= home.def.maxHeroes) {
+      this.notify(`${home.name} is full`, 'bad');
+      return null;
+    }
+    if (!u.knightKind) {
+      if (!this.canAfford(cls.cost)) { this.notify(`Not enough gold to train a ${cls.name}`, 'bad'); return null; }
+      this.spend(cls.cost);
+    }
 
     const w = this.spawnUnit(kind, u.x, u.y, 'realm');
     w.name = u.name;
@@ -491,6 +498,73 @@ export class Game {
     this.notify(`${w.name} becomes a ${cls.name}`, 'good');
     this.lastTrained = w;
     return w;
+  }
+
+  /**
+   * Everyone already promised to a guild: soldiers of that class plus the
+   * villagers currently drilling for it. Both count against its capacity.
+   */
+  guildRoll(guildBuilding, kind) {
+    let n = 0;
+    for (const u of this.units) {
+      if (u.dead) continue;
+      if (u.homeId === guildBuilding.id && u.kind === kind) n++;
+      else if (u.kind === 'peasant' && u.knightKind === kind && u.knightHall === guildBuilding.id) n++;
+    }
+    return n;
+  }
+
+  /**
+   * Mark a villager for knighthood. They do not become a soldier on the spot --
+   * they down tools, take up a spear, guard the other villagers while they
+   * drill, and are knighted when the drilling is done.
+   */
+  markForKnighthood(u, kind, hall) {
+    if (!u || u.dead || u.kind !== 'peasant') return null;
+    if (u.knightKind) { this.notify(`${u.name} is already drilling`, 'bad'); return null; }
+    const cls = CLASSES[kind];
+    const m = MISSIONS[kind];
+    if (!cls || !m) return null;
+    const home = hall
+      || this.nearestBuilding(u.x, u.y, b => b.complete && b.def.guild === kind);
+    if (!home) {
+      const need = Object.values(BUILDINGS).find(d => d.guild === kind);
+      this.notify(`Build a ${need ? need.name : 'guild'} first`, 'bad');
+      return null;
+    }
+    if (!home.complete) { this.notify(`${home.name} is not finished yet`, 'bad'); return null; }
+    if (this.guildRoll(home, kind) >= home.def.maxHeroes) { this.notify(`${home.name} is full`, 'bad'); return null; }
+    if (!this.canAfford(cls.cost)) { this.notify(`Not enough gold to train a ${cls.name}`, 'bad'); return null; }
+    this.spend(cls.cost);
+
+    if (u.job && u.job.type === 'build' && u.job.site) u.job.site.builders--;
+    u.job = null;
+    u.prevJob = null;
+    u.carry = 0;
+    u.mission = kind;
+    u.knightKind = kind;
+    u.knightHall = home.id;
+    u.knightLeft = m.drill;
+    u.knightTotal = m.drill;
+    u.knightPaid = cls.cost.gold || 0;
+    u.bonusDmg = RECRUIT_DMG;      // a spear in hand counts for something
+    u.stalledOn = null;
+    u.path = null; u.needPath = null;
+    this.fx.text(u.x, u.y - 18, 'CALLED UP', m.colour, 22);
+    this.audio.play('order');
+    this.notify(`${u.name} is called up to the ${home.name}`, 'good');
+    return u;
+  }
+
+  /** Change of heart: give the villager back their life, and the gold back. */
+  cancelKnighthood(u, quiet) {
+    if (!u || !u.knightKind) return false;
+    if (u.knightPaid) { this.res.gold += u.knightPaid; }
+    if (!quiet) this.notify(`${u.name} returns to the fields`, '');
+    u.knightKind = null; u.knightHall = null;
+    u.knightLeft = 0; u.knightTotal = 0; u.knightPaid = 0;
+    u.bonusDmg = 0;
+    return true;
   }
 
   /** Kept for older call sites; warriors are just one kind of knighting. */
@@ -543,7 +617,7 @@ export class Game {
       // a guild arms a villager rather than summoning a stranger
       const trainee = this.pickTrainee(building.x, building.y);
       if (!trainee) { this.notify('No villager free to train', 'bad'); return null; }
-      return this.knightVillager(trainee, kind, building);
+      return this.markForKnighthood(trainee, kind, building);
     }
     if (building.def.guild) {
       const alive = this.units.filter(u => !u.dead && u.homeId === building.id).length;
@@ -608,7 +682,7 @@ export class Game {
     // "Warrior" is not a job you do in the fields -- it changes what you are
     if (m.becomes) {
       const made = [];
-      for (const u of units) { const w = this.knightVillager(u, m.becomes); if (w) made.push(w); }
+      for (const u of units) { if (this.markForKnighthood(u, m.becomes)) made.push(u); }
       this.lastTrained = made[made.length - 1] || null;
       this.trainedBatch = made;
       return made.length;
@@ -617,6 +691,7 @@ export class Game {
     let n = 0;
     for (const u of units) {
       if (!u || u.dead || u.kind !== 'peasant') continue;
+      if (u.knightKind) this.cancelKnighthood(u);
       if (u.job && u.job.type === 'build' && u.job.site) u.job.site.builders--;
       u.mission = missionId;
       u.job = null;

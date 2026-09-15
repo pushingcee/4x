@@ -39,6 +39,10 @@ function walkTo(u, g, o) {
 export function peasantBrain(u, since) {
   const g = u.game;
 
+  // A villager called up to a guild stops being a worker: they drill, and
+  // they stand between the monsters and everyone still holding a shovel.
+  if (u.knightKind) return recruitBrain(u, g, since);
+
   // 1. danger. A peasant will run from something it merely sees, but if the
   //    thing is already biting them, running just means dying tired.
   const foe = g.nearestEnemy(u.x, u.y, 64, 'realm');
@@ -126,6 +130,87 @@ function missionStalled(u, g, mission) {
   }
   u.state = 'idle';
   idleAround(u, g, u.homeX, u.homeY, 5);
+}
+
+/**
+ * Militia. Marked for knighthood, not yet knighted: they drill down the clock,
+ * guard whoever is still working, and only run when they are nearly finished.
+ */
+function recruitBrain(u, g, since) {
+  u.knightLeft = Math.max(0, (u.knightLeft || 0) - since);
+
+  // wounded badly enough that dying would waste the training
+  if (u.hp < u.maxHpNow * 0.3) {
+    const foe = g.nearestEnemy(u.x, u.y, 70, 'realm');
+    if (foe) {
+      u.fleeing = 2;
+      u.state = 'flee';
+      u.target = null;
+      const safe = g.nearestBuilding(u.x, u.y, b => b.complete) || g.palace;
+      if (safe && !touching(u, safe, 2)) walkTo(u, g, safe);
+      return;
+    }
+  }
+
+  // ready: report to the guild and be knighted
+  if (u.knightLeft <= 0) {
+    const hall = g.buildings.find(b => b.id === u.knightHall && !b.dead && b.complete)
+      || g.nearestBuilding(u.x, u.y, b => b.complete && b.def.guild === u.knightKind);
+    if (!hall) { g.cancelKnighthood(u); return; }
+    if (touching(u, hall, 1.6)) { g.knightVillager(u, u.knightKind, hall); return; }
+    u.state = 'walk';
+    walkTo(u, g, hall);
+    return;
+  }
+
+  // something already biting them, or biting anyone else
+  if (u.target && !u.target.dead && u.distTo(u.target) < 170) {
+    u.state = 'defend';
+    u.fight(since);
+    return;
+  }
+  u.target = null;
+
+  const victim = g.distressed();
+  if (victim && victim !== u) {
+    const foe = (victim.lastAttacker && !victim.lastAttacker.dead
+      && dist(victim.lastAttacker.x, victim.lastAttacker.y, victim.x, victim.y) < 160)
+      ? victim.lastAttacker
+      : g.nearestEnemy(victim.x, victim.y, 140, 'realm', false);
+    if (foe) {
+      u.rushing = 1.2;
+      u.state = 'rescue';
+      u.engage(foe);
+      u.fight(since);
+      return;
+    }
+  }
+
+  // anything prowling near the people they are supposed to be protecting
+  const near = g.nearestEnemy(u.x, u.y, 150, 'realm', false);
+  if (near) {
+    const threatens = g.units.some(v => !v.dead && v.kind === 'peasant' && !v.knightKind
+      && dist(v.x, v.y, near.x, near.y) < 150)
+      || !!g.nearestBuilding(near.x, near.y, b => b.complete, 150);
+    if (threatens) {
+      u.state = 'defend';
+      u.engage(near);
+      u.fight(since);
+      return;
+    }
+  }
+
+  // otherwise walk the rows among the people still working
+  u.postFor = (u.postFor || 0) - since;
+  if (!u.post || u.post.dead || u.postFor <= 0) {
+    const folk = g.units.filter(v => !v.dead && v.kind === 'peasant' && v !== u && !v.knightKind);
+    const anchors = folk.length ? folk : g.buildings.filter(b => !b.dead);
+    u.post = anchors.length ? anchors[(Math.random() * anchors.length) | 0] : g.palace;
+    u.postFor = 6 + Math.random() * 6;
+  }
+  const p = u.post && !u.post.dead ? u.post : g.palace;
+  idleAround(u, g, p ? p.x : u.homeX, p ? p.y : u.homeY, 4);
+  u.state = 'drill';
 }
 
 function carryCap(u) { return RES_RATE[u.job?.node?.kind]?.carry || 12; }
