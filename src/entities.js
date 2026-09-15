@@ -482,6 +482,8 @@ export class Unit {
   damageTaken(n, src) {
     this.hp -= n;
     this.hitFlash = 0.12;
+    this.lastHit = this.game.time;
+    if (src && src.kindClass === 'unit') this.lastAttacker = src;
     if (this.hp <= 0) { this.hp = 0; this.die(src); }
   }
 

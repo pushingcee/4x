@@ -378,6 +378,21 @@ const BUILD_ART = {
     px(ctx, W / 2 - 1, H - 18, 1, 5, PAL.metal);
     banner(ctx, W - 4, H - 25, PAL.roofR);
   },
+  barracks(ctx, W, H) {
+    // timber hall with a weapon rack and a banner
+    wallBlock(ctx, 2, H - 18, W - 4, 18, PAL.wood, PAL.woodD, PAL.woodL);
+    roofGable(ctx, 0, H - 26, W, 9, PAL.roofR, PAL.roofRD);
+    door(ctx, W / 2 - 3, H - 11, 6, 11);
+    window_(ctx, 4, H - 16); window_(ctx, W - 6, H - 16);
+    // crossed spears over the door
+    px(ctx, W / 2 - 5, H - 16, 10, 1, PAL.metal);
+    px(ctx, W / 2 - 1, H - 20, 1, 6, PAL.woodD);
+    px(ctx, W / 2 - 2, H - 21, 3, 2, PAL.metal);
+    // training dummy outside
+    px(ctx, 3, H - 9, 1, 9, PAL.woodD);
+    px(ctx, 1, H - 8, 5, 3, PAL.thatch);
+    banner(ctx, W - 4, H - 26, PAL.roofR);
+  },
   rangers_guild(ctx, W, H) {
     px(ctx, 4, H - 6, 3, 6, PAL.woodD); px(ctx, W - 7, H - 6, 3, 6, PAL.woodD);
     wallBlock(ctx, 2, H - 18, W - 4, 13, PAL.woodL, PAL.woodD, PAL.thatch);

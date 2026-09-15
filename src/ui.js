@@ -50,17 +50,30 @@ function attrBlock(u) {
   }).join('') + `</div>`;
 }
 
-/** Progress toward the attribute points the current calling can teach. */
+/** How far along a unit is in one calling's attribute track. */
+function trainProgress(u, id) {
+  const m = MISSIONS[id];
+  const done = Math.min(1, (u.training[id] || 0) / m.trainFull);
+  return { m, done, points: Math.floor(done * TRAIN_MAX) };
+}
+
+/**
+ * Every calling this unit could learn, so you can see at a glance what is
+ * mastered, what is part-done, and what they have never touched.
+ */
 function trainBlock(u) {
-  const m = MISSIONS[u.mission];
-  if (!m || !m.trains) return '';
-  const done = Math.min(1, (u.training[u.mission] || 0) / m.trainFull);
-  const points = Math.floor(done * TRAIN_MAX);
-  const names = m.trains.map(k => STATS[k].short).join(' + ');
-  return `<div class="train" data-live="train">
-    ${done >= 1 ? `<b>Mastered ${m.name.toLowerCase()} work</b> &mdash; ${names} maxed`
-      : `Learning <b>${names}</b> &mdash; ${points}/${TRAIN_MAX} earned`}
-    <span class="bar"><i style="width:${done * 100}%"></i></span></div>`;
+  const rows = MISSION_ORDER.filter(id => MISSIONS[id].trains);
+  return `<div class="trainlist" data-live="train">
+    <div class="head">TRAINING</div>` + rows.map(id => {
+    const { m, done, points } = trainProgress(u, id);
+    const cls = done >= 1 ? 'done' : done <= 0 ? 'none' : '';
+    return `<div class="trow ${cls}" data-trow="${id}">
+      <span class="sw" style="background:${m.colour}"></span>
+      <span class="tn">${m.name} <i>${m.trains.map(k => STATS[k].short).join('&middot;')}</i></span>
+      <span class="tbar" style="--tc:${m.colour}"><i style="width:${done * 100}%"></i></span>
+      <span class="tp">${points}/${TRAIN_MAX}</span>
+    </div>`;
+  }).join('') + `</div>`;
 }
 
 /** The row of calling buttons shown wherever peasants are selected. */
@@ -470,6 +483,10 @@ export class UI {
   }
 
   unitJobText(u) {
+    // what is on their back beats what they are heading toward
+    if (u.state === 'deliver' && u.carry > 0 && u.carryRes) return `hauling ${u.carryRes}`;
+    if (u.state === 'defend') return 'fighting back';
+    if (u.job && u.job.type === 'build') return 'building';
     if (u.job && u.job.type === 'harvest' && u.job.node) {
       const k = u.job.node.kind;
       return `${u.state === 'deliver' ? 'hauling' : 'working'} ${k === 'goldmine' ? 'gold' : k === 'quarry' ? 'stone' : 'wood'}`;
@@ -539,11 +556,13 @@ export class UI {
       }
       const train = el.querySelector('[data-live="train"]');
       if (train) {
-        const m = MISSIONS[u.mission];
-        if (m && m.trains) {
-          const done = Math.min(1, (u.training[u.mission] || 0) / m.trainFull);
-          const bar = train.querySelector('.bar i');
+        for (const row of train.querySelectorAll('[data-trow]')) {
+          const { done, points } = trainProgress(u, row.dataset.trow);
+          const bar = row.querySelector('.tbar i');
           if (bar) bar.style.width = done * 100 + '%';
+          const pts = row.querySelector('.tp');
+          if (pts) pts.textContent = `${points}/${TRAIN_MAX}`;
+          row.className = 'trow ' + (done >= 1 ? 'done' : done <= 0 ? 'none' : '');
         }
       }
       const stats = el.querySelector('[data-live="stats"]');
@@ -1149,8 +1168,12 @@ export class UI {
       <p><b>What the attributes do.</b> Strength adds melee damage, agility attack speed,
       constitution health, and intelligence both mana and critical chance &mdash; all in
       steps of five points.</p>
-      <p><b>Careful where you send them.</b> Monsters still prowl near their lairs, and a peasant
-      is no fighter. They will run, but not always fast enough.</p>
+      <p><b>Warriors.</b> Build a <b>Barracks</b> and train some. They take no orders at all &mdash;
+      they roam, explore and pick their own fights. To steer them, raise a <b>flag</b> and put
+      gold on it; the gold waits in escrow until somebody earns it.</p>
+      <p><b>Peasants are not helpless.</b> They run from a monster they can see, but anything
+      already biting them gets hit back &mdash; until they are badly hurt, at which point they
+      sensibly leave.</p>
       <p><b>Camera.</b> Drag to pan, pinch to zoom, or tap <b>Zoom</b> for Close / Mid / Far / Wide.
       Tap the corner map to open the full realm and jump anywhere. Select a unit and hit
       <b>Follow</b> to have the camera track it.</p>

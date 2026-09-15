@@ -123,6 +123,12 @@ export const BUILDINGS = {
     tax: 3, shop: 'rest',
     desc: 'Heroes drink, boast, and heal fast. Idle heroes drift here between jobs.'
   },
+  barracks: {
+    id: 'barracks', name: 'Barracks', fw: 2, fh: 2, hp: 560,
+    cost: { gold: 130, wood: 90, stone: 30 }, build: 14,
+    guild: 'warrior', maxHeroes: 3, sight: 9,
+    desc: 'Trains Warriors. They patrol, explore and answer reward flags -- but they pick their own fights.'
+  },
   warriors_guild: {
     id: 'warriors_guild', name: 'Warriors Guild', fw: 2, fh: 2, hp: 620,
     cost: { gold: 170, wood: 90, stone: 40 }, build: 16, needs: ['palace'],
@@ -166,16 +172,16 @@ export const BUILDINGS = {
  * so it can be switched back on a line at a time as features come back --
  * for now the game is deliberately just a City Centre and its peasants.
  */
-export const BUILD_ORDER = [];
+export const BUILD_ORDER = ['barracks'];
 
 /** The full menu, kept for when the rest of the realm is reinstated. */
 export const BUILD_ORDER_FULL = ['hut', 'lumberyard', 'mining_camp', 'marketplace', 'inn', 'blacksmith',
   'warriors_guild', 'rangers_guild', 'temple', 'wizards_guild', 'guardhouse', 'tower'];
 
 /**
- * With no guilds there are no heroes, and with no heroes a monster raid is
- * just a slow execution. Lairs still breed and their broods still prowl, so
- * where you send a peasant still matters -- they simply do not march on town.
+ * Lairs still breed and their broods still prowl their own ground, but they do
+ * not march on the town yet. Flip this on once the realm can field enough
+ * warriors to meet a raid.
  */
 export const RAIDS_ENABLED = false;
 
@@ -189,7 +195,7 @@ export const RAIDS_ENABLED = false;
  */
 export const CLASSES = {
   peasant: {
-    id: 'peasant', name: 'Peasant', hp: 34, dmg: 3, rate: 1.2, range: 12, speed: 30,
+    id: 'peasant', name: 'Peasant', hp: 34, dmg: 5, rate: 1.1, range: 12, speed: 30,
     sight: 6, cost: { gold: 30 }, greed: 0, courage: 0, wander: 6, pop: 1,
     stats: { str: 5, agi: 5, con: 5, int: 5 },
     desc: 'Digs, chops, builds, repairs, panics. Grows into whatever you make them do.'

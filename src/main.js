@@ -56,7 +56,10 @@ async function start() {
       <p><b>1.</b> Tap your <b>City Centre</b> and hire a few peasants.</p>
       <p><b>2.</b> Tap one and choose a calling: <b>Mine</b>, <b>Wood</b>, <b>Stone</b> or <b>Build</b>.
       They will hunt down the nearest seam themselves and keep at it forever.</p>
-      <p><b>3.</b> Use the <b>Peasants</b> tab to move your whole workforce between callings.</p>
+      <p><b>3.</b> Use the <b>Folk</b> tab to move your workforce around, or pick one villager
+      by name. Work trains them: every calling raises two attributes.</p>
+      <p><b>4.</b> <b>Build</b> a Barracks, train a warrior, then raise an attack <b>Flag</b> on a
+      monster lair and watch the greedy fool charge in.</p>
       <p><b>Getting around.</b> One finger pans, two fingers pinch to zoom, and
       <b>Zoom</b> steps through Close / Mid / Far / Wide. Tap the little map in the corner
       to open the whole realm, then tap anywhere on it to jump there.</p>

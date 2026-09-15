@@ -17,7 +17,9 @@ work themselves.
 - Select any unit and hit **Follow** to lock the camera onto it; drag the map to let go.
 - **Tap your City Centre** → *Hire Peasant*.
 - **Tap a peasant** and pick a calling: **Mine**, **Wood**, **Stone**, **Build** or **Idle**.
-- Or open the **Peasants** tab to move the whole workforce between callings at once.
+- Or open the **Folk** tab to move the workforce around in bulk, or pick one villager
+  by name and give them a calling of their own.
+- **Build** a Barracks, train warriors, then raise a **Flag** to tempt them somewhere.
 
 Keyboard, if you are at a desk: `B` peasants, `K` realm, `P` select peasants,
 `M` full map, `C` follow the selected unit, `space` pause, arrows pan, `+`/`-` zoom,
@@ -73,20 +75,40 @@ to the seam and hauling the load home teach nothing.
 Points earned are permanent and stack across callings, so a peasant who has mastered
 mining and then woodcutting ends up at STR 15. Veterans are worth keeping.
 
+Tap any peasant and their sheet shows all four tracks at once — mastered, part-done,
+and never started — so you can see exactly what a given villager has become.
+
 Every load walks back to the City Centre, so **distance is the whole economy**. Where
 the seams fell on your map decides how rich you are.
 
+## Warriors and flags
+
+Build a **Barracks** and you can train Warriors. Unlike peasants, warriors take no
+orders at all — they patrol, explore the dark, and pick their own fights. The only way
+to steer them is to put money on the map:
+
+- **Attack** — paid when the area is cleared of monsters and lairs.
+- **Explore** — paid on arrival; the fog lifts around it.
+- **Defend** — pays out gradually while a warrior holds the ground.
+- **Fear** — free, and makes them avoid a place entirely.
+
+Gold on a flag sits in escrow (shown in brackets beside your treasury) and is refunded
+in full if you withdraw it.
+
+Peasants are not completely helpless. They will run from a monster they merely see, but
+something already biting them gets hit back — and they break off and flee once badly
+hurt. A lone peasant can see off a rat; anything larger needs a warrior.
+
 ## Current scope
 
-The game is deliberately stripped back to the peasant economy while that loop is built
-out. Only the City Centre exists; the guilds, shops, towers and the heroes who used to
-take reward-flag bounties are switched off — the code is all still there, behind
-`BUILD_ORDER_FULL` and `RAIDS_ENABLED` in `src/data.js`, waiting to come back a piece
-at a time.
+Still deliberately small while the core is built out: City Centre, Barracks, peasants,
+warriors and flags. The shops, towers, huts and the other three hero classes are
+defined but switched off behind `BUILD_ORDER_FULL` in `src/data.js`.
 
-Monster lairs still breed and their broods still prowl their own ground. They will not
-march on your town, but a peasant sent to a seam next to a nest is a peasant you may not
-see again — so **where** you send them matters.
+Monster lairs breed and their broods prowl their own ground, but they do not yet march
+on your town — `RAIDS_ENABLED` in `src/data.js` turns that on once the realm can field
+enough warriors to meet a raid. A peasant sent to a seam next to a nest is still a
+peasant you may not see again, so **where** you send them matters.
 
 ## Running it locally
 

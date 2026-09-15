@@ -39,31 +39,52 @@ function walkTo(u, g, o) {
 export function peasantBrain(u, since) {
   const g = u.game;
 
-  // 1. self-preservation outranks any calling
-  const foe = g.nearestEnemy(u.x, u.y, 58, 'realm');
+  // 1. danger. A peasant will run from something it merely sees, but if the
+  //    thing is already biting them, running just means dying tired.
+  const foe = g.nearestEnemy(u.x, u.y, 64, 'realm');
   if (foe) {
+    const underAttack = g.time - (u.lastHit || -99) < 3;
+    const cornered = u.distTo(foe) <= u.def.range + 8;
+    const badlyHurt = u.hp < u.maxHpNow * 0.35;
+
+    if ((underAttack || cornered) && !badlyHurt) {
+      u.fleeing = 0;
+      u.state = 'defend';
+      u.engage(u.lastAttacker && !u.lastAttacker.dead && u.distTo(u.lastAttacker) < 80
+        ? u.lastAttacker : foe);
+      u.fight(since);
+      return;
+    }
     u.fleeing = 2.6;
     u.state = 'flee';
+    u.target = null;
     const safe = g.nearestBuilding(u.x, u.y, b => b.complete) || g.palace;
     if (safe && !touching(u, safe, 2)) walkTo(u, g, safe);
     return;
   }
   if (u.fleeing > 0) return;
+  u.target = null;
 
   const mission = MISSIONS[u.mission] || MISSIONS.none;
 
-  // 2. line up the next seam before anything else, so a peasant hauling a
+  // 2. An explicit construction order outranks the standing calling. Without
+  //    this the calling's own search overwrites the build job every tick and
+  //    nothing ever gets built by anyone who already has a trade.
+  if (u.job && u.job.type === 'build') {
+    if (u.carry > 0) return deliver(u, g);      // drop the load off first
+    return doBuild(u, g, since, u.job.site);
+  }
+
+  // 3. line up the next seam before anything else, so a peasant hauling a
   //    load home already knows where they are going back to
   if (mission.nodes && !findWork(u, g, mission)) return missionStalled(u, g, mission);
 
-  // 3. a full pack goes home first, whatever the mission
+  // 4. a full pack goes home first, whatever the mission
   if (u.carry > 0 && (u.state === 'deliver' || !u.job)) return deliver(u, g);
 
   if (mission.nodes) return doHarvest(u, g, since);
 
-  // 4. builders, and idlers who happen to see something half-finished
-  if (u.job && u.job.type === 'build') return doBuild(u, g, since, u.job.site);
-
+  // 5. builders, and idlers who happen to see something half-finished
   const site = g.nearestBuilding(u.x, u.y, b => !b.complete && b.builders < 4);
   if (site) { u.job = { type: 'build', site }; site.builders++; return; }
 
@@ -155,6 +176,7 @@ function deliver(u, g) {
     u.state = u.job ? 'walk' : 'idle';
     u.path = null;
     if (u.job && u.job.type === 'harvest') walkTo(u, g, u.job.node);
+    else if (u.job && u.job.type === 'build') walkTo(u, g, u.job.site);
   } else {
     walkTo(u, g, depot);
   }
