@@ -2,10 +2,13 @@ name: Deploy to GitHub Pages
 
 on:
   push:
+    # Only the default branch deploys. The Pages environment is protected to
+    # it, so a feature-branch push just fails -- and because both runs share
+    # the `pages` concurrency group with cancel-in-progress, that doomed run
+    # can cancel the real deploy it raced.
     branches:
       - main
       - master
-      - claude/majesty-4x-game-wnmxpa
   workflow_dispatch:
 
 permissions:
