@@ -10,7 +10,7 @@ import {
   BUILDINGS, CLASSES, MONSTERS, LAIRS, FLAGS, RES_RATE, START,
   DAY_SECONDS, TAX_INTERVAL, RESURRECT_COST, HERO_CLASSES, PEACE_DAYS, STRUCTURE_DMG,
   MISSIONS, RAIDS_ENABLED, CALLING_ORDER, DISTRESS_WINDOW, RECRUIT_DMG,
-  THREAT_PER_DAY, THREAT_CAP
+  THREAT_PER_DAY, THREAT_CAP, SEPARATION_CAP
 } from './data.js';
 import { makeRng, clamp, dist } from './util.js';
 
@@ -955,7 +955,7 @@ export class Game {
     for (const l of this.lairs) if (!l.dead) l.update(dt);
     for (const u of this.units) if (!u.dead) u.update(dt);
     for (const p of this.projectiles) if (!p.dead) p.update(dt);
-    this.separate();
+    this.separate(dt);
     this.fx.update(dt);
 
     // wandering wildlife keeps the map from feeling empty
@@ -985,12 +985,43 @@ export class Game {
   }
 
   /**
+   * Tiles around a footprint that somebody is already standing on, as "x,y"
+   * keys, so an arriving unit can pick a different one.
+   */
+  standingTiles(self, o) {
+    const s = new Set();
+    const cx = o.tx * TILE, cy = o.ty * TILE;
+    for (const v of this.units) {
+      if (v.dead || v === self) continue;
+      if (Math.abs(v.x - cx) > 96 || Math.abs(v.y - cy) > 96) continue;
+      s.add(toTile(v.x) + ',' + toTile(v.y));
+    }
+    return s;
+  }
+
+  /**
    * Nudge overlapping units apart. Without this a mine looks like it is
    * being worked by one very wide peasant.
+   *
+   * The nudge must never out-push walking. It used to be applied straight to
+   * each pair, immediately, at a strength that beat a single movement step --
+   * so a crowd converging on one approach tile deadlocked: every unit stepped
+   * forward and was shoved back exactly as far, and the whole knot stood
+   * still for minutes on end while cheerfully reporting itself as `moving`.
+   *
+   * So: accumulate the shoves, then clamp each unit's total to a fraction of
+   * the ground it can cover this tick. Whatever else happens, a walking unit
+   * keeps most of its step and the jam resolves itself. Right of way goes to
+   * whoever is actually travelling -- the one standing still is the one who
+   * steps aside, which is also what people do.
    */
-  separate() {
+  separate(dt) {
     const arr = this.units;
-    const MIN = 7, MIN2 = MIN * MIN;
+    const MIN = 11, MIN2 = MIN * MIN;   // a shade over two 5px radii: shoulders, not overlap
+    for (let i = 0; i < arr.length; i++) {
+      const u = arr[i];
+      if (!u.dead) { u.pushX = 0; u.pushY = 0; }
+    }
     for (let i = 0; i < arr.length; i++) {
       const a = arr[i];
       if (a.dead) continue;
@@ -1002,12 +1033,24 @@ export class Game {
         if (d2 >= MIN2) continue;
         let d = Math.sqrt(d2);
         if (d < 0.001) { dx = (Math.random() - 0.5); dy = (Math.random() - 0.5); d = 0.5; }
-        const push = (MIN - d) * 0.22 / d;
-        const ax = a.x - dx * push, ay = a.y - dy * push;
-        const bx = b.x + dx * push, by = b.y + dy * push;
-        if (this.world.passable(toTile(ax), toTile(ay))) { a.x = ax; a.y = ay; }
-        if (this.world.passable(toTile(bx), toTile(by))) { b.x = bx; b.y = by; }
+        const shove = (MIN - d) / d;
+        let wa = 0.5, wb = 0.5;
+        if (a.moving && !b.moving) { wa = 0; wb = 1; }
+        else if (b.moving && !a.moving) { wa = 1; wb = 0; }
+        a.pushX -= dx * shove * wa; a.pushY -= dy * shove * wa;
+        b.pushX += dx * shove * wb; b.pushY += dy * shove * wb;
       }
+    }
+    for (let i = 0; i < arr.length; i++) {
+      const u = arr[i];
+      if (u.dead) continue;
+      let px = u.pushX, py = u.pushY;
+      if (!px && !py) continue;
+      const m = Math.hypot(px, py);
+      const cap = Math.max(0.25, u.speed * dt * SEPARATION_CAP);
+      if (m > cap) { px = px / m * cap; py = py / m * cap; }
+      const nx = u.x + px, ny = u.y + py;
+      if (this.world.passable(toTile(nx), toTile(ny))) { u.x = nx; u.y = ny; }
     }
   }
 

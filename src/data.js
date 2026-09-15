@@ -41,6 +41,12 @@ export const STANCES = {
 };
 export const STANCE_ORDER = ['defend', 'roam'];
 export const RUSH_SPEED = 1.45;     // answering a worker's distress call
+/**
+ * The share of one movement step that crowd separation is allowed to undo.
+ * Strictly below 1 or a knot of units can push each other to a standstill --
+ * which it did, for minutes at a time.
+ */
+export const SEPARATION_CAP = 0.45;
 export const DISTRESS_WINDOW = 5;   // seconds a cry for help stays live
 
 /** How each attribute cashes out. One place to retune all of it. */

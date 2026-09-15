@@ -267,6 +267,8 @@ export class Unit {
     this.needPath = null;
     this.repathIn = 0;
     this.stuck = 0;
+    this.watchIn = 1;
+    this.watchX = x; this.watchY = y;
     this.dead = false;
     this.hitFlash = 0;
     this.selected = false;
@@ -535,6 +537,24 @@ export class Unit {
     }
     if (!this.target || this.target.dead || this.distTo(this.target) > this.def.range) {
       this.stepMove(dt);
+    }
+
+    // Watchdog. Wanting to be somewhere and getting no closer is a bug, not a
+    // plan, and nothing above is allowed to freeze a unit for good -- two of
+    // them managed it for minutes at a time. So measure it: ask for the path
+    // again first, and if that changes nothing, `stuck` keeps climbing and
+    // the brain gets to abandon the errand.
+    this.watchIn -= dt;
+    if (this.watchIn <= 0) {
+      this.watchIn = 1;
+      if (this.goal && !this.target && !this.atGoal()) {
+        const moved = Math.hypot(this.x - this.watchX, this.y - this.watchY);
+        this.stuck = moved < 2 ? this.stuck + 1 : 0;
+        if (this.stuck >= 2 && !this.path && !this.needPath) {
+          this.needPath = { tx: this.goal.tx, ty: this.goal.ty, near: this.goal.near };
+        }
+      } else this.stuck = 0;
+      this.watchX = this.x; this.watchY = this.y;
     }
   }
 }

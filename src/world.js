@@ -395,9 +395,13 @@ export class World {
    * Nearest walkable tile that touches the rectangle (tx,ty,fw,fh), measured
    * from the pixel position (fx,fy). Units use this to walk *up to* mines and
    * buildings instead of trying to stand inside them.
+   *
+   * `taken` is an optional set of "x,y" keys already occupied by somebody
+   * else: those are passed over while any free tile remains, so a crowd fans
+   * out around a seam instead of all converging on the one closest spot.
    */
-  approachTile(tx, ty, fw, fh, fx, fy) {
-    let best = null, bestD = Infinity;
+  approachTile(tx, ty, fw, fh, fx, fy, taken) {
+    let best = null, bestD = Infinity, spare = null, spareD = Infinity;
     for (let r = 1; r <= 3 && !best; r++) {
       for (let y = ty - r; y < ty + fh + r; y++) {
         for (let x = tx - r; x < tx + fw + r; x++) {
@@ -405,11 +409,15 @@ export class World {
           if (!this.passable(x, y)) continue;
           const dx = x * 16 + 8 - fx, dy = y * 16 + 8 - fy;
           const d = dx * dx + dy * dy;
+          if (taken && taken.has(x + ',' + y)) {
+            if (d < spareD) { spareD = d; spare = { x, y }; }
+            continue;
+          }
           if (d < bestD) { bestD = d; best = { x, y }; }
         }
       }
     }
-    return best || this.nearestFree(tx, ty, 6);
+    return best || spare || this.nearestFree(tx, ty, 6);
   }
 
   /** Closest walkable tile to (x,y), searched in rings. */

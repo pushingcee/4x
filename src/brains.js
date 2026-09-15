@@ -23,13 +23,27 @@ function edgeDist(u, tx, ty, fw, fh) {
   const dy = Math.max(y0 - u.y, 0, u.y - y1);
   return Math.hypot(dx, dy);
 }
-const touching = (u, o, slack = 1.3) =>
+/**
+ * Close enough to work. The slack is not a taste call: a worker sent to an
+ * approach tile can end up anywhere on it -- the crowd nudge sees to that --
+ * and the far corner of a DIAGONAL approach tile sits sqrt(2) tiles from the
+ * footprint edge. Anything tighter than that and a worker standing exactly
+ * where it was told to stand reports itself as not yet arrived, asks for a
+ * path to the tile it is already on, gets an empty one back, and stands
+ * there until the end of the world.
+ */
+const touching = (u, o, slack = 1.5) =>
   edgeDist(u, o.tx, o.ty, o.fw || 1, o.fh || 1) <= slack * TILE;
 
-/** Send a unit to stand beside a footprint. */
+/**
+ * Send a unit to stand beside a footprint -- and not on top of whoever is
+ * already standing there. Everyone picking the same approach tile is what
+ * makes a seam look like it is being worked by one very wide peasant; given
+ * a free tile each they fan out around it instead, for the same walk.
+ */
 function walkTo(u, g, o) {
   if (u.path || u.needPath) return;
-  const t = g.world.approachTile(o.tx, o.ty, o.fw || 1, o.fh || 1, u.x, u.y);
+  const t = g.world.approachTile(o.tx, o.ty, o.fw || 1, o.fh || 1, u.x, u.y, g.standingTiles(u, o));
   u.goTo(t.x, t.y);
 }
 
@@ -105,10 +119,19 @@ export function peasantBrain(u, since) {
  * after that they go looking for the next nearest one on their own.
  */
 function findWork(u, g, mission) {
-  const cur = u.job && u.job.type === 'harvest' ? u.job.node : null;
+  let cur = u.job && u.job.type === 'harvest' ? u.job.node : null;
+  // Seconds of trying and no closer: the seam is walled in, or the only way
+  // to stand at it is taken. Write it off for this villager and look
+  // elsewhere, rather than leaving them in a field holding a pick forever.
+  if (cur && u.stuck >= 5) {
+    (u.unreachable || (u.unreachable = new Set())).add(cur);
+    g.notify(`${u.name} cannot get at that ${mission.res}`, 'bad');
+    u.job = null; u.stuck = 0; u.path = null; u.needPath = null;
+    cur = null;
+  }
   if (cur && cur.amount > 0 && !cur.removed && mission.nodes.includes(cur.kind)) return true;
 
-  const next = g.world.nearestHarvestable(mission.nodes, u.x, u.y);
+  const next = g.world.nearestHarvestable(mission.nodes, u.x, u.y, u.unreachable);
   if (!next) { u.job = null; return false; }
   if (cur) g.notify(`${u.name} moves on to the next ${mission.res === 'wood' ? 'stand of trees' : 'seam'}`);
   u.job = { type: 'harvest', node: next };
