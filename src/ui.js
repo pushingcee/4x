@@ -1304,9 +1304,15 @@ export class UI {
       quarrying <b>CON</b> and <b>INT</b>, building <b>INT</b> and <b>AGI</b>. What they
       earn is theirs for good, so a veteran who has done two jobs is worth keeping.</p>
       <p><b>What the attributes do.</b> Strength adds melee damage, agility attack speed,
-      constitution health, and intelligence both mana and critical chance &mdash; all in
-      steps of five points. Warriors instead gain <b>+3 to everything</b> per level, up to
-      level 5.</p>
+      constitution health, and intelligence both mana and critical chance &mdash; every
+      single point counts, so nothing a veteran learns is wasted. Warriors instead gain
+      <b>+5 to everything</b> per level, up to level 5, and those ranks are hard-won.
+      Take one villager through every calling before knighting them and they end up
+      worth several conscripts.</p>
+      <p><b>The camps fight back.</b> Strike a lair and it raises the alarm, mustering
+      reinforcements far faster for a while &mdash; you have to out-kill it, not outlast
+      it. Monsters also grow stronger as the days pass, so send enough, and remember a
+      big enough bounty will buy courage your soldiers do not have on their own.</p>
       <p><b>Soldiers.</b> Build a <b>Barracks</b> or a <b>Rangers Guild</b>, then set a villager's
       calling to <b>War</b> or <b>Scout</b>. They are <b>called up</b>, not knighted on the spot:
       they down tools and drill for a while first. A recruit is already militia &mdash; they guard

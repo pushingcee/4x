@@ -47,15 +47,16 @@ their own.
 
 ## Attributes
 
-Every unit has four attributes. They read in steps of five, and five is the baseline —
-a unit with straight fives behaves exactly as its raw definition says.
+Every unit has four attributes. Five is the baseline — a unit with straight fives
+behaves exactly as its raw definition says — and **every single point counts**, so
+nothing a veteran learns is ever rounded away.
 
 | Attribute | Effect |
 |---|---|
-| **Strength** | +8% melee damage per 5 points |
-| **Agility** | +6% attack speed per 5 points |
-| **Constitution** | +6 health per point |
-| **Intelligence** | +4 mana per point, and +3% critical chance per 5 points |
+| **Strength** | +2.2% melee damage per point |
+| **Agility** | +1.6% attack speed per point |
+| **Constitution** | +7 health per point |
+| **Intelligence** | +4 mana per point, and +0.8% critical chance per point (capped at 45%) |
 
 Peasants start at 5 across the board; hero classes start lopsided (a warrior is strong
 and tough and never crits, a wizard is frail and crits often) which is the seed of the
@@ -79,9 +80,14 @@ Tap any peasant and their sheet shows all four tracks at once — mastered, part
 and never started — so you can see exactly what a given villager has become.
 
 **Warriors grow by rank instead.** They cap at **level 5**, and every level grants
-**+3 to every attribute** — the only thing levels do, so a hero's numbers come from one
-place. A fresh warrior beats a skeleton and loses to an ogre; a level-5 one kills the
-ogre with a third of its health left.
+**+5 to every attribute** — the only thing levels do, so a hero's numbers come from one
+place. Ranks are *earned*, not handed out: the table runs 60 / 180 / 420 / 850 experience,
+so level 5 is the work of a whole campaign rather than an afternoon.
+
+The two systems multiply. A villager taken through **every** calling and then knighted
+and levelled to 5 ends up with roughly **2.2× the health and 2.7× the damage** of a
+conscript pulled straight off the farm — near **six times** the staying power in a
+straight fight. Raising a veteran is the strongest thing you can do with your time.
 
 Every load walks back to the City Centre, so **distance is the whole economy**. Where
 the seams fell on your map decides how rich you are.
@@ -110,8 +116,8 @@ top, so nothing can ever go *down* by being promoted:
 | Warrior | +8 | +2 | +7 | — |
 | Ranger | +2 | +9 | +3 | +1 |
 
-A villager who mastered mining becomes a STR 18 / CON 17 warrior with 202 health, where
-one straight off the farm starts at 13 / 12 and 172. Veterans make better soldiers.
+A villager who mastered mining becomes a STR 18 / CON 17 warrior with 214 health, where
+one straight off the farm starts at 13 / 12 and 179. Veterans make better soldiers.
 
 ### Stances
 
@@ -149,6 +155,19 @@ Raids are on. After a few days of peace, lairs close enough to your buildings se
 parties at the town — so expanding toward a nest is what makes it hostile. Build a
 Barracks and warriors will meet them in the field; build nothing and your peasants get
 picked off around day 17 and the City Centre erodes from there.
+
+**A camp fights back.** Hit one and it sounds the alarm: for the next 25 seconds it
+musters reinforcements at nearly twice the usual rate, so a raiding party has to kill
+the garrison faster than the lair can replace it. The muster is finite — the camp cannot
+bleed you forever — but a party that is merely *adequate* will lose the race. Monsters
+also toughen as the days pass, so a day-40 goblin is about three times the day-1 one;
+the realm has to grow at least as fast as the dark does.
+
+Roughly where the ladder sits: a rat nest falls to a single fresh warrior, a goblin camp
+**wipes** two of them but falls to three at level 2, a skeleton camp costs a life at
+three level 3s, and an ogre den wants three level-5 veterans — and still takes one of
+them. Gold buys courage, too: a fat enough bounty will talk soldiers into a fight they
+would otherwise refuse.
 
 ## Running it locally
 

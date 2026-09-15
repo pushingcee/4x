@@ -9,7 +9,8 @@ import { Fx } from './fx.js';
 import {
   BUILDINGS, CLASSES, MONSTERS, LAIRS, FLAGS, RES_RATE, START,
   DAY_SECONDS, TAX_INTERVAL, RESURRECT_COST, HERO_CLASSES, PEACE_DAYS, STRUCTURE_DMG,
-  MISSIONS, RAIDS_ENABLED, CALLING_ORDER, DISTRESS_WINDOW, RECRUIT_DMG
+  MISSIONS, RAIDS_ENABLED, CALLING_ORDER, DISTRESS_WINDOW, RECRUIT_DMG,
+  THREAT_PER_DAY, THREAT_CAP
 } from './data.js';
 import { makeRng, clamp, dist } from './util.js';
 
@@ -87,8 +88,22 @@ export class Game {
   // -----------------------------------------------------------------
   // spawning
   // -----------------------------------------------------------------
+  /** How much harder the world has grown, in attribute points. */
+  get threat() {
+    return Math.min(THREAT_CAP, Math.floor((this.day - 1) * THREAT_PER_DAY));
+  }
+
   spawnUnit(kind, x, y, faction) {
     const u = new Unit(this, kind, x, y, faction);
+    if (faction === 'monster') {
+      // the same per-point rules everything else obeys, applied to the passage
+      // of time: later monsters are simply bigger, faster and harder to kill
+      const t = this.threat;
+      if (t > 0) {
+        u.classBonus = { str: t, agi: t, con: t, int: t };
+        u.hp = u.maxHpNow;
+      }
+    }
     u.brain = faction === 'monster' ? monsterBrain
       : kind === 'peasant' ? peasantBrain
         : kind === 'guard' ? guardBrain : heroBrain;

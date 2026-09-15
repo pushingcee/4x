@@ -11,13 +11,13 @@ export const COST_KEYS = ['gold', 'wood', 'stone'];
  */
 export const STATS = {
   str: { key: 'str', name: 'Strength', short: 'STR', colour: '#e07a50',
-    desc: '+8% melee damage per 5 points' },
+    desc: '+2.2% melee damage per point' },
   agi: { key: 'agi', name: 'Agility', short: 'AGI', colour: '#7fd8a0',
-    desc: '+6% attack speed per 5 points' },
+    desc: '+1.6% attack speed per point' },
   con: { key: 'con', name: 'Constitution', short: 'CON', colour: '#ff9db0',
-    desc: '+6 health per point' },
+    desc: '+7 health per point' },
   int: { key: 'int', name: 'Intelligence', short: 'INT', colour: '#6fb6ff',
-    desc: '+4 mana per point, +3% critical chance per 5 points' }
+    desc: '+4 mana and +0.8% critical chance per point' }
 };
 export const STAT_ORDER = ['str', 'agi', 'con', 'int'];
 
@@ -44,12 +44,17 @@ export const RUSH_SPEED = 1.45;     // answering a worker's distress call
 export const DISTRESS_WINDOW = 5;   // seconds a cry for help stays live
 
 /** How each attribute cashes out. One place to retune all of it. */
+/**
+ * Per POINT, not per five. Bracketing threw away most of a veteran's training
+ * -- 23 strength and 19 strength bought exactly the same damage -- so every
+ * point now moves the needle, and moves it further.
+ */
 export const STAT_EFFECT = {
-  dmgPer5: 0.08,      // strength
-  speedPer5: 0.06,    // agility
-  hpPerPoint: 6,      // constitution
-  manaPerPoint: 4,    // intelligence
-  critPer5: 0.03,
+  dmgPerPoint: 0.022,     // strength, counted above the baseline of 5
+  speedPerPoint: 0.016,   // agility
+  hpPerPoint: 7,          // constitution
+  manaPerPoint: 4,        // intelligence
+  critPerPoint: 0.008,    // intelligence, counted absolute
   critCap: 0.45,
   critMultiplier: 1.75
 };
@@ -279,9 +284,9 @@ export const HERO_CLASSES = ['warrior', 'ranger', 'wizard', 'cleric'];
  * multipliers -- they hand out attribute points instead, so a hero's numbers
  * come from exactly one place and the class system stays legible.
  */
-export const XP_TABLE = [0, 25, 70, 140, 240];
+export const XP_TABLE = [0, 60, 180, 420, 850];
 export const MAX_LEVEL = XP_TABLE.length;   // 5
-export const LEVEL_STATS = 3;               // +3 to every attribute per level
+export const LEVEL_STATS = 5;               // +5 to every attribute per level
 
 export const MONSTERS = {
   rat: {
@@ -319,14 +324,31 @@ export const MONSTERS = {
  * poke the nest and the nest pokes back, exactly as it should be.
  */
 export const LAIRS = {
-  rat: { id: 'rat', name: 'Rat Nest', hp: 340, spawn: 'rat', every: 18, max: 3, reward: 110, prop: 'lair_rat', xp: 30, wake: 2 },
-  goblin: { id: 'goblin', name: 'Goblin Camp', hp: 720, spawn: 'goblin', every: 17, max: 4, reward: 260, prop: 'lair_goblin', xp: 70, wake: 6 },
-  skeleton: { id: 'skeleton', name: 'Haunted Graveyard', hp: 1150, spawn: 'skeleton', every: 19, max: 4, reward: 520, prop: 'lair_skeleton', xp: 130, wake: 11 },
-  ogre: { id: 'ogre', name: 'Ogre Den', hp: 1700, spawn: 'ogre', every: 24, max: 3, reward: 950, prop: 'lair_ogre', xp: 260, wake: 16 }
+  rat: { id: 'rat', name: 'Rat Nest', hp: 380, spawn: 'rat', every: 18, max: 4, reward: 140, prop: 'lair_rat', xp: 40, wake: 2 },
+  goblin: { id: 'goblin', name: 'Goblin Camp', hp: 820, spawn: 'goblin', every: 17, max: 5, reward: 320, prop: 'lair_goblin', xp: 90, wake: 6 },
+  skeleton: { id: 'skeleton', name: 'Haunted Graveyard', hp: 1300, spawn: 'skeleton', every: 18, max: 5, reward: 640, prop: 'lair_skeleton', xp: 170, wake: 11 },
+  ogre: { id: 'ogre', name: 'Ogre Den', hp: 1900, spawn: 'ogre', every: 22, max: 3, reward: 1150, prop: 'lair_ogre', xp: 320, wake: 16 }
 };
 
 /** No raids at all before this day: time to get a mine and a guild going. */
 export const PEACE_DAYS = 4;
+
+/**
+ * A camp under attack musters: for a short window it breeds faster, so razing
+ * one is a fight rather than a demolition job. The window is deliberately
+ * FINITE -- a permanent bonus just makes a camp unkillable, because attackers
+ * rightly clear the defenders before touching the building.
+ */
+export const LAIR_ALARM_RATE = 0.55;
+export const LAIR_ALARM_TIME = 25;
+
+/**
+ * The world hardens as the days pass. Monsters spawned later carry this many
+ * extra attribute points, which the ordinary per-point rules then turn into
+ * health, damage and speed -- so a day-30 goblin is genuinely a problem.
+ */
+export const THREAT_PER_DAY = 0.45;
+export const THREAT_CAP = 22;
 
 export const FLAGS = {
   attack: {

@@ -6,7 +6,7 @@ import { TILE } from './art.js';
 import { toPx, toTile } from './world.js';
 import {
   BUILDINGS, CLASSES, MONSTERS, LAIRS, XP_TABLE, MAX_LEVEL, LEVEL_STATS,
-  MISSIONS, STAT_ORDER, STAT_EFFECT, TRAIN_MAX, RUSH_SPEED
+  MISSIONS, STAT_ORDER, STAT_EFFECT, TRAIN_MAX, RUSH_SPEED, LAIR_ALARM_RATE, LAIR_ALARM_TIME
 } from './data.js';
 import { clamp, dist, heroName, peasantName } from './util.js';
 
@@ -147,6 +147,8 @@ export class Lair extends Structure {
     this.spawnCool = def.every * (0.4 + Math.random() * 0.8);
     this.spawned = [];
     this.active = false;
+    this.alarmLeft = 0;
+    this.alarmCooldown = false;
     this.occupy();
   }
   get name() { return this.def.name; }
@@ -167,7 +169,10 @@ export class Lair extends Structure {
       } else return;
     }
     this.spawned = this.spawned.filter(u => !u.dead);
-    this.spawnCool -= dt;
+    // A camp under attack musters for a while, then runs out of bodies to
+    // throw. The window has to end or the camp can never be taken.
+    if (this.alarmLeft > 0) this.alarmLeft -= dt;
+    this.spawnCool -= dt * (this.alarmLeft > 0 ? 1 / LAIR_ALARM_RATE : 1);
     if (this.spawnCool <= 0) {
       this.spawnCool = this.def.every * (0.75 + Math.random() * 0.5);
       if (this.spawned.length < this.def.max && this.game.monsterBudgetOk()) {
@@ -200,6 +205,10 @@ export class Lair extends Structure {
 
   damage(n, src) {
     if (!this.active && !this.dead) this.wake(true);   // poke it and it stirs
+    if (!(this.alarmLeft > 0) && this.alarmCooldown !== true) {
+      this.alarmLeft = LAIR_ALARM_TIME;                // sound the muster, once
+      this.alarmCooldown = true;
+    }
     super.damage(n, src);
   }
 
@@ -337,18 +346,18 @@ export class Unit {
   }
 
   get power() {
-    const strBonus = 1 + Math.floor((this.stats.str - 5) / 5) * STAT_EFFECT.dmgPer5;
+    const strBonus = Math.max(0.25, 1 + (this.stats.str - 5) * STAT_EFFECT.dmgPerPoint);
     return (this.dmg + this.bonusDmg) * strBonus;
   }
 
   /** Seconds between swings, quickened by agility. */
   get attackRate() {
-    const quick = 1 + Math.floor((this.stats.agi - 5) / 5) * STAT_EFFECT.speedPer5;
+    const quick = Math.max(0.35, 1 + (this.stats.agi - 5) * STAT_EFFECT.speedPerPoint);
     return this.def.rate / quick;
   }
 
   get critChance() {
-    return Math.min(STAT_EFFECT.critCap, Math.floor(this.stats.int / 5) * STAT_EFFECT.critPer5);
+    return Math.min(STAT_EFFECT.critCap, this.stats.int * STAT_EFFECT.critPerPoint);
   }
   get maxMana() { return this.stats.int * STAT_EFFECT.manaPerPoint; }
   get tx() { return toTile(this.x); }

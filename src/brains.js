@@ -543,7 +543,11 @@ function chooseGoal(u, g) {
     const d = dist(u.x, u.y, f.x, f.y);
     const { threat, mine } = dangerAt(g, f.x, f.y, f.radius * TILE + 30, u);
     const odds = mine / Math.max(1, threat);
-    if (f.type === 'attack' && odds < 0.85 - def.courage) continue;
+    // Gold buys courage. Without this the odds gate was absolute and a hero
+    // would refuse a camp no matter how much was piled on it, which makes the
+    // one lever the player has over them useless exactly when it matters.
+    const nerve = 1 + Math.min(2, (f.bounty / 350) * (0.5 + greed));
+    if (f.type === 'attack' && odds * nerve < 0.85 - def.courage) continue;
     let value = f.bounty * (0.45 + greed * 1.25);
     if (f.type === 'explore') value *= def.id === 'ranger' ? 1.7 : 0.85;
     if (f.type === 'defend') value *= 1.0 + (f.claimed === u.id ? 0.7 : 0);
