@@ -5,7 +5,7 @@
 import { TILE, buildingSprite, unitSprite, propSprite, flagSprite, makeCanvas, PAL } from './art.js';
 import {
   BUILDINGS, BUILD_ORDER, CLASSES, FLAGS, MONSTERS, LAIRS, RES_RATE, RESURRECT_COST,
-  MISSIONS, MISSION_ORDER
+  MISSIONS, MISSION_ORDER, STATS, STAT_ORDER, TRAIN_MAX
 } from './data.js';
 import { toTile, toPx } from './world.js';
 import { fmt, clamp, dist } from './util.js';
@@ -38,6 +38,29 @@ function costText(cost, game) {
     bits.push(`<span class="${lack ? 'no' : ''}">${cost[k]}${short}</span>`);
   }
   return bits.join(' ') || 'free';
+}
+
+/** The four attributes, with what this unit's calling has added so far. */
+function attrBlock(u) {
+  const st = u.stats, gained = u.trained;
+  return `<div class="attrs" data-live="attrs">` + STAT_ORDER.map(k => {
+    const s = STATS[k];
+    return `<div class="attr" style="--as:${s.colour}" title="${s.name}: ${s.desc}">
+      <b>${st[k]}${gained[k] ? `<i>+${gained[k]}</i>` : ''}</b><span>${s.short}</span></div>`;
+  }).join('') + `</div>`;
+}
+
+/** Progress toward the attribute points the current calling can teach. */
+function trainBlock(u) {
+  const m = MISSIONS[u.mission];
+  if (!m || !m.trains) return '';
+  const done = Math.min(1, (u.training[u.mission] || 0) / m.trainFull);
+  const points = Math.floor(done * TRAIN_MAX);
+  const names = m.trains.map(k => STATS[k].short).join(' + ');
+  return `<div class="train" data-live="train">
+    ${done >= 1 ? `<b>Mastered ${m.name.toLowerCase()} work</b> &mdash; ${names} maxed`
+      : `Learning <b>${names}</b> &mdash; ${points}/${TRAIN_MAX} earned`}
+    <span class="bar"><i style="width:${done * 100}%"></i></span></div>`;
 }
 
 /** The row of calling buttons shown wherever peasants are selected. */
@@ -471,9 +494,12 @@ export class UI {
           <div class="hp"><i data-live="hp" class="${cls}" style="width:${hpF * 100}%"></i></div>
         </div>
       </div>
+      ${attrBlock(u)}
       <div class="statline" data-live="stats">
         <span>HP <b>${Math.ceil(u.hp)}/${u.maxHpNow}</b></span>
-        <span>DMG <b>${u.power.toFixed(0)}</b></span>
+        <span>DMG <b>${u.power.toFixed(1)}</b></span>
+        <span>MANA <b>${u.maxMana}</b></span>
+        <span>CRIT <b>${Math.round(u.critChance * 100)}%</b></span>
         ${u.isHero ? `<span>GOLD <b>${Math.floor(u.gold)}</b></span>
         <span>XP <b>${Math.floor(u.xp)}</b></span>
         <span>KILLS <b>${u.kills}</b></span>
@@ -481,14 +507,15 @@ export class UI {
         ${u.upgrades ? `<span>WEAPON <b>+${u.upgrades}</b></span>` : ''}` : ''}
         ${u.carry > 0 ? `<span>CARRYING <b>${Math.floor(u.carry)} ${u.carryRes}</b></span>` : ''}
       </div>
-      ${u.isHero ? `<div class="hint">Heroes take no orders. Raise a <b>flag</b> near what you want done and pay enough to tempt them.</div>` : ''}
-      ${u.kind === 'peasant' ? `${missionPicker(u.mission)}
-        <div class="hint">${MISSIONS[u.mission].desc}</div>` : ''}
+      ${u.kind === 'peasant' ? `${missionPicker(u.mission)}${trainBlock(u)}` : ''}
       <div class="acts">
         <button class="btn small ${following ? 'danger' : 'primary'}" data-act="follow">${following ? 'Stop following' : 'Follow'}</button>
         <button class="btn small" data-act="center">Centre</button>
         <button class="btn small" data-act="clear">Close</button>
-      </div>`;
+      </div>
+      ${u.isHero ? `<div class="hint">Heroes take no orders. Raise a <b>flag</b> near what you want
+        done and pay enough to tempt them.</div>` : ''}
+      ${u.kind === 'peasant' ? `<div class="hint">${MISSIONS[u.mission].desc}</div>` : ''}`;
     el.querySelector('.pic').replaceWith(spriteEl(unitSprite(u.sprite, 0, 1), 16, 16, 36));
     this.wireSelActions(el, u);
     // keep the live numbers moving without touching the buttons
@@ -502,9 +529,27 @@ export class UI {
       }
       const meta = el.querySelector('[data-live="meta"]');
       if (meta) meta.textContent = `${u.title}${u.isHero ? ` · level ${u.level}` : ''} · ${this.unitJobText(u)}`;
+      const attrs = el.querySelector('[data-live="attrs"]');
+      if (attrs) {
+        const st = u.stats, gained = u.trained;
+        STAT_ORDER.forEach((k, i) => {
+          const cell = attrs.children[i];
+          if (cell) cell.querySelector('b').innerHTML = `${st[k]}${gained[k] ? `<i>+${gained[k]}</i>` : ''}`;
+        });
+      }
+      const train = el.querySelector('[data-live="train"]');
+      if (train) {
+        const m = MISSIONS[u.mission];
+        if (m && m.trains) {
+          const done = Math.min(1, (u.training[u.mission] || 0) / m.trainFull);
+          const bar = train.querySelector('.bar i');
+          if (bar) bar.style.width = done * 100 + '%';
+        }
+      }
       const stats = el.querySelector('[data-live="stats"]');
       if (stats) {
-        const bits = [`HP <b>${Math.ceil(u.hp)}/${u.maxHpNow}</b>`, `DMG <b>${u.power.toFixed(0)}</b>`];
+        const bits = [`HP <b>${Math.ceil(u.hp)}/${u.maxHpNow}</b>`, `DMG <b>${u.power.toFixed(1)}</b>`,
+          `MANA <b>${u.maxMana}</b>`, `CRIT <b>${Math.round(u.critChance * 100)}%</b>`];
         if (u.isHero) bits.push(`GOLD <b>${Math.floor(u.gold)}</b>`, `XP <b>${Math.floor(u.xp)}</b>`, `KILLS <b>${u.kills}</b>`);
         if (u.carry > 0) bits.push(`CARRYING <b>${Math.floor(u.carry)} ${u.carryRes}</b>`);
         stats.innerHTML = bits.map(b => `<span>${b}</span>`).join('');
@@ -817,6 +862,15 @@ export class UI {
   }
 
   /** The Peasants tab: hire, and move people between callings. */
+  /** "Miner · working gold · STR 10 CON 10" */
+  peasantLine(p) {
+    const m = MISSIONS[p.mission];
+    const gained = p.trained;
+    const earned = STAT_ORDER.filter(k => gained[k] > 0)
+      .map(k => `${STATS[k].short} ${p.stats[k]}`).join(' ');
+    return `${m.name} · ${this.unitJobText(p)}${earned ? ' · ' + earned : ''}`;
+  }
+
   /** "2 working, 1 hauling" -- what a calling's crew is up to right now. */
   missionStatus(crew, m) {
     if (!crew.length) return m.res ? `no one gathering ${m.res}` : 'nobody assigned';
@@ -836,7 +890,7 @@ export class UI {
 
     // Rebuilding this list every frame would swallow taps on the +/- buttons,
     // so only rebuild when the crew actually changes.
-    const sig = MISSION_ORDER.map(id => byMission(id).length).join(',') + '|' + canHire;
+    const sig = peasants.map(p => p.id + ':' + p.mission).join(',') + '|' + canHire;
     if (!force && sig === this.peasantSig && this.peasantRefresh) { this.peasantRefresh(); return; }
     this.peasantSig = sig;
 
@@ -867,13 +921,42 @@ export class UI {
         </div>`;
     }
 
+    // Every peasant by name: the whole point is being able to single one out
+    // and give them a calling of their own.
+    html += `<div class="hint" style="margin-top:6px">Tap anyone to give them a calling of their own.</div>`;
+    for (const p of peasants) {
+      const m = MISSIONS[p.mission];
+      html += `
+        <div class="who-row" data-who="${p.id}">
+          <span class="swatch" style="background:${m.colour}"></span>
+          <div class="grow">
+            <span class="nm">${p.name}</span>
+            <span class="sub" data-who-sub="${p.id}">${this.peasantLine(p)}</span>
+          </div>
+          <span class="go">&rsaquo;</span>
+        </div>`;
+    }
+
     body.innerHTML = html;
+
+    body.querySelectorAll('[data-who]').forEach(row => row.addEventListener('click', () => {
+      const u = g.units.find(x => x.id === +row.dataset.who && !x.dead);
+      if (!u) return;
+      this.setSelection([u]);
+      this.r.centerOn(u.x, u.y);
+      this.closeDrawer();
+      this.audio.play('ui');
+    }));
 
     // live status lines, without disturbing the controls
     this.peasantRefresh = () => {
       for (const id of MISSION_ORDER) {
         const el = body.querySelector(`[data-status="${id}"]`);
         if (el) el.textContent = this.missionStatus(byMission(id), MISSIONS[id]);
+      }
+      for (const p of peasants) {
+        const el = body.querySelector(`[data-who-sub="${p.id}"]`);
+        if (el) el.textContent = this.peasantLine(p);
       }
     };
 
@@ -1058,6 +1141,14 @@ export class UI {
       someone in a particular spot instead.</p>
       <p><b>Assigning.</b> Tap a peasant for their calling buttons, or open the
       <b>Peasants</b> tab to move your whole workforce around at once.</p>
+      <p><b>Work changes people.</b> Every calling trains two attributes, up to five points
+      each, and only while they are actually working &mdash; time served counts for nothing.
+      Mining builds <b>STR</b> and <b>CON</b>, woodcutting <b>AGI</b> and <b>STR</b>,
+      quarrying <b>CON</b> and <b>INT</b>, building <b>INT</b> and <b>AGI</b>. What they
+      earn is theirs for good, so a veteran who has done two jobs is worth keeping.</p>
+      <p><b>What the attributes do.</b> Strength adds melee damage, agility attack speed,
+      constitution health, and intelligence both mana and critical chance &mdash; all in
+      steps of five points.</p>
       <p><b>Careful where you send them.</b> Monsters still prowl near their lairs, and a peasant
       is no fighter. They will run, but not always fast enough.</p>
       <p><b>Camera.</b> Drag to pan, pinch to zoom, or tap <b>Zoom</b> for Close / Mid / Far / Wide.

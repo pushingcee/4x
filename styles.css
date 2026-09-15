@@ -182,6 +182,30 @@ canvas{image-rendering:pixelated;image-rendering:crisp-edges}
 .hp i.mid{background:var(--gold)}
 .hp i.low{background:var(--bad)}
 
+/* attributes */
+.attrs{display:flex;gap:4px;margin:6px 0 2px}
+.attr{
+  flex:1;text-align:center;padding:4px 2px;background:var(--edge-dk);
+  box-shadow:inset 0 0 0 1px var(--edge-lt);
+}
+.attr b{display:block;font-size:15px;color:var(--as,#f2e9ff);font-variant-numeric:tabular-nums}
+.attr span{display:block;font-size:9px;color:var(--txt-dim);letter-spacing:.06em}
+.attr i{font-style:normal;font-size:8.5px;color:var(--good)}
+
+.train{margin:6px 0 2px;font-size:11px;color:var(--txt-dim)}
+.train .bar{display:block;height:7px;background:var(--edge-dk);border:1px solid var(--edge-lt);margin-top:4px}
+.train .bar i{display:block;height:100%;background:var(--gold)}
+.train b{color:var(--txt)}
+
+/* individual roster */
+.who-row{display:flex;align-items:center;gap:7px;padding:7px 4px;border-bottom:1px solid var(--edge-dk);cursor:pointer}
+.who-row:active{background:var(--panel-lit)}
+.who-row .swatch{width:10px;height:10px;flex:none;box-shadow:0 0 0 1px var(--edge-dk)}
+.who-row .grow{flex:1;min-width:0}
+.who-row .nm{display:block;font-size:13px}
+.who-row .sub{display:block;font-size:10.5px;color:var(--txt-dim)}
+.who-row .go{font-size:14px;color:var(--gold)}
+
 /* mission picker */
 .missions{display:flex;flex-wrap:wrap;gap:5px;margin:7px 0}
 .missions .mbtn{flex:1 1 62px;min-width:62px;text-align:center;position:relative;padding-left:18px;font-size:13px}
@@ -271,7 +295,7 @@ canvas{image-rendering:pixelated;image-rendering:crisp-edges}
 @media (max-height:720px){
   #drawer{max-height:72vh}
   .mrow{padding:6px 4px}
-  #selpanel{max-height:52vh}
+  #selpanel{max-height:58vh}
 }
 
 /* desktop niceties */

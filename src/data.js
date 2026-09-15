@@ -5,6 +5,37 @@
 export const COST_KEYS = ['gold', 'wood', 'stone'];
 
 /**
+ * The four attributes everything in the realm is built on. Kept deliberately
+ * Warcraft-simple: each one does exactly one obvious thing, and reads in
+ * fives so the numbers stay legible.
+ */
+export const STATS = {
+  str: { key: 'str', name: 'Strength', short: 'STR', colour: '#e07a50',
+    desc: '+5% melee damage per 5 points' },
+  agi: { key: 'agi', name: 'Agility', short: 'AGI', colour: '#7fd8a0',
+    desc: '+5% attack speed per 5 points' },
+  con: { key: 'con', name: 'Constitution', short: 'CON', colour: '#ff9db0',
+    desc: '+4 health per point' },
+  int: { key: 'int', name: 'Intelligence', short: 'INT', colour: '#6fb6ff',
+    desc: '+4 mana per point, +3% critical chance per 5 points' }
+};
+export const STAT_ORDER = ['str', 'agi', 'con', 'int'];
+
+/** How each attribute cashes out. One place to retune all of it. */
+export const STAT_EFFECT = {
+  dmgPer5: 0.05,      // strength
+  speedPer5: 0.05,    // agility
+  hpPerPoint: 4,      // constitution
+  manaPerPoint: 4,    // intelligence
+  critPer5: 0.03,
+  critCap: 0.45,
+  critMultiplier: 1.75
+};
+
+/** Stat points a calling can grant, and how much work that takes. */
+export const TRAIN_MAX = 5;
+
+/**
  * Peasant missions. You do not tell a peasant which rock to hit -- you tell
  * them what they are for, and they go find the work themselves, forever,
  * moving on to the next seam when one runs dry.
@@ -19,21 +50,25 @@ export const MISSIONS = {
   miner: {
     id: 'miner', name: 'Miner', short: 'Mine', colour: '#ffc94a',
     nodes: ['goldmine'], res: 'gold',
+    trains: ['str', 'con'], trainFull: 260,
     desc: 'Seeks out the nearest gold mine and works it until it is empty, then finds another.'
   },
   woodcutter: {
     id: 'woodcutter', name: 'Woodcutter', short: 'Wood', colour: '#b4753a',
     nodes: ['tree', 'pine'], res: 'wood',
+    trains: ['agi', 'str'], trainFull: 260,
     desc: 'Fells the nearest woodland, tree by tree, and hauls the timber home.'
   },
   quarrier: {
     id: 'quarrier', name: 'Quarrier', short: 'Stone', colour: '#b6bccb',
     nodes: ['quarry'], res: 'stone',
+    trains: ['con', 'int'], trainFull: 260,
     desc: 'Cuts stone at the nearest quarry and keeps going once it is exhausted.'
   },
   builder: {
     id: 'builder', name: 'Builder', short: 'Build', colour: '#7fd8a0',
     build: true,
+    trains: ['int', 'agi'], trainFull: 150,
     desc: 'Runs to whatever is half-built or damaged and works on it.'
   }
 };
@@ -156,31 +191,37 @@ export const CLASSES = {
   peasant: {
     id: 'peasant', name: 'Peasant', hp: 34, dmg: 3, rate: 1.2, range: 12, speed: 30,
     sight: 6, cost: { gold: 30 }, greed: 0, courage: 0, wander: 6, pop: 1,
-    desc: 'Digs, chops, builds, repairs, panics.'
+    stats: { str: 5, agi: 5, con: 5, int: 5 },
+    desc: 'Digs, chops, builds, repairs, panics. Grows into whatever you make them do.'
   },
   warrior: {
     id: 'warrior', name: 'Warrior', hp: 130, dmg: 14, rate: 0.85, range: 14, speed: 33,
     sight: 8, cost: { gold: 115 }, greed: 0.55, courage: 0.22, wander: 17, pop: 0,
+    stats: { str: 13, agi: 7, con: 12, int: 4 },
     xpMul: 1, desc: 'Melee bruiser. Brave to the point of stupidity.'
   },
   ranger: {
     id: 'ranger', name: 'Ranger', hp: 84, dmg: 11, rate: 1.0, range: 86, speed: 44,
     sight: 11, cost: { gold: 105 }, greed: 0.9, courage: 0.4, wander: 30, pop: 0,
+    stats: { str: 7, agi: 14, con: 8, int: 6 },
     ranged: true, desc: 'Scout and archer. Explores on her own, loves a bounty.'
   },
   wizard: {
     id: 'wizard', name: 'Wizard', hp: 66, dmg: 26, rate: 1.7, range: 100, speed: 29,
     sight: 9, cost: { gold: 180 }, greed: 0.7, courage: 0.55, wander: 14, pop: 0,
+    stats: { str: 4, agi: 6, con: 6, int: 16 },
     ranged: true, splash: 26, desc: 'Fireballs from afar. Flees early, and rightly so.'
   },
   cleric: {
     id: 'cleric', name: 'Cleric', hp: 96, dmg: 9, rate: 1.2, range: 16, speed: 33,
     sight: 9, cost: { gold: 150 }, greed: 0.3, courage: 0.35, wander: 16, pop: 0,
+    stats: { str: 6, agi: 6, con: 9, int: 13 },
     heal: { amount: 24, range: 80, rate: 2.0 }, desc: 'Heals wounded allies, smites the odd skeleton.'
   },
   guard: {
     id: 'guard', name: 'Guard', hp: 115, dmg: 11, rate: 1.0, range: 14, speed: 30,
     sight: 8, cost: { gold: 0 }, greed: 0, courage: 0.15, wander: 5, pop: 0,
+    stats: { str: 9, agi: 6, con: 11, int: 4 },
     leash: 150, desc: 'Garrison soldier. Stays where you put him.'
   }
 };

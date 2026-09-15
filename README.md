@@ -39,7 +39,39 @@ left they say so by name and wait near home rather than milling about pretending
 | **Idle** | Loiters near home and lends a hand with construction. |
 
 You can still override a calling by tapping a **specific** mine, quarry or tree — that
-sets the matching calling *and* starts them on the seam you picked.
+sets the matching calling *and* starts them on the seam you picked. The **Peasants** tab
+also lists every peasant by name, so you can single one out and give them a calling of
+their own.
+
+## Attributes
+
+Every unit has four attributes. They read in steps of five, and five is the baseline —
+a unit with straight fives behaves exactly as its raw definition says.
+
+| Attribute | Effect |
+|---|---|
+| **Strength** | +5% melee damage per 5 points |
+| **Agility** | +5% attack speed per 5 points |
+| **Constitution** | +4 health per point |
+| **Intelligence** | +4 mana per point, and +3% critical chance per 5 points |
+
+Peasants start at 5 across the board; hero classes start lopsided (a warrior is strong
+and tough and never crits, a wizard is frail and crits often) which is the seed of the
+class system.
+
+**Work is what changes them.** Each calling trains two attributes, up to five points
+each, and progress only accrues while a peasant is *actually doing the job* — walking
+to the seam and hauling the load home teach nothing.
+
+| Calling | Trains |
+|---|---|
+| Miner | STR + CON |
+| Woodcutter | AGI + STR |
+| Quarrier | CON + INT |
+| Builder | INT + AGI |
+
+Points earned are permanent and stack across callings, so a peasant who has mastered
+mining and then woodcutting ends up at STR 15. Veterans are worth keeping.
 
 Every load walks back to the City Centre, so **distance is the whole economy**. Where
 the seams fell on your map decides how rich you are.

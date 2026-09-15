@@ -125,6 +125,8 @@ function doHarvest(u, g, since) {
     u.carry += got;
     node.amount -= got;
     u.carryRes = info.res;
+    // the calling only teaches you anything while you are actually swinging
+    u.train(u.mission, got);
     if (Math.random() < 0.28) {
       g.fx.puff(u.x + (Math.random() - .5) * 8, u.y - 4,
         info.res === 'gold' ? '#ffc94a' : info.res === 'stone' ? '#b6bccb' : '#b4753a', 2);
@@ -171,6 +173,7 @@ function doBuild(u, g, since, site) {
     u.state = 'build';
     u.path = null;
     site.addProgress(since / site.def.build);
+    u.train('builder', since);
     if (Math.random() < 0.4) g.fx.puff(site.x + (Math.random() - .5) * site.fw * TILE, site.bottom - 6, '#d8cfe6', 1);
   } else {
     u.state = 'walk';
@@ -182,6 +185,7 @@ function doRepair(u, g, since, b) {
   if (touching(u, b, 1.5)) {
     u.path = null;
     b.hp = Math.min(b.maxHp, b.hp + b.maxHp * 0.06 * since);
+    u.train('builder', since * 0.5);   // mending counts, but for less
     if (Math.random() < 0.3) g.fx.puff(b.x, b.bottom - 8, '#ffd070', 1);
   } else {
     walkTo(u, g, b);

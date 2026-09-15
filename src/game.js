@@ -99,8 +99,8 @@ export class Game {
     return u;
   }
 
-  spawnProjectile(from, to, dmg, kind) {
-    this.projectiles.push(new Projectile(this, from, to, dmg, kind));
+  spawnProjectile(from, to, dmg, kind, crit = false) {
+    this.projectiles.push(new Projectile(this, from, to, dmg, kind, crit));
   }
 
   /** How many monsters are currently marching on the realm. */
@@ -259,7 +259,7 @@ export class Game {
   // -----------------------------------------------------------------
   // damage & death
   // -----------------------------------------------------------------
-  applyDamage(target, amount, src) {
+  applyDamage(target, amount, src, crit = false) {
     if (!target || target.dead) return;
     if (target.kindClass === 'unit') {
       target.damageTaken(amount, src);
@@ -271,7 +271,7 @@ export class Game {
       target.damage(amount, src);
       if (target.faction === 'realm') this.reportAttack(target, src);
     }
-    this.fx.damage(target.x, target.y - (target.radius || 6), amount);
+    this.fx.damage(target.x, target.y - (target.radius || 6), amount, crit);
   }
 
   onUnitDeath(u, src) {

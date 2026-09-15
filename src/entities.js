@@ -4,7 +4,10 @@
 // ===================================================================
 import { TILE } from './art.js';
 import { toPx, toTile } from './world.js';
-import { BUILDINGS, CLASSES, MONSTERS, LAIRS, XP_TABLE, LEVEL_HP, LEVEL_DMG } from './data.js';
+import {
+  BUILDINGS, CLASSES, MONSTERS, LAIRS, XP_TABLE, LEVEL_HP, LEVEL_DMG,
+  MISSIONS, STAT_ORDER, STAT_EFFECT, TRAIN_MAX
+} from './data.js';
 import { clamp, dist, heroName, peasantName } from './util.js';
 
 let NEXT_ID = 1;
@@ -227,8 +230,12 @@ export class Unit {
     this.xp = 0;
     this.gold = 0;
     this.kills = 0;
+    // Attributes. A flat 5 is the baseline the rest of the numbers assume, so
+    // a unit with 5s behaves exactly as its raw definition says; points above
+    // or below that are what actually move anything.
+    this.baseStats = { str: 5, agi: 5, con: 5, int: 5, ...(def.stats || {}) };
+    this.training = {};        // mission id -> work done toward its stat track
     this.maxHp = def.hp;
-    this.hp = def.hp;
     this.speed = def.speed;
     this.dmg = def.dmg;
     this.bonusDmg = 0;
@@ -260,6 +267,8 @@ export class Unit {
     this.fleeing = 0;
     this.restIn = 0;
     this.idleWander = 0;
+    this.hp = this.maxHpNow;
+    this.mana = this.maxMana;
     this.name = faction !== 'realm' ? def.name
       : kind === 'peasant' ? peasantName(game.rng)
         : kind === 'guard' ? def.name
@@ -268,7 +277,64 @@ export class Unit {
   }
 
   get isHero() { return this.faction === 'realm' && !!CLASSES[this.kind] && this.kind !== 'peasant' && this.kind !== 'guard'; }
-  get power() { return this.dmg * (1 + (this.level - 1) * LEVEL_DMG) + this.bonusDmg; }
+
+  /** Points earned by actually doing the work, per attribute. */
+  get trained() {
+    const out = { str: 0, agi: 0, con: 0, int: 0 };
+    for (const id in this.training) {
+      const m = MISSIONS[id];
+      if (!m || !m.trains) continue;
+      const frac = Math.min(1, this.training[id] / m.trainFull);
+      const points = Math.floor(frac * TRAIN_MAX);
+      for (const k of m.trains) out[k] += points;
+    }
+    return out;
+  }
+
+  /** Base attributes plus everything the calling taught them. */
+  get stats() {
+    const t = this.trained, b = this.baseStats;
+    return { str: b.str + t.str, agi: b.agi + t.agi, con: b.con + t.con, int: b.int + t.int };
+  }
+
+  /**
+   * Log work toward a calling's attribute track. Called from the brain when a
+   * peasant actually swings a pick, never on a timer -- time served is not
+   * the same thing as work done.
+   */
+  train(missionId, amount) {
+    const m = MISSIONS[missionId];
+    if (!m || !m.trains || amount <= 0) return;
+    const before = Math.floor(Math.min(1, (this.training[missionId] || 0) / m.trainFull) * TRAIN_MAX);
+    this.training[missionId] = Math.min(m.trainFull, (this.training[missionId] || 0) + amount);
+    const after = Math.floor(Math.min(1, this.training[missionId] / m.trainFull) * TRAIN_MAX);
+    if (after > before) {
+      this.hp = Math.min(this.maxHpNow, this.hp + STAT_EFFECT.hpPerPoint); // new toughness is usable now
+      if (after === TRAIN_MAX) {
+        this.game.notify(`${this.name} has mastered ${m.name.toLowerCase()} work`, 'good');
+        this.game.fx.text(this.x, this.y - 18, 'MASTERED', '#ffc94a', 26);
+        this.game.audio.play('level');
+      } else {
+        this.game.fx.text(this.x, this.y - 16, '+' + m.trains.map(k => k.toUpperCase()).join(' +'), '#7fd8a0', 20);
+      }
+    }
+  }
+
+  get power() {
+    const strBonus = 1 + Math.floor((this.stats.str - 5) / 5) * STAT_EFFECT.dmgPer5;
+    return (this.dmg * (1 + (this.level - 1) * LEVEL_DMG) + this.bonusDmg) * strBonus;
+  }
+
+  /** Seconds between swings, quickened by agility. */
+  get attackRate() {
+    const quick = 1 + Math.floor((this.stats.agi - 5) / 5) * STAT_EFFECT.speedPer5;
+    return this.def.rate / quick;
+  }
+
+  get critChance() {
+    return Math.min(STAT_EFFECT.critCap, Math.floor(this.stats.int / 5) * STAT_EFFECT.critPer5);
+  }
+  get maxMana() { return this.stats.int * STAT_EFFECT.manaPerPoint; }
   get tx() { return toTile(this.x); }
   get ty() { return toTile(this.y); }
 
@@ -357,7 +423,7 @@ export class Unit {
       this.dir = t.x >= this.x ? 1 : -1;
       this.cool -= dt;
       if (this.cool <= 0) {
-        this.cool = this.def.rate;
+        this.cool = this.attackRate;
         this.strike(t);
       }
       return true;
@@ -377,14 +443,16 @@ export class Unit {
   }
 
   strike(t) {
-    const dmg = this.power * (0.85 + Math.random() * 0.3);
+    let dmg = this.power * (0.85 + Math.random() * 0.3);
+    const crit = Math.random() < this.critChance;
+    if (crit) dmg *= STAT_EFFECT.critMultiplier;
     if (this.def.ranged) {
-      this.game.spawnProjectile(this, t, dmg, this.kind === 'wizard' ? 'fire' : 'arrow');
+      this.game.spawnProjectile(this, t, dmg, this.kind === 'wizard' ? 'fire' : 'arrow', crit);
       this.game.audio.play(this.kind === 'wizard' ? 'cast' : 'bow');
     } else {
-      this.game.applyDamage(t, dmg, this);
+      this.game.applyDamage(t, dmg, this, crit);
       this.game.audio.play('hit');
-      this.game.fx.burst(t.x, t.y - 4, '#ffd0a0', 3, 26, 0.26);
+      this.game.fx.burst(t.x, t.y - 4, crit ? '#ffc94a' : '#ffd0a0', crit ? 7 : 3, crit ? 44 : 26, 0.26);
     }
   }
 
@@ -393,7 +461,10 @@ export class Unit {
     this.game.fx.text(this.x, this.y - 12, '+' + Math.round(n), '#7fd8a0', 16);
   }
 
-  get maxHpNow() { return Math.round(this.maxHp * (1 + (this.level - 1) * LEVEL_HP)); }
+  get maxHpNow() {
+    const con = (this.stats.con - 5) * STAT_EFFECT.hpPerPoint;
+    return Math.round((this.maxHp + con) * (1 + (this.level - 1) * LEVEL_HP));
+  }
 
   gainXp(n) {
     if (!this.isHero) return;
@@ -440,8 +511,9 @@ export class Unit {
 
 // -------------------------------------------------------------------
 export class Projectile {
-  constructor(game, from, to, dmg, kind) {
+  constructor(game, from, to, dmg, kind, crit = false) {
     this.game = game;
+    this.crit = crit;
     this.x = from.x; this.y = from.y - 6;
     this.target = to;
     this.tx = to.x; this.ty = to.y - 4;
@@ -475,10 +547,10 @@ export class Projectile {
       g.audio.play('boom');
       const splash = CLASSES.wizard.splash;
       const foes = g.enemiesNear(this.x, this.y, splash, this.owner.faction);
-      for (const f of foes) g.applyDamage(f, this.dmg * (f === this.target ? 1 : 0.6), this.owner);
+      for (const f of foes) g.applyDamage(f, this.dmg * (f === this.target ? 1 : 0.6), this.owner, this.crit);
     } else {
       if (this.target && !this.target.dead) {
-        g.applyDamage(this.target, this.dmg, this.owner);
+        g.applyDamage(this.target, this.dmg, this.owner, this.crit);
         g.fx.burst(this.x, this.y, '#ffe0a0', 4, 30, 0.25);
       }
     }
