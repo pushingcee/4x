@@ -307,6 +307,12 @@ export function heroBrain(u, since) {
   if (!u.target && u.hp < u.maxHpNow) u.heal(u.maxHpNow * 0.03 * since);
 
   // --- 2. already swinging at something? ----------------------------
+  // A wall does not bite back. If we are hitting a lair or a building while
+  // something alive is within reach, deal with the living thing first.
+  if (u.target && !u.target.dead && u.target.kindClass !== 'unit') {
+    const biting = g.nearestEnemy(u.x, u.y, 96, 'realm', false);
+    if (biting) u.target = biting;
+  }
   if (u.target && !u.target.dead) {
     const d = u.distTo(u.target);
     if (d < 260) {
@@ -494,6 +500,10 @@ function heroIdle(u, g) {
 export function guardBrain(u, since) {
   const g = u.game;
   const leash = u.def.leash || 150;
+  if (u.target && !u.target.dead && u.target.kindClass !== 'unit') {
+    const biting = g.nearestEnemy(u.x, u.y, 96, 'realm', false);
+    if (biting) u.target = biting;
+  }
   if (u.target && !u.target.dead && dist(u.x, u.y, u.homeX, u.homeY) < leash * 1.4) {
     u.state = 'fight'; u.fight(since); return;
   }

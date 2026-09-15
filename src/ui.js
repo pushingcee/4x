@@ -5,7 +5,7 @@
 import { TILE, buildingSprite, unitSprite, propSprite, flagSprite, makeCanvas, PAL } from './art.js';
 import {
   BUILDINGS, BUILD_ORDER, CLASSES, FLAGS, MONSTERS, LAIRS, RES_RATE, RESURRECT_COST,
-  MISSIONS, MISSION_ORDER, STATS, STAT_ORDER, TRAIN_MAX, MAX_LEVEL
+  MISSIONS, MISSION_ORDER, CALLING_ORDER, STATS, STAT_ORDER, TRAIN_MAX, MAX_LEVEL
 } from './data.js';
 import { toTile, toPx } from './world.js';
 import { fmt, clamp, dist } from './util.js';
@@ -79,7 +79,7 @@ function trainBlock(u) {
 
 /** The row of calling buttons shown wherever peasants are selected. */
 function missionPicker(currentId) {
-  return `<div class="missions">` + MISSION_ORDER.map(id => {
+  return `<div class="missions">` + CALLING_ORDER.map(id => {
     const m = MISSIONS[id];
     return `<button class="btn small mbtn ${currentId === id ? 'on' : ''}"
       style="--mc:${m.colour}" data-mission="${id}">${m.short}</button>`;
@@ -593,7 +593,7 @@ export class UI {
       if (def.guild) {
         const c = CLASSES[def.guild];
         const alive = g.units.filter(u => !u.dead && u.homeId === b.id).length;
-        actions += `<button class="btn small primary" data-recruit="${def.guild}">Hire ${c.name} (${c.cost.gold}g) ${alive}/${def.maxHeroes}</button>`;
+        actions += `<button class="btn small primary" data-recruit="${def.guild}">Arm a villager (${c.cost.gold}g) ${alive}/${def.maxHeroes}</button>`;
       }
     }
     el.innerHTML = `
@@ -768,15 +768,20 @@ export class UI {
         const peasants = g.selection.filter(x => x.kindClass === 'unit' && x.kind === 'peasant');
         const targets = peasants.length ? peasants : (e && e.kind === 'peasant' ? [e] : []);
         if (!targets.length) return;
-        g.assignMission(targets, btn.dataset.mission);
-        this.renderSelection(true);
+        const made = g.assignMission(targets, btn.dataset.mission);
+        if (MISSIONS[btn.dataset.mission].becomes && made) {
+          this.setSelection(g.trainedBatch || []);   // stay with the same person
+        } else {
+          this.renderSelection(true);
+        }
         if (this.tab === 'peasants') this.renderDrawer();
+        this.renderTopbar();
       });
     });
     el.querySelectorAll('[data-recruit]').forEach(btn => {
       btn.addEventListener('click', () => {
         const u = g.recruit(e, btn.dataset.recruit);
-        if (u) { this.renderSelection(); this.renderTopbar(); }
+        if (u) { this.renderSelection(true); this.renderTopbar(); }
       });
     });
     el.querySelectorAll('[data-send]').forEach(btn => {
@@ -892,6 +897,16 @@ export class UI {
     return `${m.name} · ${this.unitJobText(p)}${earned ? ' · ' + earned : ''}`;
   }
 
+  /** "2 patrolling, 1 fighting" -- or a nudge if there are none. */
+  warriorStatus(list) {
+    if (!list.length) return 'nobody under arms';
+    const verb = { fight: 'fighting', quest: 'on a flag', explore: 'scouting', flee: 'retreating',
+      rest: 'recovering', shop: 'shopping', idle: 'patrolling', walk: 'marching' };
+    const busy = {};
+    for (const w of list) { const v = verb[w.state] || w.state; busy[v] = (busy[v] || 0) + 1; }
+    return Object.entries(busy).map(([k, n]) => `${n} ${k}`).join(', ');
+  }
+
   /** "2 working, 1 hauling" -- what a calling's crew is up to right now. */
   missionStatus(crew, m) {
     if (!crew.length) return m.res ? `no one gathering ${m.res}` : 'nobody assigned';
@@ -911,7 +926,8 @@ export class UI {
 
     // Rebuilding this list every frame would swallow taps on the +/- buttons,
     // so only rebuild when the crew actually changes.
-    const sig = peasants.map(p => p.id + ':' + p.mission).join(',') + '|' + canHire;
+    const sig = peasants.map(p => p.id + ':' + p.mission).join(',') + '|' + canHire
+      + '|w' + g.units.filter(u => !u.dead && u.isHero).length;
     if (!force && sig === this.peasantSig && this.peasantRefresh) { this.peasantRefresh(); return; }
     this.peasantSig = sig;
 
@@ -942,6 +958,23 @@ export class UI {
         </div>`;
     }
 
+    // warriors are former villagers, so they belong on the same roster
+    const warriors = g.units.filter(u => !u.dead && u.isHero);
+    const wm = MISSIONS.warrior;
+    html += `
+      <div class="mrow">
+        <span class="swatch" style="background:${wm.colour}"></span>
+        <div class="grow" data-pickwar>
+          <span class="nm">${wm.name}</span>
+          <span class="sub" data-warstatus>${this.warriorStatus(warriors)}</span>
+        </div>
+        <span class="cnt">${warriors.length}</span>
+        <span class="pm">
+          <button disabled title="A warrior cannot go back to the fields">&minus;</button>
+          <button data-arm>+</button>
+        </span>
+      </div>`;
+
     // Every peasant by name: the whole point is being able to single one out
     // and give them a calling of their own.
     html += `<div class="hint" style="margin-top:6px">Tap anyone to give them a calling of their own.</div>`;
@@ -959,6 +992,19 @@ export class UI {
     }
 
     body.innerHTML = html;
+
+    body.querySelector('[data-arm]')?.addEventListener('click', () => {
+      const hall = g.nearestBuilding(g.palace.x, g.palace.y, b => b.complete && b.def.guild === 'warrior');
+      if (!hall) { this.notify('Build a Barracks first', 'bad'); return; }
+      const t = g.pickTrainee(hall.x, hall.y);
+      if (!t) { this.notify('No villager free to train', 'bad'); return; }
+      if (g.trainWarrior(t, hall)) { this.renderDrawer(); this.renderTopbar(); }
+    });
+    body.querySelector('[data-pickwar]')?.addEventListener('click', () => {
+      if (!warriors.length) { this.notify('No warriors yet'); return; }
+      this.setSelection(warriors);
+      this.audio.play('ui');
+    });
 
     body.querySelectorAll('[data-who]').forEach(row => row.addEventListener('click', () => {
       const u = g.units.find(x => x.id === +row.dataset.who && !x.dead);
@@ -979,6 +1025,8 @@ export class UI {
         const el = body.querySelector(`[data-who-sub="${p.id}"]`);
         if (el) el.textContent = this.peasantLine(p);
       }
+      const ws = body.querySelector('[data-warstatus]');
+      if (ws) ws.textContent = this.warriorStatus(g.units.filter(u => !u.dead && u.isHero));
     };
 
     body.querySelector('[data-hire]')?.addEventListener('click', () => {
@@ -1171,9 +1219,10 @@ export class UI {
       constitution health, and intelligence both mana and critical chance &mdash; all in
       steps of five points. Warriors instead gain <b>+3 to everything</b> per level, up to
       level 5.</p>
-      <p><b>Warriors.</b> Build a <b>Barracks</b> and train some. They take no orders at all &mdash;
-      they roam, explore and pick their own fights. To steer them, raise a <b>flag</b> and put
-      gold on it; the gold waits in escrow until somebody earns it.</p>
+      <p><b>Warriors.</b> Build a <b>Barracks</b>, then set a villager's calling to <b>War</b>.
+      Soldiers are not conjured &mdash; a villager takes up arms, so each one costs you a worker
+      as well as gold, and everything the work taught them comes with them. From then on they
+      take no orders: raise a <b>flag</b> and put gold on it to tempt them.</p>
       <p><b>Peasants are not helpless.</b> They run from a monster they can see, but anything
       already biting them gets hit back &mdash; until they are badly hurt, at which point they
       sensibly leave.</p>

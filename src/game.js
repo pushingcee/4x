@@ -9,7 +9,7 @@ import { Fx } from './fx.js';
 import {
   BUILDINGS, CLASSES, MONSTERS, LAIRS, FLAGS, RES_RATE, START,
   DAY_SECONDS, TAX_INTERVAL, RESURRECT_COST, HERO_CLASSES, PEACE_DAYS, STRUCTURE_DMG,
-  MISSIONS, RAIDS_ENABLED
+  MISSIONS, RAIDS_ENABLED, CALLING_ORDER
 } from './data.js';
 import { makeRng, clamp, dist } from './util.js';
 
@@ -437,6 +437,54 @@ export class Game {
     return b;
   }
 
+  /** Who to call up: idle hands first, then whoever is closest. */
+  pickTrainee(x, y) {
+    const pool = this.units.filter(u => !u.dead && u.kind === 'peasant');
+    if (!pool.length) return null;
+    const rank = (u) => (u.mission === 'none' ? 0 : 1e6) + dist(u.x, u.y, x, y);
+    return pool.sort((a, b) => rank(a) - rank(b))[0];
+  }
+
+  /** Take a unit off the board without the fanfare of a death. */
+  retireUnit(u) {
+    if (u.job && u.job.type === 'build' && u.job.site) u.job.site.builders--;
+    u.job = null;
+    u.dead = true;
+  }
+
+  /**
+   * Turn a villager into a warrior. Warriors are not conjured out of gold --
+   * somebody's miner puts down the pick and picks up a sword, and everything
+   * the work taught them comes along.
+   */
+  trainWarrior(u, barracks) {
+    if (!u || u.dead || u.kind !== 'peasant') return null;
+    const hall = barracks
+      || this.nearestBuilding(u.x, u.y, b => b.complete && b.def.guild === 'warrior');
+    if (!hall) { this.notify('Build a Barracks first', 'bad'); return null; }
+    if (!hall.complete) { this.notify(`${hall.name} is not finished yet`, 'bad'); return null; }
+    const alive = this.units.filter(x => !x.dead && x.homeId === hall.id).length;
+    if (alive >= hall.def.maxHeroes) { this.notify(`${hall.name} is full`, 'bad'); return null; }
+    const cost = CLASSES.warrior.cost;
+    if (!this.canAfford(cost)) { this.notify('Not enough gold to arm a villager', 'bad'); return null; }
+    this.spend(cost);
+
+    const w = this.spawnUnit('warrior', u.x, u.y, 'realm');
+    w.name = u.name;
+    w.training = { ...u.training };     // a veteran miner makes a tougher warrior
+    w.hp = w.maxHpNow;
+    w.gold = 20;
+    w.homeId = hall.id; w.homeX = hall.x; w.homeY = hall.y;
+    this.retireUnit(u);
+    this.recomputePop();
+    this.fx.ring(w.x, w.y - 8, '#e07a50', 15);
+    this.fx.text(w.x, w.y - 20, 'TAKES UP ARMS', '#e07a50', 24);
+    this.audio.play('recruit');
+    this.notify(`${w.name} takes up arms`, 'good');
+    this.lastTrained = w;
+    return w;
+  }
+
   /** Put the nearest peasants on a site; miners remember what they were doing. */
   sendBuilders(site, count) {
     const pool = this.units
@@ -465,6 +513,12 @@ export class Game {
     if (!cls || !building || building.dead) return null;
     if (!building.complete) { this.notify(`${building.name} is not finished yet`, 'bad'); return null; }
     if (this.pop + (cls.pop || 0) > this.popCap) { this.notify('Population cap reached — build huts', 'bad'); return null; }
+    if (building.def.guild === kind) {
+      // a guild arms a villager rather than summoning a stranger
+      const trainee = this.pickTrainee(building.x, building.y);
+      if (!trainee) { this.notify('No villager free to train', 'bad'); return null; }
+      return this.trainWarrior(trainee, building);
+    }
     if (building.def.guild) {
       const alive = this.units.filter(u => !u.dead && u.homeId === building.id).length;
       if (alive >= building.def.maxHeroes) { this.notify(`${building.name} is full`, 'bad'); return null; }
@@ -524,6 +578,16 @@ export class Game {
   assignMission(units, missionId) {
     const m = MISSIONS[missionId];
     if (!m) return 0;
+
+    // "Warrior" is not a job you do in the fields -- it changes what you are
+    if (m.becomes) {
+      const made = [];
+      for (const u of units) { const w = this.trainWarrior(u); if (w) made.push(w); }
+      this.lastTrained = made[made.length - 1] || null;
+      this.trainedBatch = made;
+      return made.length;
+    }
+
     let n = 0;
     for (const u of units) {
       if (!u || u.dead || u.kind !== 'peasant') continue;
@@ -631,7 +695,12 @@ export class Game {
         break;
       }
       case 'attack': {
-        const foe = this.nearestEnemy(f.x, f.y, r + 30, 'realm', true);
+        // Living defenders first. Searching with structures included always
+        // returned the lair itself -- the flag sits on top of it, so its edge
+        // distance is negative and it wins every time, and the heroes hacked
+        // at the building while the rats ate them.
+        const foe = this.nearestEnemy(f.x, f.y, r + 40, 'realm', false)
+          || this.nearestEnemy(u.x, u.y, 110, 'realm', false);
         if (foe) { u.engage(foe); u.fight(since); return; }
         const lair = this.lairs.find(l => !l.dead && dist(l.x, l.y, f.x, f.y) <= r + 24);
         if (lair) { u.engage(lair); u.fight(since); return; }

@@ -70,9 +70,19 @@ export const MISSIONS = {
     build: true,
     trains: ['int', 'agi'], trainFull: 150,
     desc: 'Runs to whatever is half-built or damaged and works on it.'
+  },
+  warrior: {
+    id: 'warrior', name: 'Warrior', short: 'War', colour: '#e07a50',
+    becomes: 'warrior', at: 'barracks',
+    desc: 'Takes up arms at the Barracks. Everything they learned as a villager goes with them -- and from then on they answer flags, not orders.'
   }
 };
+
+/** The work callings: what the Folk tab counts and what training tracks exist. */
 export const MISSION_ORDER = ['miner', 'woodcutter', 'quarrier', 'builder', 'none'];
+
+/** Everything you can set a villager to, including leaving the fields for good. */
+export const CALLING_ORDER = ['miner', 'woodcutter', 'quarrier', 'builder', 'warrior', 'none'];
 
 /**
  * Buildings. `fw/fh` footprint in tiles. `needs` gates the build menu.
@@ -127,7 +137,7 @@ export const BUILDINGS = {
     id: 'barracks', name: 'Barracks', fw: 2, fh: 2, hp: 560,
     cost: { gold: 130, wood: 90, stone: 30 }, build: 14,
     guild: 'warrior', maxHeroes: 3, sight: 9,
-    desc: 'Trains Warriors. They patrol, explore and answer reward flags -- but they pick their own fights.'
+    desc: 'Turns a villager into a Warrior for a fee. They patrol, explore and answer reward flags -- but they pick their own fights.'
   },
   warriors_guild: {
     id: 'warriors_guild', name: 'Warriors Guild', fw: 2, fh: 2, hp: 620,

@@ -88,9 +88,17 @@ the seams fell on your map decides how rich you are.
 
 ## Warriors and flags
 
-Build a **Barracks** and you can train Warriors. Unlike peasants, warriors take no
-orders at all — they patrol, explore the dark, and pick their own fights. The only way
-to steer them is to put money on the map:
+Build a **Barracks** and you can arm Warriors — but a warrior is not conjured out of
+gold. One of your **villagers** puts down the pick and takes up a sword, so every
+soldier costs you a worker as well as coin. Set a villager's calling to **War**, or use
+the Barracks' own button and it calls up whoever is idle.
+
+Everything the work taught them comes along: a villager who mastered mining becomes a
+STR 18 / CON 17 warrior with 202 health, where one straight off the farm starts at
+13 / 12 and 172. Veterans make better soldiers.
+
+Unlike peasants, warriors then take no orders at all — they patrol, explore the dark,
+and pick their own fights. The only way to steer them is to put money on the map:
 
 - **Attack** — paid when the area is cleared of monsters and lairs.
 - **Explore** — paid on arrival; the fog lifts around it.

@@ -214,8 +214,8 @@ canvas{image-rendering:pixelated;image-rendering:crisp-edges}
 .who-row .go{font-size:14px;color:var(--gold)}
 
 /* mission picker */
-.missions{display:flex;flex-wrap:wrap;gap:5px;margin:7px 0}
-.missions .mbtn{flex:1 1 62px;min-width:62px;text-align:center;position:relative;padding-left:18px;font-size:13px}
+.missions{display:grid;grid-template-columns:repeat(3,1fr);gap:5px;margin:7px 0}
+.missions .mbtn{min-width:0;text-align:center;position:relative;padding-left:18px;font-size:13px}
 .missions .mbtn::before{
   content:'';position:absolute;left:6px;top:50%;transform:translateY(-50%);
   width:8px;height:8px;background:var(--mc,#a596c4);box-shadow:0 0 0 1px var(--edge-dk);
