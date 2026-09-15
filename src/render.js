@@ -57,9 +57,13 @@ export class Renderer {
     this.canvas = canvas;
     this.ctx = canvas.getContext('2d', { alpha: false });
     this.game = game;
+    this.scaleF = undefined;          // fractional zoom; `scale` is its integer form
     this.scale = 3;
-    this.minScale = 2; this.maxScale = 6;
+    this.minScale = 1; this.maxScale = 8;
     this.cam = { x: game.palace.x, y: game.palace.y };
+    this.follow = null;               // entity the camera is tracking
+    this.onFollowEnd = null;
+    this.mapOpen = false;             // full-screen map overlay
     this.ground = null;
     this.mini = makeCanvas(game.world.w, game.world.h);
     this.miniIn = 0;
@@ -91,16 +95,81 @@ export class Renderer {
       this.canvas.width = cw; this.canvas.height = ch;
     }
     this.dpr = dpr;
-    this.autoScale();
+    // `scale` counts device pixels per world pixel, so the zoom limits have
+    // to be expressed in dpr or a 3x phone ends up looking twice as far out
+    // as a 1.5x one at the same number.
+    this.minScale = 1;
+    this.maxScale = Math.max(4, Math.round(dpr * 4));
+    // ~28 CSS pixels per tile: chunky enough to read faces on a phone.
+    this.defaultScale = clamp(Math.round(dpr * 1.75), 2, this.maxScale);
+    // Only pick a zoom on first sight. Mobile browsers fire resize every time
+    // the URL bar slides away, and resetting the player's zoom for that is rude.
+    if (this.scaleF === undefined) this.setScale(this.defaultScale);
+    else this.setScale(this.scaleF);
   }
 
-  autoScale() {
-    // aim for roughly 30 tiles across, then clamp to sane integers
-    const want = this.canvas.width / (30 * TILE);
-    this.scale = clamp(Math.round(want), this.minScale, this.maxScale);
+  /** Set fractional zoom; the renderer draws at the nearest integer. */
+  setScale(v) {
+    this.scaleF = clamp(v, this.minScale, this.maxScale);
+    this.scale = clamp(Math.round(this.scaleF), this.minScale, this.maxScale);
   }
+
+  /**
+   * Four named stops, so one thumb can cross the whole range.
+   * They are built around the default so that "Mid" is genuinely where the
+   * game starts, and "Wide" shows most of the island at once.
+   */
+  get zoomLevels() {
+    const d = this.defaultScale;
+    const raw = [
+      Math.min(this.maxScale, Math.round(d * 1.75)),
+      d,
+      Math.max(this.minScale, Math.round(d * 0.55)),
+      this.minScale
+    ];
+    return [...new Set(raw)].filter(v => v >= this.minScale).sort((a, b) => b - a);
+  }
+  static ZOOM_NAMES = ['Close', 'Mid', 'Far', 'Wide'];
+
+  zoomName() {
+    const levels = this.zoomLevels;
+    let best = 0, bestD = Infinity;
+    levels.forEach((v, i) => {
+      const d = Math.abs(v - this.scale);
+      if (d < bestD) { bestD = d; best = i; }
+    });
+    return Renderer.ZOOM_NAMES[best] || 'Zoom';
+  }
+
+  /** Step to the next stop out, wrapping back to the closest. */
   zoomStep() {
-    this.scale = this.scale >= this.maxScale ? this.minScale : this.scale + 1;
+    const levels = this.zoomLevels;
+    let cur = 0, bestD = Infinity;
+    levels.forEach((v, i) => {
+      const d = Math.abs(v - this.scale);
+      if (d < bestD) { bestD = d; cur = i; }
+    });
+    this.setScale(levels[(cur + 1) % levels.length]);
+  }
+
+  setFollow(e) {
+    this.follow = e && !e.dead ? e : null;
+    if (this.follow) { this.cam.x = this.follow.x; this.cam.y = this.follow.y; }
+    return this.follow;
+  }
+
+  /** Keep the camera glued to whatever it is tracking. */
+  updateFollow(dt) {
+    if (!this.follow) return;
+    if (this.follow.dead) {
+      const gone = this.follow;
+      this.follow = null;
+      if (this.onFollowEnd) this.onFollowEnd(gone);
+      return;
+    }
+    const k = 1 - Math.exp(-dt * 9);
+    this.cam.x += (this.follow.x - this.cam.x) * k;
+    this.cam.y += (this.follow.y - this.cam.y) * k;
   }
 
   get viewW() { return this.canvas.width / this.scale; }
@@ -133,6 +202,7 @@ export class Renderer {
   // -----------------------------------------------------------------
   draw(dt) {
     const g = this.game, w = g.world, ctx = this.ctx;
+    this.updateFollow(dt);
     this.clampCam();
     const vw = this.viewW, vh = this.viewH;
     const ox = Math.floor(this.cam.x - vw / 2);
@@ -519,11 +589,26 @@ export class Renderer {
       for (const f of g.flags) dot(toTile(f.x), toTile(f.y), FLAGS[f.type].colour, 3);
     }
 
-    const size = Math.round(Math.min(110 * this.dpr, this.canvas.width * 0.26));
-    const pad = Math.round(6 * this.dpr);
-    const top = Math.round((this.topInset || 34) * this.dpr);
-    const x = this.canvas.width - size - pad, y = top;
-    this.miniRect = { x, y, size };
+    const cw = this.canvas.width, ch = this.canvas.height;
+    let x, y, size;
+
+    if (this.mapOpen) {
+      // Full map: scale the tile-per-pixel image up by a whole number so the
+      // overview stays as crisp as the world it is summarising.
+      const k = Math.max(2, Math.floor(Math.min(cw * 0.9 / w.w, ch * 0.66 / w.h)));
+      size = w.w * k;
+      x = Math.round((cw - size) / 2);
+      y = Math.round((ch - size) / 2);
+      ctx.fillStyle = 'rgba(9,6,16,0.82)';
+      ctx.fillRect(0, 0, cw, ch);
+    } else {
+      size = Math.round(Math.min(110 * this.dpr, cw * 0.26));
+      const pad = Math.round(6 * this.dpr);
+      x = cw - size - pad;
+      y = Math.round((this.topInset || 34) * this.dpr);
+    }
+    this.mapRect = { x, y, size };
+
     ctx.imageSmoothingEnabled = false;
     ctx.fillStyle = '#120c1c';
     ctx.fillRect(x - 2, y - 2, size + 4, size + 4);
@@ -531,20 +616,38 @@ export class Renderer {
     ctx.strokeStyle = '#7a5fa8';
     ctx.lineWidth = Math.max(1, this.dpr);
     ctx.strokeRect(x - 1, y - 1, size + 2, size + 2);
+
     // viewport box
     const sx = size / (w.w * TILE), sy = size / (w.h * TILE);
-    ctx.strokeStyle = 'rgba(255,255,255,0.75)';
-    ctx.lineWidth = 1;
+    ctx.strokeStyle = 'rgba(255,255,255,0.8)';
+    ctx.lineWidth = this.mapOpen ? Math.max(2, this.dpr) : 1;
     ctx.strokeRect(
       x + (this.cam.x - this.viewW / 2) * sx, y + (this.cam.y - this.viewH / 2) * sy,
       this.viewW * sx, this.viewH * sy
     );
+
+    if (this.mapOpen) {
+      const k = Math.max(2, Math.round(this.dpr * 1.6));
+      ctx.save();
+      ctx.scale(k, k);
+      const line = 'TAP THE MAP TO GO THERE';
+      drawText(ctx, line, Math.round((x + size / 2) / k - textWidth(line) / 2),
+        Math.round((y + size) / k) + 6, '#f2e9ff');
+      const line2 = 'TAP OUTSIDE TO CLOSE';
+      drawText(ctx, line2, Math.round((x + size / 2) / k - textWidth(line2) / 2),
+        Math.round((y + size) / k) + 14, '#a596c4');
+      ctx.restore();
+    }
   }
 
+  /**
+   * Translate a tap into a world position on whichever map is showing.
+   * Returns null when the tap missed it.
+   */
   minimapHit(sx, sy) {
-    if (!this.miniRect) return null;
+    if (!this.mapRect) return null;
     const dpr = this.dpr;
-    const { x, y, size } = this.miniRect;
+    const { x, y, size } = this.mapRect;
     const px = sx * dpr, py = sy * dpr;
     if (px < x || px > x + size || py < y || py > y + size) return null;
     const w = this.game.world;

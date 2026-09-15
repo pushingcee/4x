@@ -57,7 +57,11 @@ async function start() {
       <p><b>2.</b> Tap a <b>gold mine</b>, <b>quarry</b> or <b>forest</b>, then <b>Send</b> peasants to work it.</p>
       <p><b>3.</b> <b>Build</b> a guild, hire a hero, then raise an <b>attack flag</b> on a monster lair
       and watch the greedy fools charge in.</p>
-      <p>Destroy every lair to win. One finger pans, two fingers pinch to zoom.</p>`,
+      <p><b>Getting around.</b> One finger pans, two fingers pinch to zoom, and
+      <b>Zoom</b> steps through Close / Mid / Far / Wide. Tap the little map in the corner
+      to open the whole realm, then tap anywhere on it to jump there.</p>
+      <p>Select any hero or peasant and hit <b>Follow</b> to ride along with them.</p>
+      <p>Destroy every lair to win.</p>`,
       [{ label: 'Rule the realm', cls: 'primary', fn: () => ui.hideModal() }]);
   }
 

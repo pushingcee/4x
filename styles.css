@@ -47,6 +47,9 @@ html,body{
 #view{
   position:fixed;inset:0;width:100%;height:100%;display:block;
   background:#0d1a22;
+  /* touch-action does not inherit, and without it here Safari swallows the
+     pinch as page zoom before the game ever sees the second finger. */
+  touch-action:none;
 }
 canvas{image-rendering:pixelated;image-rendering:crisp-edges}
 
@@ -205,6 +208,16 @@ canvas{image-rendering:pixelated;image-rendering:crisp-edges}
 
 /* ---------- alerts ---------- */
 #alerts #alarm{pointer-events:auto;margin-top:4px;align-self:flex-start}
+#alerts #followchip{
+  pointer-events:auto;align-self:flex-start;display:flex;align-items:center;gap:6px;
+  background:rgba(18,12,28,.9);border:2px solid var(--edge-dk);
+  box-shadow:inset 0 0 0 1px var(--gold);
+  padding:3px 4px 3px 7px;font-size:9.5px;color:var(--gold);margin-bottom:2px;
+}
+#alerts #followchip button{
+  font:inherit;font-size:9px;background:var(--gold);color:var(--ink);
+  border:none;padding:3px 6px;cursor:pointer;
+}
 #alerts{
   position:fixed;left:calc(6px + var(--safe-l));top:calc(40px + var(--safe-t));
   z-index:18;display:flex;flex-direction:column;gap:3px;pointer-events:none;max-width:56vw;

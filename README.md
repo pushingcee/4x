@@ -12,6 +12,9 @@ die in ditches. The only way to steer them is to put money on the map.
 ## Playing
 
 - **One finger drags** the map, **two fingers pinch** to zoom, **tap** to select.
+- **Zoom** steps through Close / Mid / Far / Wide. Tap the corner map to open the whole
+  realm, then tap anywhere on it to jump there.
+- Select any unit and hit **Follow** to lock the camera onto it; drag the map to let go.
 - **Tap your City Centre** → *Hire Peasant*. Peasants are your entire economy.
 - **Tap a gold mine, quarry or forest** → *Send 1 / Send 3 / Send all idle*.
   They walk there, dig, and haul the load back to the nearest depot.
@@ -21,7 +24,8 @@ die in ditches. The only way to steer them is to put money on the map.
 - **Destroy every lair to win.** Lose your City Centre and the realm falls.
 
 Keyboard, if you are at a desk: `B` build, `F` flags, `K` realm, `P` select peasants,
-`space` pause, arrows pan, `+`/`-` zoom, shift-drag to box-select.
+`M` full map, `C` follow the selected unit, `space` pause, arrows pan, `+`/`-` zoom,
+shift-drag to box-select.
 
 ## How the kingdom actually works
 

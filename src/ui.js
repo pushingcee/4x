@@ -53,6 +53,13 @@ export class UI {
     this.lastTap = 0;
     this.bind();
     this.renderTopbar();
+    this.syncZoomLabel();
+    // if the camera's subject dies, say so rather than silently drifting
+    this.r.onFollowEnd = (gone) => {
+      this.setFollowChip();
+      this.notify(`${gone.name} is gone`, 'bad');
+      this.renderSelection();
+    };
   }
 
   // ---------------------------------------------------------------
@@ -67,18 +74,32 @@ export class UI {
     cv.addEventListener('wheel', e => {
       e.preventDefault();
       const before = this.r.screenToWorld(e.clientX, e.clientY);
-      this.r.scale = clamp(this.r.scale + (e.deltaY < 0 ? 1 : -1), this.r.minScale, this.r.maxScale);
+      this.r.setScale(this.r.scaleF * (e.deltaY < 0 ? 1.18 : 1 / 1.18));
       const after = this.r.screenToWorld(e.clientX, e.clientY);
       this.r.cam.x += before.x - after.x;
       this.r.cam.y += before.y - after.y;
+      this.syncZoomLabel();
     }, { passive: false });
+
+    // iOS Safari ignores user-scalable=no and pinches the page instead of the
+    // map unless these are cancelled outright.
+    for (const ev of ['gesturestart', 'gesturechange', 'gestureend']) {
+      document.addEventListener(ev, e => e.preventDefault(), { passive: false });
+    }
+    cv.addEventListener('touchstart', e => { if (e.touches.length > 1) e.preventDefault(); }, { passive: false });
+    cv.addEventListener('touchmove', e => { e.preventDefault(); }, { passive: false });
+    cv.addEventListener('dblclick', e => e.preventDefault());
 
     for (const b of document.querySelectorAll('.cmd[data-tab]')) {
       b.addEventListener('click', () => { this.audio.play('ui'); this.openDrawer(b.dataset.tab); });
     }
     $('#drawer-close').addEventListener('click', () => this.closeDrawer());
     $('#placecancel').addEventListener('click', () => this.cancelPlace());
-    $('#btn-zoom').addEventListener('click', () => { this.audio.play('ui'); this.r.zoomStep(); });
+    $('#btn-zoom').addEventListener('click', () => {
+      this.audio.play('ui');
+      this.r.zoomStep();
+      this.syncZoomLabel();
+    });
     $('#btn-speed').addEventListener('click', () => {
       this.audio.play('ui');
       const g = this.game;
@@ -95,13 +116,16 @@ export class UI {
   // pointer input
   // ---------------------------------------------------------------
   onDown(e) {
-    this.r.canvas.setPointerCapture?.(e.pointerId);
     this.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY, sx: e.clientX, sy: e.clientY, t: performance.now() });
+    // Capture is a nicety, not a requirement: if the browser refuses it, input
+    // must still work rather than throwing out of the handler.
+    try { this.r.canvas.setPointerCapture?.(e.pointerId); } catch (_) { /* no capture, no problem */ }
     this.moved = 0;
     if (this.pointers.size === 2) {
       const [a, b] = [...this.pointers.values()];
       this.pinchStart = Math.hypot(a.x - b.x, a.y - b.y);
-      this.pinchScale = this.r.scale;
+      this.pinchScale = this.r.scaleF;
+      this.pinchAnchor = this.r.screenToWorld((a.x + b.x) / 2, (a.y + b.y) / 2);
       this.panning = false;
     } else if (e.shiftKey && e.pointerType === 'mouse') {
       const w = this.r.screenToWorld(e.clientX, e.clientY);
@@ -121,17 +145,28 @@ export class UI {
     p.x = e.clientX; p.y = e.clientY;
     this.moved += Math.hypot(dx, dy);
 
+    if (this.r.mapOpen) return;
+
     if (this.pointers.size === 2 && this.pinchStart) {
       const [a, b] = [...this.pointers.values()];
       const d = Math.hypot(a.x - b.x, a.y - b.y);
-      const ratio = d / this.pinchStart;
-      this.r.scale = clamp(Math.round(this.pinchScale * ratio), this.r.minScale, this.r.maxScale);
+      this.r.setScale(this.pinchScale * (d / this.pinchStart));
+      // hold the point between the fingers still, unless the camera is
+      // already locked to somebody
+      if (!this.r.follow) {
+        const after = this.r.screenToWorld((a.x + b.x) / 2, (a.y + b.y) / 2);
+        this.r.cam.x += this.pinchAnchor.x - after.x;
+        this.r.cam.y += this.pinchAnchor.y - after.y;
+        this.r.clampCam();
+      }
+      this.syncZoomLabel();
       return;
     }
     if (this.boxSelect) { this.boxSelect.x1 = world.x; this.boxSelect.y1 = world.y; return; }
-    if (this.panning) {
-      this.r.cam.x -= dx * (window.devicePixelRatio || 1) / this.r.scale * (this.r.dpr / (window.devicePixelRatio || 1));
-      this.r.cam.y -= dy * (window.devicePixelRatio || 1) / this.r.scale * (this.r.dpr / (window.devicePixelRatio || 1));
+    if (this.panning && this.moved > 6) {
+      this.stopFollow();                       // taking the wheel ends the tour
+      this.r.cam.x -= dx * this.r.dpr / this.r.scale;
+      this.r.cam.y -= dy * this.r.dpr / this.r.scale;
       this.r.clampCam();
     }
   }
@@ -150,8 +185,14 @@ export class UI {
     const held = performance.now() - p.t;
     const travel = Math.hypot(e.clientX - p.sx, e.clientY - p.sy);
     if (travel < 12 && held < 600 && this.pointers.size === 0) {
-      const mini = this.r.minimapHit(e.clientX, e.clientY);
-      if (mini) { this.r.centerOn(mini.x, mini.y); this.audio.play('ui'); return; }
+      const onMap = this.r.minimapHit(e.clientX, e.clientY);
+      if (this.r.mapOpen) {
+        if (onMap) { this.stopFollow(); this.r.centerOn(onMap.x, onMap.y); }
+        this.r.mapOpen = false;
+        this.audio.play('ui');
+        return;
+      }
+      if (onMap) { this.r.mapOpen = true; this.audio.play('ui'); return; }
       this.handleTap(this.r.screenToWorld(e.clientX, e.clientY), held);
     }
     if (this.pointers.size === 0) this.panning = false;
@@ -169,19 +210,71 @@ export class UI {
 
   onKey(e) {
     const g = this.game;
-    if (e.key === 'Escape') { this.cancelPlace(); this.closeDrawer(); this.setSelection([]); }
+    if (e.key === 'Escape') {
+      if (this.r.mapOpen) { this.r.mapOpen = false; return; }
+      this.cancelPlace(); this.closeDrawer(); this.setSelection([]); this.stopFollow();
+    }
+    if (e.key === 'm' || e.key === 'M') this.r.mapOpen = !this.r.mapOpen;
+    if (e.key === 'c' || e.key === 'C') {
+      const u = this.game.selection.find(x => x.kindClass === 'unit');
+      if (u) this.startFollow(u); else this.stopFollow();
+    }
     if (e.key === ' ') { e.preventDefault(); g.paused = !g.paused; this.notify(g.paused ? 'Paused' : 'Resumed'); }
     if (e.key === 'b' || e.key === 'B') this.openDrawer('build');
     if (e.key === 'f' || e.key === 'F') this.openDrawer('flags');
     if (e.key === 'k' || e.key === 'K') this.openDrawer('kingdom');
     if (e.key === 'p' || e.key === 'P') this.selectAllPeasants();
-    if (e.key === '+' || e.key === '=') this.r.scale = clamp(this.r.scale + 1, this.r.minScale, this.r.maxScale);
-    if (e.key === '-') this.r.scale = clamp(this.r.scale - 1, this.r.minScale, this.r.maxScale);
+    if (e.key === '+' || e.key === '=') { this.r.setScale(this.r.scaleF + 1); this.syncZoomLabel(); }
+    if (e.key === '-') { this.r.setScale(this.r.scaleF - 1); this.syncZoomLabel(); }
     const pan = 64;
+    if (e.key.startsWith('Arrow')) this.stopFollow();
     if (e.key === 'ArrowLeft') this.r.cam.x -= pan;
     if (e.key === 'ArrowRight') this.r.cam.x += pan;
     if (e.key === 'ArrowUp') this.r.cam.y -= pan;
     if (e.key === 'ArrowDown') this.r.cam.y += pan;
+  }
+
+  // ---------------------------------------------------------------
+  // camera: zoom + follow
+  // ---------------------------------------------------------------
+  syncZoomLabel() {
+    const el = document.getElementById('zoomlbl');
+    if (el) el.textContent = this.r.zoomName();
+  }
+
+  /** Lock the camera onto a unit and keep it there until told otherwise. */
+  startFollow(u) {
+    if (!u || u.dead) return;
+    this.r.setFollow(u);
+    this.setFollowChip();
+    this.notify(`Following ${u.name}`);
+    this.audio.play('ui');
+    this.renderSelection();
+  }
+  stopFollow() {
+    if (!this.r.follow) return;
+    this.r.follow = null;
+    this.setFollowChip();
+    this.renderSelection();
+  }
+
+  /** The "Following X / Stop" chip that sits above the alert stack. */
+  setFollowChip() {
+    const box = $('#alerts');
+    let chip = document.getElementById('followchip');
+    const u = this.r.follow;
+    if (!u) { if (chip) chip.remove(); return; }
+    if (!chip) {
+      chip = document.createElement('div');
+      chip.id = 'followchip';
+      chip.innerHTML = `<span class="who"></span><button type="button">Stop</button>`;
+      chip.querySelector('button').addEventListener('click', () => {
+        this.audio.play('ui');
+        this.stopFollow();
+      });
+      box.insertBefore(chip, box.firstChild);
+    }
+    chip.querySelector('.who').textContent = `Following ${u.name}`;
   }
 
   // ---------------------------------------------------------------
@@ -219,7 +312,9 @@ export class UI {
       }
       this.lastTap = now;
       this.setSelection([hit]);
-      this.audio.play('ui');
+      // already riding along with someone? switch the camera to the new subject
+      if (this.r.follow && hit.kindClass === 'unit') this.startFollow(hit);
+      else this.audio.play('ui');
     } else {
       this.setSelection([]);
     }
@@ -320,6 +415,7 @@ export class UI {
 
   renderUnitPanel(el, u) {
     const g = this.game;
+    const following = this.r.follow === u;
     const hpF = clamp(u.hp / u.maxHpNow, 0, 1);
     const cls = hpF > 0.5 ? '' : hpF > 0.25 ? 'mid' : 'low';
     const job = u.job && u.job.type === 'harvest'
@@ -349,6 +445,7 @@ export class UI {
       ${u.isHero ? `<div class="hint">Heroes take no orders. Raise a <b>flag</b> near what you want done and pay enough to tempt them.</div>` : ''}
       ${u.kind === 'peasant' ? `<div class="hint">Tap a <b>gold mine</b>, <b>quarry</b> or <b>forest</b> to assign this worker.</div>` : ''}
       <div class="acts">
+        <button class="btn small ${following ? 'danger' : 'primary'}" data-act="follow">${following ? 'Stop following' : 'Follow'}</button>
         <button class="btn small" data-act="center">Centre</button>
         ${u.kind === 'peasant' ? `<button class="btn small" data-act="allpeasants">Select all peasants</button>` : ''}
         ${u.kind === 'peasant' && u.job ? `<button class="btn small" data-act="unassign">Stop work</button>` : ''}
@@ -481,7 +578,11 @@ export class UI {
         this.audio.play('ui');
         switch (btn.dataset.act) {
           case 'clear': this.setSelection([]); break;
-          case 'center': this.r.centerOn(e.x, e.y); break;
+          case 'center': this.stopFollow(); this.r.centerOn(e.x, e.y); break;
+          case 'follow':
+            if (this.r.follow === e) this.stopFollow();
+            else this.startFollow(e);
+            break;
           case 'idle': this.selectIdlePeasants(); break;
           case 'allpeasants': this.selectAllPeasants(); break;
           case 'unassign':
@@ -669,7 +770,7 @@ export class UI {
     body.querySelectorAll('[data-unit]').forEach(s => s.replaceWith(unitIcon(s.dataset.unit)));
     body.querySelectorAll('[data-focus]').forEach(row => row.addEventListener('click', () => {
       const h = g.units.find(u => u.id === +row.dataset.focus);
-      if (h) { this.r.centerOn(h.x, h.y); this.setSelection([h]); this.closeDrawer(); }
+      if (h) { this.setSelection([h]); this.closeDrawer(); this.startFollow(h); }
     }));
     body.querySelectorAll('[data-raise]').forEach(b => b.addEventListener('click', () => {
       g.resurrect(+b.dataset.raise);
@@ -738,7 +839,12 @@ export class UI {
     el.className = 'alert ' + tone;
     el.textContent = msg;
     box.appendChild(el);
-    while (box.children.length > 4) box.removeChild(box.firstChild);
+    // trim old alerts only -- the follow chip and alarm button live here too
+    let alerts = box.querySelectorAll('.alert');
+    while (alerts.length > 4) {
+      alerts[0].remove();
+      alerts = box.querySelectorAll('.alert');
+    }
     setTimeout(() => { el.classList.add('fade'); setTimeout(() => el.remove(), 600); }, 2800);
   }
 
@@ -768,6 +874,9 @@ export class UI {
       <p><b>Money.</b> Taxes tick in from your buildings, mines feed the treasury, and heroes hand their
       loot straight back when they shop at your Marketplace, Blacksmith and Inn.</p>
       <p><b>Goal.</b> Destroy every monster lair. Lose your City Centre and the realm falls.</p>
+      <p><b>Camera.</b> Drag to pan, pinch to zoom, or tap <b>Zoom</b> for Close / Mid / Far / Wide.
+      Tap the corner map to open the full realm and jump anywhere. Select a unit and hit
+      <b>Follow</b> to have the camera track it.</p>
       <p>Seed <b>${g.seed}</b> &middot; day <b>${g.day}</b> &middot; lairs left <b>${g.lairs.filter(l => !l.dead).length}</b></p>`,
       [
         { label: this.audio.muted ? 'Sound: off' : 'Sound: on', fn: () => { this.audio.toggleMute(); this.hideModal(); this.showMenu(); } },
