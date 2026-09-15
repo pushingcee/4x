@@ -128,6 +128,7 @@ export class UI {
   // pointer input
   // ---------------------------------------------------------------
   onDown(e) {
+    this.touchedAt = performance.now();
     this.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY, sx: e.clientX, sy: e.clientY, t: performance.now() });
     // Capture is a nicety, not a requirement: if the browser refuses it, input
     // must still work rather than throwing out of the handler.
@@ -184,6 +185,7 @@ export class UI {
   }
 
   onUp(e) {
+    this.touchedAt = performance.now();
     const p = this.pointers.get(e.pointerId);
     this.pointers.delete(e.pointerId);
     if (this.pointers.size < 2) this.pinchStart = null;
@@ -379,7 +381,7 @@ export class UI {
     for (const e of this.game.selection) e.selected = false;
     this.game.selection = list.filter(Boolean);
     for (const e of this.game.selection) e.selected = true;
-    this.renderSelection();
+    this.renderSelection(true);
   }
   selectAllPeasants() {
     const list = this.game.units.filter(u => !u.dead && u.kind === 'peasant');
@@ -393,12 +395,31 @@ export class UI {
     this.notify(list.length ? `${list.length} idle peasants selected` : 'No idle peasants', list.length ? '' : 'bad');
   }
 
-  renderSelection() {
+  /**
+   * What the selection panel's *buttons* depend on. Numbers that tick along
+   * (health, carried gold) are deliberately absent: they get refreshed in
+   * place instead, because replacing the panel's DOM mid-tap eats the tap.
+   */
+  selectionSignature() {
+    const sel = this.game.selection;
+    return sel.length + '|' + sel.map(e => [
+      e.id, e.kindClass, e.kind || e.defId || e.type,
+      e.mission, e.complete, e.amount > 0, this.r.follow === e
+    ].join(',')).join(';');
+  }
+
+  renderSelection(force = false) {
     const g = this.game;
     const el = $('#selpanel');
     const sel = g.selection;
-    if (!sel.length || g.placing) { el.hidden = true; return; }
+    if (!sel.length || g.placing) { el.hidden = true; this.selSig = null; return; }
     el.hidden = false;
+
+    // Same controls as last time? Just freshen the numbers.
+    const sig = this.selectionSignature();
+    if (!force && sig === this.selSig) { if (this.selRefresh) this.selRefresh(); return; }
+    this.selSig = sig;
+    this.selRefresh = null;
 
     if (sel.length > 1) {
       const peasants = sel.filter(u => u.kind === 'peasant');
@@ -407,9 +428,8 @@ export class UI {
       el.innerHTML = `
         <div class="sel-head"><div><h3>${sel.length} selected</h3>
         <div class="meta">${peasants.length} peasant${peasants.length === 1 ? '' : 's'}</div></div></div>
-        ${peasants.length ? `<div class="hint" style="padding-bottom:0">Give them all the same calling:</div>
-        ${missionPicker(shared)}` : ''}
-        <div class="hint">Or tap a <b>mine</b>, <b>quarry</b> or <b>tree</b> to start them there. Tap open ground to move them.</div>
+        ${peasants.length ? missionPicker(shared) : ''}
+        <div class="hint">Or tap a <b>mine</b>, <b>quarry</b> or <b>tree</b> to start them there.</div>
         <div class="acts">
           <button class="btn small" data-act="idle">Select idle only</button>
           <button class="btn small" data-act="clear">Clear</button>
@@ -426,26 +446,32 @@ export class UI {
     if (e.kindClass === 'flag') return this.renderFlagPanel(el, e);
   }
 
+  unitJobText(u) {
+    if (u.job && u.job.type === 'harvest' && u.job.node) {
+      const k = u.job.node.kind;
+      return `${u.state === 'deliver' ? 'hauling' : 'working'} ${k === 'goldmine' ? 'gold' : k === 'quarry' ? 'stone' : 'wood'}`;
+    }
+    if (u.job && u.job.type === 'build') return 'building';
+    return u.state;
+  }
+
   renderUnitPanel(el, u) {
     const g = this.game;
     const following = this.r.follow === u;
     const hpF = clamp(u.hp / u.maxHpNow, 0, 1);
     const cls = hpF > 0.5 ? '' : hpF > 0.25 ? 'mid' : 'low';
-    const job = u.job && u.job.type === 'harvest'
-      ? `mining ${u.job.node.kind === 'goldmine' ? 'gold' : u.job.node.kind === 'quarry' ? 'stone' : 'wood'}`
-      : u.job && u.job.type === 'build' ? 'building'
-        : u.state;
+    const job = this.unitJobText(u);
     const isMine = u.faction === 'realm';
     el.innerHTML = `
       <div class="sel-head">
         <span class="pic"></span>
         <div class="grow">
           <h3>${u.name}</h3>
-          <div class="meta">${u.title}${u.isHero ? ` &middot; level ${u.level}` : ''} &middot; ${job}</div>
-          <div class="hp"><i class="${cls}" style="width:${hpF * 100}%"></i></div>
+          <div class="meta" data-live="meta">${u.title}${u.isHero ? ` &middot; level ${u.level}` : ''} &middot; ${job}</div>
+          <div class="hp"><i data-live="hp" class="${cls}" style="width:${hpF * 100}%"></i></div>
         </div>
       </div>
-      <div class="statline">
+      <div class="statline" data-live="stats">
         <span>HP <b>${Math.ceil(u.hp)}/${u.maxHpNow}</b></span>
         <span>DMG <b>${u.power.toFixed(0)}</b></span>
         ${u.isHero ? `<span>GOLD <b>${Math.floor(u.gold)}</b></span>
@@ -456,19 +482,34 @@ export class UI {
         ${u.carry > 0 ? `<span>CARRYING <b>${Math.floor(u.carry)} ${u.carryRes}</b></span>` : ''}
       </div>
       ${u.isHero ? `<div class="hint">Heroes take no orders. Raise a <b>flag</b> near what you want done and pay enough to tempt them.</div>` : ''}
-      ${u.kind === 'peasant' ? `
-        <div class="hint" style="padding-bottom:0">Give them a calling &mdash; they will find the work themselves.</div>
-        ${missionPicker(u.mission)}
-        <div class="hint" style="padding-top:0">${MISSIONS[u.mission].desc}
-        Or tap a specific <b>mine</b>, <b>quarry</b> or <b>tree</b> to start them there.</div>` : ''}
+      ${u.kind === 'peasant' ? `${missionPicker(u.mission)}
+        <div class="hint">${MISSIONS[u.mission].desc}</div>` : ''}
       <div class="acts">
         <button class="btn small ${following ? 'danger' : 'primary'}" data-act="follow">${following ? 'Stop following' : 'Follow'}</button>
         <button class="btn small" data-act="center">Centre</button>
-        ${u.kind === 'peasant' ? `<button class="btn small" data-act="allpeasants">Select all peasants</button>` : ''}
         <button class="btn small" data-act="clear">Close</button>
       </div>`;
     el.querySelector('.pic').replaceWith(spriteEl(unitSprite(u.sprite, 0, 1), 16, 16, 36));
     this.wireSelActions(el, u);
+    // keep the live numbers moving without touching the buttons
+    this.selRefresh = () => {
+      if (u.dead) { this.renderSelection(true); return; }
+      const f = clamp(u.hp / u.maxHpNow, 0, 1);
+      const bar = el.querySelector('[data-live="hp"]');
+      if (bar) {
+        bar.style.width = f * 100 + '%';
+        bar.className = f > 0.5 ? '' : f > 0.25 ? 'mid' : 'low';
+      }
+      const meta = el.querySelector('[data-live="meta"]');
+      if (meta) meta.textContent = `${u.title}${u.isHero ? ` · level ${u.level}` : ''} · ${this.unitJobText(u)}`;
+      const stats = el.querySelector('[data-live="stats"]');
+      if (stats) {
+        const bits = [`HP <b>${Math.ceil(u.hp)}/${u.maxHpNow}</b>`, `DMG <b>${u.power.toFixed(0)}</b>`];
+        if (u.isHero) bits.push(`GOLD <b>${Math.floor(u.gold)}</b>`, `XP <b>${Math.floor(u.xp)}</b>`, `KILLS <b>${u.kills}</b>`);
+        if (u.carry > 0) bits.push(`CARRYING <b>${Math.floor(u.carry)} ${u.carryRes}</b>`);
+        stats.innerHTML = bits.map(b => `<span>${b}</span>`).join('');
+      }
+    };
   }
 
   renderBuildingPanel(el, b) {
@@ -494,8 +535,8 @@ export class UI {
         <span class="pic"></span>
         <div class="grow">
           <h3>${def.name}</h3>
-          <div class="meta">${b.complete ? 'operational' : `under construction ${Math.round(b.progress * 100)}%`}</div>
-          <div class="hp"><i class="${hpF > 0.5 ? '' : hpF > 0.25 ? 'mid' : 'low'}" style="width:${hpF * 100}%"></i></div>
+          <div class="meta" data-live="meta">${b.complete ? 'operational' : `under construction ${Math.round(b.progress * 100)}%`}</div>
+          <div class="hp"><i data-live="hp" class="${hpF > 0.5 ? '' : hpF > 0.25 ? 'mid' : 'low'}" style="width:${hpF * 100}%"></i></div>
         </div>
       </div>
       <div class="statline">
@@ -512,6 +553,17 @@ export class UI {
       </div>`;
     el.querySelector('.pic').replaceWith(buildIcon(b.defId));
     this.wireSelActions(el, b);
+    this.selRefresh = () => {
+      if (b.dead) { this.renderSelection(true); return; }
+      const f = clamp(b.hp / b.maxHp, 0, 1);
+      const bar = el.querySelector('[data-live="hp"]');
+      if (bar) {
+        bar.style.width = f * 100 + '%';
+        bar.className = f > 0.5 ? '' : f > 0.25 ? 'mid' : 'low';
+      }
+      const meta = el.querySelector('[data-live="meta"]');
+      if (meta) meta.textContent = b.complete ? 'operational' : `under construction ${Math.round(b.progress * 100)}%`;
+    };
   }
 
   renderLairPanel(el, l) {
@@ -548,11 +600,11 @@ export class UI {
         <span class="pic"></span>
         <div class="grow">
           <h3>${label}</h3>
-          <div class="meta">yields ${info.res} &middot; ${Math.ceil(n.amount)} left</div>
-          <div class="hp"><i style="width:${(n.amount / n.max) * 100}%"></i></div>
+          <div class="meta" data-live="meta">yields ${info.res} &middot; ${Math.ceil(n.amount)} left</div>
+          <div class="hp"><i data-live="hp" style="width:${(n.amount / n.max) * 100}%"></i></div>
         </div>
       </div>
-      <div class="statline"><span>WORKERS <b>${workers.length}</b></span><span>IDLE PEASANTS <b>${idle}</b></span></div>
+      <div class="statline" data-live="stats"><span>WORKERS <b>${workers.length}</b></span><span>IDLE PEASANTS <b>${idle}</b></span></div>
       <div class="hint">Send peasants here and they will haul ${info.res} back to the nearest depot.</div>
       <div class="acts">
         <button class="btn small primary" data-send="1">Send 1</button>
@@ -563,6 +615,19 @@ export class UI {
       </div>`;
     el.querySelector('.pic').replaceWith(spriteEl(propSprite(n.kind, n.v || 0), 32, 32, 34));
     this.wireSelActions(el, n);
+    this.selRefresh = () => {
+      if (n.amount <= 0 || n.removed) { this.renderSelection(true); return; }
+      const meta = el.querySelector('[data-live="meta"]');
+      if (meta) meta.innerHTML = `yields ${info.res} &middot; ${Math.ceil(n.amount)} left`;
+      const bar = el.querySelector('[data-live="hp"]');
+      if (bar) bar.style.width = (n.amount / n.max) * 100 + '%';
+      const stats = el.querySelector('[data-live="stats"]');
+      if (stats) {
+        const w = g.units.filter(u => !u.dead && u.job && u.job.type === 'harvest' && u.job.node === n).length;
+        const free = g.units.filter(u => !u.dead && u.kind === 'peasant' && u.mission === 'none').length;
+        stats.innerHTML = `<span>WORKERS <b>${w}</b></span><span>IDLE PEASANTS <b>${free}</b></span>`;
+      }
+    };
   }
 
   renderFlagPanel(el, f) {
@@ -638,7 +703,7 @@ export class UI {
         const targets = peasants.length ? peasants : (e && e.kind === 'peasant' ? [e] : []);
         if (!targets.length) return;
         g.assignMission(targets, btn.dataset.mission);
-        this.renderSelection();
+        this.renderSelection(true);
         if (this.tab === 'peasants') this.renderDrawer();
       });
     });
@@ -688,7 +753,7 @@ export class UI {
     const body = $('#drawer-body');
     if (this.tab === 'build') this.renderBuild(body);
     else if (this.tab === 'flags') this.renderFlags(body);
-    else if (this.tab === 'peasants') this.renderPeasants(body);
+    else if (this.tab === 'peasants') this.renderPeasants(body, true);
     else this.renderRealm(body);
   }
 
@@ -752,20 +817,31 @@ export class UI {
   }
 
   /** The Peasants tab: hire, and move people between callings. */
-  renderPeasants(body) {
+  /** "2 working, 1 hauling" -- what a calling's crew is up to right now. */
+  missionStatus(crew, m) {
+    if (!crew.length) return m.res ? `no one gathering ${m.res}` : 'nobody assigned';
+    const verb = { walk: 'walking', harvest: 'working', deliver: 'hauling', build: 'building',
+      repair: 'mending', flee: 'fleeing', idle: 'waiting' };
+    const busy = {};
+    for (const p of crew) { const v = verb[p.state] || p.state; busy[v] = (busy[v] || 0) + 1; }
+    return Object.entries(busy).map(([k, n]) => `${n} ${k}`).join(', ');
+  }
+
+  renderPeasants(body, force = false) {
     const g = this.game;
     const peasants = g.units.filter(u => !u.dead && u.kind === 'peasant');
     const cost = CLASSES.peasant.cost.gold;
     const canHire = g.res.gold >= cost && g.pop < g.popCap;
     const byMission = (id) => peasants.filter(p => p.mission === id);
 
-    const verb = { walk: 'walking', harvest: 'working', deliver: 'hauling', build: 'building',
-      repair: 'mending', flee: 'fleeing', idle: 'waiting' };
+    // Rebuilding this list every frame would swallow taps on the +/- buttons,
+    // so only rebuild when the crew actually changes.
+    const sig = MISSION_ORDER.map(id => byMission(id).length).join(',') + '|' + canHire;
+    if (!force && sig === this.peasantSig && this.peasantRefresh) { this.peasantRefresh(); return; }
+    this.peasantSig = sig;
 
     let html = `
-      <div class="hint">You are the god here, and peasants actually listen. Give each one a
-      <b>calling</b> and they will hunt down their own work &mdash; when a seam runs dry they
-      walk to the next one without being told.</div>
+      <div class="hint">Tap a name to select that crew. <b>+</b> promotes an idle peasant.</div>
       <div class="mrow">
         <div class="grow"><span class="nm">Peasants</span>
         <span class="sub">${peasants.length} of ${g.popCap} housed &middot; ${g.res.gold} gold in the treasury</span></div>
@@ -775,17 +851,13 @@ export class UI {
     for (const id of MISSION_ORDER) {
       const m = MISSIONS[id];
       const crew = byMission(id);
-      const busy = {};
-      for (const p of crew) { const v = verb[p.state] || p.state; busy[v] = (busy[v] || 0) + 1; }
-      const detail = crew.length
-        ? Object.entries(busy).map(([k, n]) => `${n} ${k}`).join(', ')
-        : m.res ? `no one gathering ${m.res}` : 'nobody assigned';
+      const detail = this.missionStatus(crew, m);
       html += `
         <div class="mrow">
           <span class="swatch" style="background:${m.colour}"></span>
           <div class="grow" data-pick="${id}">
             <span class="nm">${m.name}</span>
-            <span class="sub">${detail}</span>
+            <span class="sub" data-status="${id}">${detail}</span>
           </div>
           <span class="cnt">${crew.length}</span>
           <span class="pm">
@@ -795,9 +867,15 @@ export class UI {
         </div>`;
     }
 
-    html += `<div class="hint">Tap a calling's name to select everyone doing it.
-      <b>+</b> promotes an idle peasant, or hires one if nobody is free.</div>`;
     body.innerHTML = html;
+
+    // live status lines, without disturbing the controls
+    this.peasantRefresh = () => {
+      for (const id of MISSION_ORDER) {
+        const el = body.querySelector(`[data-status="${id}"]`);
+        if (el) el.textContent = this.missionStatus(byMission(id), MISSIONS[id]);
+      }
+    };
 
     body.querySelector('[data-hire]')?.addEventListener('click', () => {
       if (g.recruit(g.palace, 'peasant')) { this.renderDrawer(); this.renderTopbar(); }
@@ -1015,8 +1093,11 @@ export class UI {
   // ---------------------------------------------------------------
   update(dt) {
     this.refreshIn -= dt;
-    if (this.refreshIn <= 0) {
-      this.refreshIn = 0.35;
+    // A finger on the glass means a click is still in flight: touch browsers
+    // synthesise it well after pointerup, and a rebuild in between loses it.
+    const settling = this.pointers.size > 0 || performance.now() - (this.touchedAt || 0) < 500;
+    if (this.refreshIn <= 0 && !settling) {
+      this.refreshIn = 0.3;
       this.renderTopbar();
       if (this.game.selection.length) this.renderSelection();
       if (this.tab === 'kingdom') this.renderRealm($('#drawer-body'));
