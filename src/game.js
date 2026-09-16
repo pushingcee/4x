@@ -10,7 +10,7 @@ import {
   BUILDINGS, CLASSES, MONSTERS, LAIRS, FLAGS, RES_RATE, START,
   DAY_SECONDS, TAX_INTERVAL, RESURRECT_COST, HERO_CLASSES, PEACE_DAYS, STRUCTURE_DMG,
   MISSIONS, RAIDS_ENABLED, CALLING_ORDER, DISTRESS_WINDOW, RECRUIT_DMG,
-  THREAT_PER_DAY, THREAT_CAP, SEPARATION_CAP
+  THREAT_PER_DAY, THREAT_CAP, SEPARATION_CAP, SPECS, WORK_TALENTS
 } from './data.js';
 import { makeRng, clamp, dist } from './util.js';
 
@@ -177,6 +177,7 @@ export class Game {
     let best = null, bestD = range;
     for (const u of this.units) {
       if (u.dead || u.faction === myFaction) continue;
+      if (u.unseen) continue;            // you cannot pick a fight with what you cannot see
       const d = dist(u.x, u.y, x, y);
       if (d < bestD) { bestD = d; best = u; }
     }
@@ -516,6 +517,50 @@ export class Game {
   }
 
   /**
+   * Lock in a specialisation. Offered once the soldier is ranked high enough,
+   * taken once, and permanent -- it is the one irreversible choice a unit
+   * makes, which is what gives it any weight.
+   */
+  chooseSpec(u, specId) {
+    if (!u || u.dead || !u.canSpec) return null;
+    const list = SPECS[u.kind] || [];
+    const sp = list.find(x => x.id === specId);
+    if (!sp) return null;
+    u.spec = sp.id;
+    u.title = `${sp.name} ${CLASSES[u.kind].name}`;
+    u.hp = u.maxHpNow;                  // the new constitution is theirs at once
+    // Rage you have to work up; focus you simply have, until you spend it.
+    const pw = u.chargeDef;
+    u.charge = pw && pw.startFull ? pw.max : 0;
+    if (sp.stealth) u.conceal(Infinity);
+    this.fx.ring(u.x, u.y - 6, sp.colour, 18);
+    this.fx.text(u.x, u.y - 22, sp.name.toUpperCase(), sp.colour, 28);
+    this.audio.play('level');
+    this.notify(`${u.name} becomes a ${sp.name} ${CLASSES[u.kind].name}`, 'good');
+    return sp;
+  }
+
+  /** Put a talent point into one of a calling's talents. */
+  spendTalent(u, missionId, talentId) {
+    if (!u || u.dead) return false;
+    const ok = u.spendTalent(missionId, talentId);
+    if (ok) {
+      this.fx.text(u.x, u.y - 16, '+' + (WORK_TALENTS[missionId]
+        .find(t => t.id === talentId) || {}).name, '#7fd8a0', 20);
+      this.audio.play('coin');
+    }
+    return ok;
+  }
+
+  /** Hand every point in a tree back, so a bad pick is never permanent. */
+  resetTalents(u, missionId) {
+    if (!u || u.dead) return false;
+    u.clearTalents(missionId);
+    this.notify(`${u.name} rethinks their ${(MISSIONS[missionId] || {}).name || missionId} training`);
+    return true;
+  }
+
+  /**
    * Everyone already promised to a guild: soldiers of that class plus the
    * villagers currently drilling for it. Both count against its capacity.
    */
@@ -703,23 +748,29 @@ export class Game {
       return made.length;
     }
 
-    let n = 0;
+    // Anyone in the realm can take a calling -- villagers and veterans alike.
+    // A knighthood is a layer on top of who somebody is, so sending a warrior
+    // back to the seam costs them nothing they earned.
+    let n = 0, first = null;
     for (const u of units) {
-      if (!u || u.dead || u.kind !== 'peasant') continue;
+      if (!u || u.dead) continue;
+      if (u.kind !== 'peasant' && !u.isHero) continue;
       if (u.knightKind) this.cancelKnighthood(u);
       if (u.job && u.job.type === 'build' && u.job.site) u.job.site.builders--;
       u.mission = missionId;
       u.job = null;
       u.prevJob = null;
       u.stalledOn = null;
+      u.target = null;
       u.state = 'idle';
       u.path = null; u.needPath = null;
+      if (!first) first = u;
       n++;
     }
     if (n) {
       this.notify(n === 1
-        ? `${units.find(u => u && u.kind === 'peasant').name} is now a ${m.name}`
-        : `${n} peasants are now ${m.name}s`, 'good');
+        ? `${first.name} is now a ${m.name}`
+        : `${n} of the realm are now ${m.name}s`, 'good');
       this.audio.play('order');
     }
     return n;

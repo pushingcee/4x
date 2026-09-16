@@ -404,8 +404,11 @@ export class Renderer {
     const frame = moving ? (u.frame | 0) % 2 : 0;
     const s = unitSprite(u.sprite, frame, u.dir);
     const x = Math.round(u.x - 8), y = Math.round(u.y - 14);
+    // Unseen: you still know where your own killer is, the enemy does not.
+    const ghost = u.hidden > 0;
+    if (ghost) ctx.globalAlpha = 0.38;
     ctx.fillStyle = PAL.shadow;
-    ctx.fillRect(x + 4, Math.round(u.y) - 1, 8, 2);
+    if (!ghost) ctx.fillRect(x + 4, Math.round(u.y) - 1, 8, 2);
     if (u.def.big) {
       ctx.save();
       ctx.translate(Math.round(u.x), Math.round(u.y + 2));
@@ -418,7 +421,7 @@ export class Renderer {
       ctx.drawImage(s, x, y);
     }
     // a badge so you can read the whole workforce at a glance
-    if (u.kind === 'peasant' && u.mission && u.mission !== 'none') {
+    if ((u.kind === 'peasant' || u.isHero) && u.mission && u.mission !== 'none') {
       const m = MISSIONS[u.mission];
       if (m) {
         ctx.fillStyle = PAL.outline;
@@ -433,20 +436,37 @@ export class Renderer {
       ctx.fillStyle = PAL.outline; ctx.fillRect(x + (u.dir > 0 ? 1 : 12), y + 6, 4, 4);
       ctx.fillStyle = col; ctx.fillRect(x + (u.dir > 0 ? 1 : 12), y + 6, 3, 3);
     }
+    // whatever the specialisation has going right now
+    if (u.frenzy > 0 || u.guarded > 0) {
+      ctx.fillStyle = u.frenzy > 0 ? '#ff7a3a' : '#6fb6ff';
+      ctx.fillRect(x + 6, y - 9, 4, 2);
+    }
+    ctx.globalAlpha = 1;
   }
 
   drawUnitBar(ctx, u) {
     const hurt = u.hp < u.maxHpNow - 0.5;
-    if (!hurt && !u.selected) return;
+    const pw = u.chargeDef;
+    // A soldier with an ability nearly ready is worth seeing even at full health
+    const showCharge = pw && (u.abilityReady || u.charge > u.maxCharge * 0.5);
+    if (!hurt && !u.selected && !showCharge) return;
     // clear the mission badge when there is one
-    const badged = u.kind === 'peasant' && u.mission && u.mission !== 'none';
+    const badged = u.mission && u.mission !== 'none' && (u.kind === 'peasant' || u.isHero);
     const w = 12, x = Math.round(u.x - w / 2), y = Math.round(u.y - (badged ? 25 : 19));
-    ctx.fillStyle = '#120c1c'; ctx.fillRect(x - 1, y - 1, w + 2, 4);
-    const f = clamp(u.hp / u.maxHpNow, 0, 1);
-    ctx.fillStyle = u.faction === 'monster' ? '#e05050' : f > 0.5 ? '#6ecf8e' : f > 0.25 ? '#ffc94a' : '#e05050';
-    ctx.fillRect(x, y, Math.max(1, Math.round(w * f)), 2);
-    if (u.isHero) {
-      drawText(ctx, String(u.level), x + w + 2, y - 2, '#ffc94a');
+    if (hurt || u.selected) {
+      ctx.fillStyle = '#120c1c'; ctx.fillRect(x - 1, y - 1, w + 2, 4);
+      const f = clamp(u.hp / u.maxHpNow, 0, 1);
+      ctx.fillStyle = u.faction === 'monster' ? '#e05050'
+        : f > 0.5 ? '#6ecf8e' : f > 0.25 ? '#ffc94a' : '#e05050';
+      ctx.fillRect(x, y, Math.max(1, Math.round(w * f)), 2);
+    }
+    if (u.isHero) drawText(ctx, String(u.level), x + w + 2, y - 2, '#ffc94a');
+    // rage or focus, so you can see an ability coming
+    if (showCharge) {
+      const cf = clamp(u.charge / u.maxCharge, 0, 1);
+      ctx.fillStyle = '#120c1c'; ctx.fillRect(x - 1, y + 2, w + 2, 3);
+      ctx.fillStyle = u.abilityReady ? '#ffffff' : pw.colour;
+      ctx.fillRect(x, y + 3, Math.max(1, Math.round(w * cf)), 1);
     }
   }
 

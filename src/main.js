@@ -60,6 +60,9 @@ async function start() {
       by name. Work trains them: every calling raises two attributes.</p>
       <p><b>4.</b> <b>Build</b> a Barracks, call a villager up to <b>War</b> and let them drill,
       then raise an attack <b>Flag</b> on a monster lair and watch the greedy fool charge in.</p>
+      <p><b>5.</b> Work earns <b>talent points</b>, and at level 5 a soldier picks a
+      <b>specialisation</b> for good. Nothing is ever lost on the way &mdash; knight a
+      veteran and they keep it all, and you can send them back to the fields any time.</p>
       <p><b>Send enough.</b> A struck camp sounds the alarm and pours out reinforcements,
       and the monsters toughen as the days pass. Veterans win these fights: a villager who
       worked every calling before being knighted is worth several raw recruits.</p>

@@ -116,6 +116,148 @@ export const MISSIONS = {
   }
 };
 
+/**
+ * ===================================================================
+ * TALENTS -- what a villager chooses to do with what the work taught them.
+ * ===================================================================
+ *
+ * Every working calling has a tree of three talents, three ranks each, and
+ * hands out three points as its training track fills -- so the points never
+ * cover the whole tree and the choice is real. Points are earned per calling
+ * and spent in that calling's tree; a villager who mastered mining and
+ * woodcutting has two trees to spend in, and keeps both forever.
+ */
+export const TALENT_RANKS = 3;
+export const TALENT_POINTS = 3;
+
+/**
+ * The three talents are the same three ideas in every tree -- carry more,
+ * work faster, walk quicker -- under names that fit the job. Same shape
+ * everywhere means a player learns the tree once.
+ */
+export const WORK_TALENTS = {
+  miner: [
+    { id: 'capacity', name: 'Deep Pockets', per: 0.25, desc: '+25% ore per load' },
+    { id: 'rate', name: 'Steady Swing', per: 0.20, desc: '+20% faster at the seam' },
+    { id: 'haste', name: 'Sure Footing', per: 0.12, desc: '+12% movement while working' }
+  ],
+  woodcutter: [
+    { id: 'capacity', name: 'Big Bundles', per: 0.25, desc: '+25% timber per load' },
+    { id: 'rate', name: 'Sharp Axe', per: 0.20, desc: '+20% faster felling' },
+    { id: 'haste', name: 'Trailblazer', per: 0.12, desc: '+12% movement while working' }
+  ],
+  quarrier: [
+    { id: 'capacity', name: 'Broad Back', per: 0.25, desc: '+25% stone per load' },
+    { id: 'rate', name: 'True Chisel', per: 0.20, desc: '+20% faster cutting' },
+    { id: 'haste', name: 'Quarry Legs', per: 0.12, desc: '+12% movement while working' }
+  ],
+  builder: [
+    { id: 'capacity', name: 'Full Hod', per: 0.25, desc: '+25% carried to site' },
+    { id: 'rate', name: 'Scaffolding', per: 0.20, desc: '+20% faster building and mending' },
+    { id: 'haste', name: 'On The Run', per: 0.12, desc: '+12% movement while working' }
+  ]
+};
+
+/**
+ * ===================================================================
+ * SPECIALISATIONS -- chosen once, at the rank cap, and permanent.
+ * ===================================================================
+ *
+ * Every specialisation is worth exactly twenty attribute points, spent
+ * differently: the choice is about shape, never about power. On top of that
+ * each one gets an ability, paid for out of its class resource.
+ */
+export const SPEC_LEVEL = 5;
+
+/**
+ * The resource an ability is paid for with. Warriors work themselves into a
+ * temper; rangers settle and breathe.
+ */
+export const POWERS = {
+  rage: {
+    id: 'rage', name: 'Rage', colour: '#ff5a5a', max: 100,
+    onHit: 9, onHurt: 7, regen: 0, decay: 3.5,
+    desc: 'Builds by dealing and taking blows, and cools off out of a fight.'
+  },
+  focus: {
+    id: 'focus', name: 'Focus', colour: '#7fd8a0', max: 100,
+    onHit: 0, onHurt: 0, regen: 11, idleRegen: 20, decay: 0, startFull: true,
+    desc: 'Gathers steadily, faster between shots, and full before a fight starts.'
+  }
+};
+
+export const ABILITIES = {
+  rampage: {
+    id: 'rampage', name: 'Rampage', power: 'rage', cost: 70, cd: 9, lasts: 6,
+    desc: 'A berserk flurry: swings twice as fast and drinks back a quarter of the damage dealt.'
+  },
+  mortal_strike: {
+    id: 'mortal_strike', name: 'Mortal Strike', power: 'rage', cost: 60, cd: 8, lasts: 0,
+    mult: 3.2, desc: 'One crushing blow for triple damage, aimed at whatever is in front of them.'
+  },
+  shield_wall: {
+    id: 'shield_wall', name: 'Shield Wall', power: 'rage', cost: 55, cd: 13, lasts: 8,
+    desc: 'Takes half damage, and drags every nearby monster onto itself and off everyone else.'
+  },
+  aimed_shot: {
+    id: 'aimed_shot', name: 'Aimed Shot', power: 'focus', cost: 55, cd: 7, lasts: 0,
+    mult: 3, desc: 'A long drawn shot for triple damage, loosed from further than anything can answer.'
+  },
+  ambush: {
+    id: 'ambush', name: 'Ambush', power: 'focus', cost: 60, cd: 10, lasts: 0,
+    mult: 2.5, hiddenMult: 4.5,
+    desc: 'A brutal opening blow -- and far worse if it lands before they are seen.'
+  },
+  vanish: {
+    id: 'vanish', name: 'Vanish', power: 'focus', cost: 65, cd: 15, lasts: 5,
+    mult: 5, desc: 'Steps out of sight, closes unseen, and opens with a five-fold strike in the back.'
+  }
+};
+
+export const SPECS = {
+  warrior: [
+    {
+      id: 'fury', name: 'Fury', colour: '#ff7a3a',
+      bonus: { str: 10, agi: 10, con: 0, int: 0 }, ability: 'rampage',
+      desc: 'A blade in each hand and no thought of tomorrow. All damage, all speed, no guard.'
+    },
+    {
+      id: 'arms', name: 'Arms', colour: '#ffc94a',
+      bonus: { str: 8, agi: 8, con: 4, int: 0 }, ability: 'mortal_strike',
+      desc: 'One great weapon and one opponent at a time. Hits hardest of anyone, one blow at a time.'
+    },
+    {
+      id: 'protection', name: 'Protection', colour: '#6fb6ff',
+      bonus: { str: 5, agi: 0, con: 15, int: 0 }, ability: 'shield_wall',
+      taunt: 120,
+      desc: 'Shield up, feet planted. Soaks what would kill anyone else, and insists on being the one hit.'
+    }
+  ],
+  ranger: [
+    {
+      id: 'longbow', name: 'Longbowman', colour: '#7fd8a0',
+      bonus: { str: 8, agi: 12, con: 0, int: 0 }, ability: 'aimed_shot',
+      rangeMul: 1.35, dmgMul: 1.15,
+      desc: 'Reach above all. Outranges everything on the map and opens fire before the enemy knows.'
+    },
+    {
+      id: 'mercenary', name: 'Mercenary', colour: '#c9a227',
+      bonus: { str: 6, agi: 10, con: 4, int: 0 }, ability: 'ambush',
+      stealth: true, stealthIn: 3, openerMul: 1.8,
+      desc: 'Paid to end things quickly. Slips out of sight between fights and opens hard.'
+    },
+    {
+      id: 'assassin', name: 'Assassin', colour: '#9b6fff',
+      bonus: { str: 0, agi: 14, con: 0, int: 6 }, ability: 'vanish',
+      stealth: true, stealthIn: 2.5, openerMul: 2.4,
+      desc: 'Walks unseen, kills once, and is gone before the answer comes.'
+    }
+  ]
+};
+
+/** How long a unit stays unseen after breaking stealth by striking. */
+export const STEALTH_REVEAL = 2.5;
+
 /** A villager under arms but not yet knighted: militia, and a little tougher. */
 export const RECRUIT_DMG = 3;
 

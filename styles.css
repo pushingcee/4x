@@ -242,7 +242,7 @@ canvas{image-rendering:pixelated;image-rendering:crisp-edges}
 #selpanel{
   position:fixed;left:calc(4px + var(--safe-l));right:calc(4px + var(--safe-r));
   bottom:calc(72px + var(--safe-b));
-  padding:9px 10px;z-index:19;max-height:46vh;overflow-y:auto;overscroll-behavior:contain;
+  padding:9px 10px;z-index:19;max-height:56vh;overflow-y:auto;overscroll-behavior:contain;
 }
 #selpanel .sel-head{display:flex;align-items:center;gap:8px;margin-bottom:5px}
 #selpanel canvas.portrait{image-rendering:pixelated;width:36px;height:36px;flex:none}
@@ -303,7 +303,7 @@ canvas{image-rendering:pixelated;image-rendering:crisp-edges}
 @media (max-height:720px){
   #drawer{max-height:72vh}
   .mrow{padding:6px 4px}
-  #selpanel{max-height:58vh}
+  #selpanel{max-height:66vh}
 }
 
 /* desktop niceties */
@@ -316,3 +316,52 @@ canvas{image-rendering:pixelated;image-rendering:crisp-edges}
   #placebar{left:50%;transform:translateX(-50%);right:auto;width:min(420px,92vw)}
   .cmd{font-size:12px}
 }
+
+/* ---------- talents ---------- */
+.trow .tal{
+  flex:none;font:inherit;font-size:11px;min-width:26px;height:22px;padding:0 5px;cursor:pointer;
+  background:var(--panel-lit);color:var(--txt-dim);border:2px solid var(--edge-dk);
+  box-shadow:inset 0 0 0 1px var(--edge-lt);
+}
+.trow .tal.ready{background:var(--gold);color:var(--ink);border-color:#6b4a08}
+.trow .tal:active{background:var(--gold);color:var(--ink)}
+
+.talents{
+  margin:7px 0 2px;padding:7px;display:flex;flex-direction:column;gap:6px;
+  background:var(--edge-dk);box-shadow:inset 0 0 0 1px var(--edge-lt);
+}
+.talents .head{font-size:9.5px;letter-spacing:.1em;color:var(--txt-dim)}
+.talrow{display:flex;align-items:center;gap:7px}
+.talrow .tn{flex:1;min-width:0;font-size:12px;color:var(--txt);line-height:1.35}
+.talrow .tn i{display:block;font-style:normal;font-size:10px;color:var(--txt-dim)}
+.talrow .pips{display:flex;gap:3px;flex:none}
+.talrow .pips b{
+  width:9px;height:9px;display:block;background:var(--edge-dk);
+  box-shadow:inset 0 0 0 1px var(--edge-lt);
+}
+.talrow .pips b.on{background:var(--mc,#ffc94a);box-shadow:none}
+.talrow .btn{min-height:30px;padding:4px 10px;font-size:14px}
+.talrow.full .tn{color:var(--txt-dim)}
+.talfoot{display:flex;gap:5px;justify-content:flex-end}
+.talfoot .btn{min-height:30px;padding:4px 10px;font-size:11.5px}
+
+/* ---------- specialisation ---------- */
+.spec{margin:8px 0 2px;padding:7px;background:var(--edge-dk);box-shadow:inset 0 0 0 1px var(--edge-lt)}
+.spec .head{font-size:9.5px;letter-spacing:.1em;color:var(--sc,var(--gold));margin-bottom:4px}
+.spec .sdesc{font-size:10.5px;color:var(--txt-dim);line-height:1.45}
+.spec .sdesc b{color:var(--txt)}
+.spec .sdesc i{font-style:normal;color:var(--gold)}
+.spec.chosen{box-shadow:inset 0 0 0 1px var(--sc,var(--edge-lt))}
+.spec.chosen .trow{margin-top:5px}
+.spec.offer{display:flex;flex-direction:column;gap:5px}
+.specbtn{
+  display:flex;flex-direction:column;gap:2px;text-align:left;font:inherit;cursor:pointer;
+  background:var(--panel-lit);color:var(--txt);border:2px solid var(--edge-dk);
+  box-shadow:inset 0 0 0 1px var(--sc,var(--edge-lt));padding:6px 7px;
+}
+.specbtn:active{background:var(--sc,var(--gold));color:var(--ink)}
+.specbtn b{font-size:13px;color:var(--sc,var(--gold))}
+.specbtn:active b,.specbtn:active .sdesc,.specbtn:active .bon{color:var(--ink)}
+.specbtn .bon{font-size:11px;color:var(--good)}
+.specbtn .sdesc{font-size:10.5px;color:var(--txt-dim);line-height:1.4}
+.specbtn .sdesc.ab{color:var(--gold);opacity:.85}

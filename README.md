@@ -76,6 +76,12 @@ to the seam and hauling the load home teach nothing.
 Points earned are permanent and stack across callings, so a peasant who has mastered
 mining and then woodcutting ends up at STR 15. Veterans are worth keeping.
 
+**Nothing is ever lost.** Knighting a villager keeps every point and every
+talent they earned, and a soldier can be given a working calling again at any
+time — tell a warrior to mine and they will go and mine, with all their
+training intact. A knighthood is a layer on top of who somebody is, not a
+replacement for it.
+
 Tap any peasant and their sheet shows all four tracks at once — mastered, part-done,
 and never started — so you can see exactly what a given villager has become.
 
@@ -118,6 +124,54 @@ top, so nothing can ever go *down* by being promoted:
 
 A villager who mastered mining becomes a STR 18 / CON 17 warrior with 214 health, where
 one straight off the farm starts at 13 / 12 and 179. Veterans make better soldiers.
+
+### Talents
+
+Work does not just raise attributes, it earns **talent points** — three per
+calling, handed out as that calling's training track fills. Each calling has a
+tree of three talents at three ranks each, so three points never cover a tree
+and the choice is a real one:
+
+| Talent | Per rank |
+|---|---|
+| Capacity (Deep Pockets, Big Bundles, Broad Back, Full Hod) | +25% carried per load |
+| Rate (Steady Swing, Sharp Axe, True Chisel, Scaffolding) | +20% faster at the work |
+| Legwork (Sure Footing, Trailblazer, Quarry Legs, On The Run) | +12% movement while working |
+
+Points are earned and spent per calling, and **Rethink** hands a tree's points
+back, so nothing you pick is a trap. A miner with three ranks of Deep Pockets
+hauls 35 gold a trip instead of 20.
+
+### Specialisations
+
+At **level 5** a soldier chooses a specialisation. It is the one permanent
+decision a unit makes, and each is worth exactly **twenty attribute points** —
+the choice is about shape, never about power. Each also unlocks an ability
+paid for out of a class resource: warriors work themselves into a **Rage**,
+rangers hold a **Focus**.
+
+| Warrior | Points | Ability |
+|---|---|---|
+| **Fury** | +10 STR, +10 AGI | **Rampage** — swings twice as fast and drinks back a quarter of the damage dealt |
+| **Arms** | +8 STR, +8 AGI, +4 CON | **Mortal Strike** — one crushing blow for triple damage |
+| **Protection** | +15 CON, +5 STR | **Shield Wall** — takes half damage and drags every nearby monster onto itself |
+
+| Ranger | Points | Ability |
+|---|---|---|
+| **Longbowman** | +8 STR, +12 AGI | **Aimed Shot** — triple damage, and a third more reach than anything can answer |
+| **Mercenary** | +6 STR, +10 AGI, +4 CON | **Ambush** — a brutal opener, far worse if it lands before they are seen |
+| **Assassin** | +14 AGI, +6 INT | **Vanish** — steps out of sight, closes unseen, opens with a five-fold strike |
+
+Measured against an unspecialised level 5: warriors gain **×1.27 / ×1.32 /
+×1.42** staying power, rangers **×1.46 / ×1.35 / ×1.19**. The assassin looks
+weakest on paper and is not — the number cannot see an opener landing at 2.4×
+on something that never got to swing back.
+
+**Mercenaries and assassins fight out of the dark.** They are invisible to
+monsters while unseen, strike for a bonus when they open from it, and then
+break off rather than standing and trading — strike, leave, come again. In a
+four-on-one brawl an assassin spends a third of the fight unseen and takes
+about a third of the attention it otherwise would.
 
 ### Stances
 

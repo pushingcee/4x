@@ -6,7 +6,8 @@ import { TILE } from './art.js';
 import { toPx, toTile } from './world.js';
 import {
   BUILDINGS, CLASSES, MONSTERS, LAIRS, XP_TABLE, MAX_LEVEL, LEVEL_STATS,
-  MISSIONS, STAT_ORDER, STAT_EFFECT, TRAIN_MAX, RUSH_SPEED, LAIR_ALARM_RATE, LAIR_ALARM_TIME
+  MISSIONS, STAT_ORDER, STAT_EFFECT, TRAIN_MAX, RUSH_SPEED, LAIR_ALARM_RATE, LAIR_ALARM_TIME,
+  WORK_TALENTS, TALENT_RANKS, TALENT_POINTS, SPECS, SPEC_LEVEL, POWERS, ABILITIES, STEALTH_REVEAL
 } from './data.js';
 import { clamp, dist, heroName, peasantName } from './util.js';
 
@@ -246,6 +247,16 @@ export class Unit {
     // A class is a layer on top of whoever you already were, never a rewrite.
     this.classBonus = { str: 0, agi: 0, con: 0, int: 0, ...(def.knight || {}) };
     this.training = {};        // mission id -> work done toward its stat track
+    this.talents = {};         // mission id -> { talentId: ranks spent }
+    this.spec = null;          // chosen once at the rank cap, then permanent
+    this.charge = 0;           // rage or focus, whichever this class runs on
+    this.abilityCd = 0;
+    this.frenzy = 0;           // Rampage
+    this.guarded = 0;          // Shield Wall
+    this.hidden = 0;           // seconds of being unseen
+    this.stealthIn = 0;        // countdown to slipping out of sight again
+    this.withdraw = 0;         // breaking off after a strike from the dark
+    this.strikeMul = 0;        // a charged blow waiting to land
     this.stance = 'defend';    // soldiers only: defend the realm, or roam it
     this.rushing = 0;          // seconds left of answering a distress call
     this.maxHp = def.hp;
@@ -309,6 +320,85 @@ export class Unit {
   /** Points granted purely by rank: +3 to everything per level gained. */
   get levelBonus() { return (this.level - 1) * LEVEL_STATS; }
 
+  /** The specialisation chosen at the rank cap, if any. */
+  get specDef() {
+    const list = SPECS[this.kind];
+    return list ? list.find(sp => sp.id === this.spec) || null : null;
+  }
+  /** Points from that choice. Every specialisation is worth the same twenty. */
+  get specBonus() {
+    const sp = this.specDef;
+    return sp ? sp.bonus : { str: 0, agi: 0, con: 0, int: 0 };
+  }
+  /** True once they are ranked high enough to choose, and have not yet. */
+  get canSpec() {
+    return !this.spec && this.level >= SPEC_LEVEL && !!SPECS[this.kind];
+  }
+
+  // ---- talents --------------------------------------------------
+  /** Points a calling has handed out, earned as its training track filled. */
+  talentEarned(missionId) {
+    const m = MISSIONS[missionId];
+    if (!m || !WORK_TALENTS[missionId]) return 0;
+    const frac = Math.min(1, (this.training[missionId] || 0) / m.trainFull);
+    return Math.floor(frac * TALENT_POINTS);
+  }
+  talentSpent(missionId) {
+    const t = this.talents[missionId];
+    let n = 0;
+    for (const k in t) n += t[k];
+    return n;
+  }
+  talentFree(missionId) { return this.talentEarned(missionId) - this.talentSpent(missionId); }
+  talentRank(missionId, talentId) {
+    const t = this.talents[missionId];
+    return (t && t[talentId]) || 0;
+  }
+  /** Spend one point. Returns false if there is none free, or the rank is capped. */
+  spendTalent(missionId, talentId) {
+    const tree = WORK_TALENTS[missionId];
+    if (!tree || !tree.some(t => t.id === talentId)) return false;
+    if (this.talentFree(missionId) <= 0) return false;
+    if (this.talentRank(missionId, talentId) >= TALENT_RANKS) return false;
+    const t = this.talents[missionId] || (this.talents[missionId] = {});
+    t[talentId] = (t[talentId] || 0) + 1;
+    return true;
+  }
+  /** Take every point in a tree back, so a choice is never a trap. */
+  clearTalents(missionId) {
+    if (this.talents[missionId]) this.talents[missionId] = {};
+  }
+  /** Multiplier a talent grants for the calling currently being worked. */
+  talentMul(missionId, talentId) {
+    const tree = WORK_TALENTS[missionId];
+    if (!tree) return 1;
+    const def = tree.find(t => t.id === talentId);
+    if (!def) return 1;
+    return 1 + def.per * this.talentRank(missionId, talentId);
+  }
+
+  // ---- class resource -------------------------------------------
+  /** Rage for warriors, focus for rangers. Null for anyone with neither. */
+  get chargeDef() {
+    const sp = this.specDef;
+    if (!sp) return null;
+    const ab = ABILITIES[sp.ability];
+    return ab ? POWERS[ab.power] : null;
+  }
+  get maxCharge() { const p = this.chargeDef; return p ? p.max : 0; }
+  get ability() {
+    const sp = this.specDef;
+    return sp ? ABILITIES[sp.ability] || null : null;
+  }
+  get abilityReady() {
+    const ab = this.ability;
+    return !!ab && this.abilityCd <= 0 && this.charge >= ab.cost;
+  }
+  gainCharge(n) {
+    if (!this.chargeDef || n <= 0) return;
+    this.charge = Math.min(this.maxCharge, this.charge + n);
+  }
+
   /**
    * Everything a unit is: their baseline, what the work taught them, the class
    * laid on top, and their rank. Every term adds -- nothing here replaces
@@ -316,11 +406,12 @@ export class Unit {
    */
   get stats() {
     const t = this.trained, b = this.baseStats, c = this.classBonus, l = this.levelBonus;
+    const p = this.specBonus;
     return {
-      str: b.str + t.str + c.str + l,
-      agi: b.agi + t.agi + c.agi + l,
-      con: b.con + t.con + c.con + l,
-      int: b.int + t.int + c.int + l
+      str: b.str + t.str + c.str + l + p.str,
+      agi: b.agi + t.agi + c.agi + l + p.agi,
+      con: b.con + t.con + c.con + l + p.con,
+      int: b.int + t.int + c.int + l + p.int
     };
   }
 
@@ -349,13 +440,20 @@ export class Unit {
 
   get power() {
     const strBonus = Math.max(0.25, 1 + (this.stats.str - 5) * STAT_EFFECT.dmgPerPoint);
-    return (this.dmg + this.bonusDmg) * strBonus;
+    const sp = this.specDef;
+    return (this.dmg + this.bonusDmg) * strBonus * ((sp && sp.dmgMul) || 1);
   }
 
-  /** Seconds between swings, quickened by agility. */
+  /** Seconds between swings, quickened by agility -- and halved in a Rampage. */
   get attackRate() {
     const quick = Math.max(0.35, 1 + (this.stats.agi - 5) * STAT_EFFECT.speedPerPoint);
-    return this.def.rate / quick;
+    return this.def.rate / quick / (this.frenzy > 0 ? 2 : 1);
+  }
+
+  /** How far they can reach. A longbow reaches a good deal further. */
+  get reach() {
+    const sp = this.specDef;
+    return this.def.range * ((sp && sp.rangeMul) || 1);
   }
 
   get critChance() {
@@ -407,7 +505,9 @@ export class Unit {
     const d = Math.hypot(dx, dy);
     // adrenaline in flight; and a soldier answering a worker's scream runs
     const haste = this.fleeing > 0 ? 1.3 : this.rushing > 0 ? RUSH_SPEED : 1;
-    const step = this.speed * haste * dt;
+    // and the legwork talent, which only counts while actually on the job
+    const legs = this.job ? this.talentMul(this.mission, 'haste') : 1;
+    const step = this.speed * haste * legs * dt;
     this.moving = true;
     if (d <= step) {
       this.x = gx; this.y = gy;
@@ -436,7 +536,7 @@ export class Unit {
     const dy = Math.max(y0 - this.y, 0, this.y - y1);
     return Math.hypot(dx, dy);
   }
-  canReach(e) { return this.distTo(e) <= this.def.range + 2; }
+  canReach(e) { return this.distTo(e) <= this.reach + 2; }
 
   engage(e) {
     this.target = e;
@@ -446,7 +546,7 @@ export class Unit {
     const t = this.target;
     if (!t || t.dead) { this.target = null; return false; }
     const d = this.distTo(t);
-    if (d <= this.def.range) {
+    if (d <= this.reach) {
       this.path = null; this.needPath = null; this.moving = false;
       this.dir = t.x >= this.x ? 1 : -1;
       this.cool -= dt;
@@ -474,6 +574,17 @@ export class Unit {
     let dmg = this.power * (0.85 + Math.random() * 0.3);
     const crit = Math.random() < this.critChance;
     if (crit) dmg *= STAT_EFFECT.critMultiplier;
+    // A blow charged by an ability, spent on this swing and this swing only.
+    if (this.strikeMul > 0) { dmg *= this.strikeMul; this.strikeMul = 0; }
+    // Coming out of the dark is worth more than coming at them head on.
+    const sp = this.specDef;
+    if (this.hidden > 0) {
+      if (sp && sp.openerMul) dmg *= sp.openerMul;
+      this.reveal();
+    }
+    const pw = this.chargeDef;
+    if (pw && pw.onHit) this.gainCharge(pw.onHit);
+    if (this.frenzy > 0) this.heal(dmg * 0.25);   // Rampage drinks it back
     if (this.def.ranged) {
       this.game.spawnProjectile(this, t, dmg, this.kind === 'wizard' ? 'fire' : 'arrow', crit);
       this.game.audio.play(this.kind === 'wizard' ? 'cast' : 'bow');
@@ -488,6 +599,32 @@ export class Unit {
     this.hp = Math.min(this.maxHpNow, this.hp + n);
     this.game.fx.text(this.x, this.y - 12, '+' + Math.round(n), '#7fd8a0', 16);
   }
+
+  /** Slip out of sight. Only specialisations that know how can do it. */
+  conceal(seconds) {
+    const sp = this.specDef;
+    if (!sp || !sp.stealth) return;
+    if (this.hidden <= 0) this.game.fx.puff(this.x, this.y - 6, '#9b6fff', 3);
+    this.hidden = Math.max(this.hidden, seconds);
+    // Whoever was watching loses them: without this a monster keeps its lock
+    // and stealth means nothing to the only things it is supposed to fool.
+    for (const m of this.game.units) {
+      if (!m.dead && m.faction !== this.faction && m.target === this) m.target = null;
+    }
+  }
+  /** Break cover, and start the clock on slipping away again. */
+  reveal() {
+    const wasHidden = this.hidden > 0;
+    if (wasHidden) this.game.fx.puff(this.x, this.y - 6, '#c9a227', 2);
+    this.hidden = 0;
+    const sp = this.specDef;
+    this.stealthIn = sp && sp.stealth ? sp.stealthIn : 0;
+    // Having struck from the dark, get back out of it rather than standing
+    // there trading blows -- that is the whole of the trade.
+    if (wasHidden && sp && sp.stealth) this.withdraw = STEALTH_REVEAL;
+  }
+  /** Invisible to the enemy: hidden, and not currently something's target. */
+  get unseen() { return this.hidden > 0; }
 
   get maxHpNow() {
     const con = (this.stats.con - 5) * STAT_EFFECT.hpPerPoint;
@@ -508,7 +645,95 @@ export class Unit {
     }
   }
 
+  /**
+   * Everything a specialisation runs on: its ability timer, the resource that
+   * pays for it, whatever the last ability left running, and -- for those who
+   * know how -- slipping back out of sight once nothing is looking at them.
+   */
+  tickSpec(dt) {
+    const sp = this.specDef;
+    if (!sp) return;
+    if (this.abilityCd > 0) this.abilityCd -= dt;
+    if (this.frenzy > 0) this.frenzy -= dt;
+    if (this.guarded > 0) this.guarded -= dt;
+    if (this.withdraw > 0) this.withdraw -= dt;
+
+    const p = this.chargeDef;
+    if (p) {
+      const fighting = !!(this.target && !this.target.dead);
+      if (p.regen) this.gainCharge((fighting ? p.regen : (p.idleRegen || p.regen)) * dt);
+      if (p.decay && !fighting) this.charge = Math.max(0, this.charge - p.decay * dt);
+    }
+
+    if (sp.stealth) {
+      if (this.hidden > 0) {
+        if (this.hidden !== Infinity) this.hidden -= dt;
+        if (this.hidden <= 0) this.reveal();
+      } else {
+        // out of a fight and left alone long enough: back into the dark
+        // Fading mid-fight is the whole point of these two; what stops them is
+        // being hit, not merely having somebody in mind.
+        const quiet = this.game.time - (this.lastHit || -99) > 2;
+        const sp2 = sp.stealthIn + STEALTH_REVEAL;
+        this.stealthIn = quiet
+          ? this.stealthIn - dt
+          : Math.min(sp2, this.stealthIn + dt * 0.5);   // a fight keeps them visible
+        if (this.stealthIn <= 0) this.conceal(Infinity);
+      }
+    }
+  }
+
+  /**
+   * Spend the resource and set the specialisation's trick going. Charged
+   * blows (Mortal Strike, Aimed Shot, Ambush, the Vanish opener) arm the next
+   * swing rather than hitting immediately, so they still have to connect.
+   */
+  useAbility(target) {
+    const ab = this.ability;
+    if (!ab || !this.abilityReady) return false;
+    this.charge -= ab.cost;
+    this.abilityCd = ab.cd;
+    const g = this.game, sp = this.specDef;
+    g.fx.text(this.x, this.y - 22, ab.name.toUpperCase(), sp.colour, 24);
+    g.fx.ring(this.x, this.y - 6, sp.colour, 13);
+    g.audio.play('level');
+
+    switch (ab.id) {
+      case 'rampage':
+        this.frenzy = ab.lasts;
+        break;
+      case 'shield_wall': {
+        this.guarded = ab.lasts;
+        // insist on being the one they hit
+        for (const m of g.units) {
+          if (m.dead || m.faction !== 'monster') continue;
+          if (dist(m.x, m.y, this.x, this.y) > (sp.taunt || 120)) continue;
+          m.target = this;
+        }
+        break;
+      }
+      case 'vanish':
+        this.conceal(ab.lasts);
+        this.strikeMul = ab.mult;
+        break;
+      case 'ambush':
+        this.strikeMul = this.hidden > 0 ? ab.hiddenMult : ab.mult;
+        break;
+      default:
+        this.strikeMul = ab.mult || 1;
+    }
+    if (target && !target.dead) this.target = target;
+    // Anyone who fights out of the dark breaks off after their blow, whether
+    // the blow was the vanishing kind or not: strike, leave, come again.
+    if (sp.stealth && ab.id !== 'vanish') this.withdraw = STEALTH_REVEAL;
+    return true;
+  }
+
   damageTaken(n, src) {
+    if (this.guarded > 0) n *= 0.5;         // Shield Wall
+    const pw = this.chargeDef;
+    if (pw && pw.onHurt) this.gainCharge(pw.onHurt);
+    if (this.hidden > 0) this.reveal();     // being hit gives you away
     this.hp -= n;
     this.hitFlash = 0.12;
     this.lastHit = this.game.time;
@@ -527,6 +752,7 @@ export class Unit {
     if (this.cool > 0) this.cool -= dt;
     if (this.fleeing > 0) this.fleeing -= dt;
     if (this.rushing > 0) this.rushing -= dt;
+    this.tickSpec(dt);
     this.thinkIn -= dt;
     this.thinkAcc = (this.thinkAcc || 0) + dt;
     if (this.thinkIn <= 0) {
@@ -535,7 +761,7 @@ export class Unit {
       this.thinkAcc = 0;
       this.brain(this, since);
     }
-    if (!this.target || this.target.dead || this.distTo(this.target) > this.def.range) {
+    if (!this.target || this.target.dead || this.distTo(this.target) > this.reach) {
       this.stepMove(dt);
     }
 

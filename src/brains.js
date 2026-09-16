@@ -50,6 +50,50 @@ function walkTo(u, g, o) {
 // -------------------------------------------------------------------
 // PEASANTS — directly commandable workforce
 // -------------------------------------------------------------------
+/**
+ * When to spend the temper. Each specialisation wants a different moment:
+ * the berserker wants a crowd, the duellist wants the biggest thing in front
+ * of it, the shield wants to be in trouble, and the killers want to open a
+ * fight rather than finish one.
+ */
+function useAbilityWisely(u, g) {
+  const ab = u.ability;
+  if (!ab) return false;
+  const t = u.target && !u.target.dead ? u.target : null;
+  const full = u.charge >= u.maxCharge * 0.95;
+
+  switch (ab.id) {
+    case 'rampage': {
+      // worth it when there is enough in front of them to chew through --
+      // and never worth sitting on once the temper has nowhere left to go
+      if (!t) return false;
+      const crowd = g.units.filter(m => !m.dead && m.faction === 'monster'
+        && dist(m.x, m.y, u.x, u.y) < 90).length;
+      return (crowd >= 2 || u.hp < u.maxHpNow * 0.8 || full) ? u.useAbility(t) : false;
+    }
+    case 'mortal_strike':
+      // the duellist's blow: aimed at whatever is actually in front of them
+      return t ? u.useAbility(t) : false;
+    case 'shield_wall': {
+      // a shield is no use once you are already dead -- put it up early
+      const beingHit = g.time - (u.lastHit || -99) < 2.5;
+      return (beingHit || u.hp < u.maxHpNow * 0.9 || full) ? u.useAbility(t) : false;
+    }
+    case 'aimed_shot':
+      return t ? u.useAbility(t) : false;
+    case 'ambush':
+      // best out of the dark, but a full head of focus is not worth hoarding
+      return t && (u.hidden > 0 || full) ? u.useAbility(t) : false;
+    case 'vanish': {
+      // open on something worth opening on, or disappear when it turns bad
+      const prey = t || g.nearestEnemy(u.x, u.y, u.reach * 1.6, 'realm');
+      return prey ? u.useAbility(prey) : false;
+    }
+    default:
+      return t ? u.useAbility(t) : false;
+  }
+}
+
 export function peasantBrain(u, since) {
   const g = u.game;
 
@@ -62,7 +106,7 @@ export function peasantBrain(u, since) {
   const foe = g.nearestEnemy(u.x, u.y, 64, 'realm');
   if (foe) {
     const underAttack = g.time - (u.lastHit || -99) < 3;
-    const cornered = u.distTo(foe) <= u.def.range + 8;
+    const cornered = u.distTo(foe) <= u.reach + 8;
     const badlyHurt = u.hp < u.maxHpNow * 0.35;
 
     if ((underAttack || cornered) && !badlyHurt) {
@@ -83,8 +127,15 @@ export function peasantBrain(u, since) {
   if (u.fleeing > 0) return;
   u.target = null;
 
-  const mission = MISSIONS[u.mission] || MISSIONS.none;
+  return workShift(u, g, since, MISSIONS[u.mission] || MISSIONS.none);
+}
 
+/**
+ * A shift's work, whoever is doing it. Peasants live here, and so does any
+ * veteran you have sent back to the fields -- a knighthood adds to what
+ * somebody is, it does not stop them being able to swing a pick.
+ */
+function workShift(u, g, since, mission) {
   // 2. An explicit construction order outranks the standing calling. Without
   //    this the calling's own search overwrites the build job every tick and
   //    nothing ever gets built by anyone who already has a trade.
@@ -236,12 +287,15 @@ function recruitBrain(u, g, since) {
   u.state = 'drill';
 }
 
-function carryCap(u) { return RES_RATE[u.job?.node?.kind]?.carry || 12; }
+function carryCap(u) {
+  const base = RES_RATE[u.job?.node?.kind]?.carry || 12;
+  return base * u.talentMul(u.mission, 'capacity');
+}
 
 function doHarvest(u, g, since) {
   const node = u.job && u.job.node;
   if (!node || node.amount <= 0) { u.job = null; u.state = 'idle'; return; }
-  const cap = RES_RATE[node.kind].carry;
+  const cap = RES_RATE[node.kind].carry * u.talentMul(u.mission, 'capacity');
   if (u.carry >= cap) return deliver(u, g);
 
   if (touching(u, node)) {
@@ -250,7 +304,9 @@ function doHarvest(u, g, since) {
     u.path = null;
     const info = RES_RATE[node.kind];
     const boost = g.depotBoost(node.tx, node.ty, info.res);
-    const got = Math.min(info.rate * (1 + boost) * since, cap - u.carry, node.amount);
+    const got = Math.min(
+      info.rate * (1 + boost) * u.talentMul(u.mission, 'rate') * since,
+      cap - u.carry, node.amount);
     u.carry += got;
     node.amount -= got;
     u.carryRes = info.res;
@@ -302,7 +358,7 @@ function doBuild(u, g, since, site) {
   if (touching(u, site, 1.5)) {
     u.state = 'build';
     u.path = null;
-    site.addProgress(since / site.def.build);
+    site.addProgress(since * u.talentMul('builder', 'rate') / site.def.build);
     u.train('builder', since);
     if (Math.random() < 0.4) g.fx.puff(site.x + (Math.random() - .5) * site.fw * TILE, site.bottom - 6, '#d8cfe6', 1);
   } else {
@@ -314,7 +370,7 @@ function doBuild(u, g, since, site) {
 function doRepair(u, g, since, b) {
   if (touching(u, b, 1.5)) {
     u.path = null;
-    b.hp = Math.min(b.maxHp, b.hp + b.maxHp * 0.06 * since);
+    b.hp = Math.min(b.maxHp, b.hp + b.maxHp * 0.06 * since * u.talentMul('builder', 'rate'));
     u.train('builder', since * 0.5);   // mending counts, but for less
     if (Math.random() < 0.3) g.fx.puff(b.x, b.bottom - 8, '#ffd070', 1);
   } else {
@@ -381,6 +437,47 @@ export function heroBrain(u, since) {
   const g = u.game;
   const def = u.def;
   const hpFrac = u.hp / u.maxHpNow;
+
+  // --- 0. a soldier you sent back to work is a worker, first ---------
+  // Knighthood is a layer, not a life sentence: give a veteran a calling and
+  // they go and do it, keeping everything they are. They still fight anything
+  // that comes at them -- doWork falls through to the danger checks below
+  // only when there is no work to be had.
+  const calling = MISSIONS[u.mission];
+  if (calling && (calling.nodes || calling.build) && !u.flagId) {
+    const foe = g.nearestEnemy(u.x, u.y, 72, 'realm');
+    if (!foe) { workShift(u, g, since, calling); return; }
+  }
+
+  // --- 0b. spend the temper ----------------------------------------
+  if (u.abilityReady) useAbilityWisely(u, g);
+
+  // --- 0c. hit, and gone -------------------------------------------
+  // A killer with nothing left to spend does not stand in the open taking
+  // blows: if they are visible, out of tricks and being hit, they break off
+  // and go back into the dark. Armed, they strike; unarmed, they leave.
+  const stealthy = u.specDef && u.specDef.stealth;
+  if (stealthy && u.hidden <= 0 && !u.abilityReady
+      && g.time - (u.lastHit || -99) < 2) {
+    u.withdraw = Math.max(u.withdraw, 1.4);
+  }
+
+  // A killer who has just come out of the dark breaks off instead of standing
+  // there trading: back away, drop out of sight, come again from somewhere
+  // else. Without this an assassin is just a warrior with worse armour.
+  if (u.withdraw > 0) {
+    const hunter = g.nearestEnemy(u.x, u.y, 140, 'realm');
+    u.target = null;
+    u.state = 'stalk';
+    if (hunter) {
+      const dx = u.x - hunter.x, dy = u.y - hunter.y;
+      const len = Math.hypot(dx, dy) || 1;
+      const away = g.world.nearestFree(
+        toTile(u.x + (dx / len) * 70), toTile(u.y + (dy / len) * 70), 6);
+      if (away && (away.x !== u.tx || away.y !== u.ty)) u.goTo(away.x, away.y, 1);
+    }
+    return;
+  }
 
   // --- 1. stay alive ------------------------------------------------
   if (hpFrac < 0.42 && u.potions > 0) {
@@ -487,7 +584,7 @@ export function heroBrain(u, since) {
     case 'lair': {
       const l = best.lair;
       u.state = 'quest';
-      if (u.distTo(l) <= def.range) { u.engage(l); u.fight(since); }
+      if (u.distTo(l) <= u.reach) { u.engage(l); u.fight(since); }
       else walkTo(u, g, l);
       return;
     }
@@ -548,7 +645,7 @@ function chooseGoal(u, g) {
     const d = dist(u.x, u.y, m.x, m.y);
     const sightPx = def.sight * TILE + 40;
     if (d > sightPx) continue;
-    if (!g.world.visible(toTile(m.x), toTile(m.y)) && d > def.range * 1.5) continue;
+    if (!g.world.visible(toTile(m.x), toTile(m.y)) && d > u.reach * 1.5) continue;
     const { threat, mine } = dangerAt(g, m.x, m.y, 90, u);
     const odds = mine / Math.max(1, threat);
     if (odds < 1 - def.courage) continue;
@@ -722,7 +819,7 @@ export function monsterBrain(u, since) {
     const objective = g.raidTarget(u);
     if (objective) {
       u.state = 'raid';
-      if (u.distTo(objective) <= def.range) { u.engage(objective); u.fight(since); }
+      if (u.distTo(objective) <= u.reach) { u.engage(objective); u.fight(since); }
       else if (objective.kindClass === 'unit') {
         if (!u.path && !u.needPath) u.goTo(toTile(objective.x), toTile(objective.y), 0);
       } else walkTo(u, g, objective);
