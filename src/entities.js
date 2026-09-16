@@ -8,7 +8,7 @@ import {
   BUILDINGS, CLASSES, MONSTERS, LAIRS, XP_TABLE, MAX_LEVEL, LEVEL_STATS,
   MISSIONS, STAT_ORDER, STAT_EFFECT, TRAIN_MAX, RUSH_SPEED, LAIR_ALARM_RATE, LAIR_ALARM_TIME,
   WORK_TALENTS, TALENT_RANKS, TALENT_POINTS, SPECS, SPEC_LEVEL, POWERS, ABILITIES, STEALTH_REVEAL,
-  BLESSING, MANA_REGEN, MANA_REST
+  BLESSING, MANA_REGEN, MANA_REST, MANA_REGEN_PER_INT, XP_PER_HEAL, CREDIT_WINDOW
 } from './data.js';
 import { clamp, dist, heroName, peasantName } from './util.js';
 
@@ -64,9 +64,26 @@ class Structure {
   }
   damage(n, src) {
     if (this.dead) return;
+    this.creditHit(src);
     this.hp -= n;
     this.hitFlash = 0.14;
     if (this.hp <= 0) { this.hp = 0; this.onDestroyed(src); }
+  }
+  /** Same shared-credit bookkeeping a unit keeps -- a camp is a group effort. */
+  creditHit(src) {
+    if (!src || src.kindClass !== 'unit' || src.faction !== 'realm') return;
+    if (!this.credit) this.credit = new Map();
+    this.credit.set(src, this.game.time);
+  }
+  contributors() {
+    const out = [];
+    if (!this.credit) return out;
+    for (const [u, t] of this.credit) {
+      if (u.dead || u.faction !== 'realm') continue;
+      if (this.game.time - t > CREDIT_WINDOW) continue;
+      out.push(u);
+    }
+    return out;
   }
   onDestroyed() { this.dead = true; }
 }
@@ -463,6 +480,11 @@ export class Unit {
     return Math.min(STAT_EFFECT.critCap, this.stats.int * STAT_EFFECT.critPerPoint);
   }
   get maxMana() { return this.stats.int * STAT_EFFECT.manaPerPoint; }
+  /** Mana per second. Intelligence buys the rate as well as the pool. */
+  manaRegen(resting) {
+    const base = resting ? MANA_REST : MANA_REGEN;
+    return base + Math.max(0, this.stats.int - 5) * MANA_REGEN_PER_INT;
+  }
   get tx() { return toTile(this.x); }
   get ty() { return toTile(this.y); }
 
@@ -598,9 +620,40 @@ export class Unit {
     }
   }
 
+  /**
+   * Returns the health actually restored, which is not the same as the health
+   * offered: topping up somebody already full restores nothing. Everything
+   * that pays out for healing pays on this number, so there is nothing to
+   * farm by mending the healthy.
+   */
   heal(n) {
+    const before = this.hp;
     this.hp = Math.min(this.maxHpNow, this.hp + n);
-    this.game.fx.text(this.x, this.y - 12, '+' + Math.round(n), '#7fd8a0', 16);
+    const given = this.hp - before;
+    if (given > 0.5) this.game.fx.text(this.x, this.y - 12, '+' + Math.round(given), '#7fd8a0', 16);
+    return given;
+  }
+
+  /**
+   * Note that somebody had a hand in this unit's downfall, so the credit can
+   * be shared out when it finally falls instead of going entirely to whoever
+   * landed the last blow.
+   */
+  creditHit(src) {
+    if (!src || src.kindClass !== 'unit' || src.faction !== 'realm') return;
+    if (!this.credit) this.credit = new Map();
+    this.credit.set(src, this.game.time);
+  }
+  /** Everyone still alive who had a hand in it, recently enough to count. */
+  contributors() {
+    const out = [];
+    if (!this.credit) return out;
+    for (const [u, t] of this.credit) {
+      if (u.dead || u.faction !== 'realm') continue;
+      if (this.game.time - t > CREDIT_WINDOW) continue;
+      out.push(u);
+    }
+    return out;
   }
 
   /** Slip out of sight. Only specialisations that know how can do it. */
@@ -733,6 +786,12 @@ export class Unit {
   }
 
   damageTaken(n, src) {
+    this.creditHit(src);
+    // Standing in front of it is taking part. Without this a Protection
+    // warrior holding the whole camp's attention while everyone else does the
+    // killing would earn nothing at all for it.
+    if (src && src.kindClass === 'unit' && src.faction === 'monster'
+      && this.faction === 'realm' && src.creditHit) src.creditHit(this);
     if (this.guarded > 0) n *= 0.5;         // Shield Wall
     if (this.blessed > 0) n *= BLESSING.soak;
     const pw = this.chargeDef;
@@ -762,7 +821,7 @@ export class Unit {
     // they are standing about than when they are working a fight.
     if (this.maxMana > 0 && this.mana < this.maxMana) {
       const rest = !this.target && !this.moving;
-      this.mana = Math.min(this.maxMana, this.mana + (rest ? MANA_REST : MANA_REGEN) * dt);
+      this.mana = Math.min(this.maxMana, this.mana + this.manaRegen(rest) * dt);
     }
     this.thinkIn -= dt;
     this.thinkAcc = (this.thinkAcc || 0) + dt;

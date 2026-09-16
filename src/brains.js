@@ -10,7 +10,8 @@ import { toPx, toTile } from './world.js';
 import { TILE } from './art.js';
 import {
   RES_RATE, CLASSES, BUILDINGS, MISSIONS, STANCES,
-  BLESSING, HEAL_COST, MEND_RANGE, MEND_AT, CLERIC_KEEP
+  BLESSING, HEAL_COST, MEND_RANGE, MEND_AT, CLERIC_KEEP, CLERIC_TETHER,
+  XP_PER_HEAL, XP_PER_BLESSING
 } from './data.js';
 import { dist, clamp } from './util.js';
 
@@ -541,6 +542,28 @@ export function heroBrain(u, since) {
     const biting = g.nearestEnemy(u.x, u.y, 96, 'realm', false);
     if (biting) u.target = biting;
   }
+  // --- 2a. a cleric keeps out of reach ------------------------------
+  // This has to come BEFORE the fighting: a cleric handed a target by being
+  // hit would otherwise stand and trade blows, which is how the first version
+  // of them died in every single test. They are not fighters. They back off,
+  // mending and blessing as they go, and only swing when genuinely cornered.
+  if (def.heal) {
+    const close = g.nearestEnemy(u.x, u.y, CLERIC_KEEP, 'realm');
+    if (close) {
+      const cornered = u.distTo(close) <= u.reach + 6
+        && g.time - (u.lastHit || -99) < 2
+        && u.hp > u.maxHpNow * 0.4;
+      if (!cornered) {
+        u.target = null;
+        u.state = 'mend';
+        tryHeal(u, g, since) || tryBless(u, g, since);
+        backAwayFrom(u, g, close, CLERIC_KEEP + 30);
+        return;
+      }
+      u.engage(close);      // nowhere left to go: swing the mace
+    }
+  }
+
   if (u.target && !u.target.dead) {
     const d = u.distTo(u.target);
     if (d < 260) {
@@ -561,15 +584,6 @@ export function heroBrain(u, since) {
   // They do it from arm's length, though: a cleric standing in the middle of
   // a melee is a dead cleric, and a dead cleric heals nobody.
   if (def.heal) {
-    const close = g.nearestEnemy(u.x, u.y, CLERIC_KEEP, 'realm');
-    if (close) {
-      u.target = null;
-      u.state = 'mend';
-      // bless and mend on the way out -- backing off is not idling
-      tryHeal(u, g, since) || tryBless(u, g, since);
-      backAwayFrom(u, g, close, CLERIC_KEEP + 30);
-      return;
-    }
     const patient = findPatient(u, g);
     if (patient) {
       u.target = null;
@@ -581,6 +595,22 @@ export function heroBrain(u, since) {
         if (spot && (spot.x !== u.tx || spot.y !== u.ty)) u.goTo(spot.x, spot.y, 1);
       }
       return;
+    }
+
+    // Nobody hurt: go and stand with the soldiers. A cleric wandering the map
+    // alone is a robe with a mace -- their whole worth is being there already
+    // when somebody starts bleeding, so they travel with the people who do.
+    const anchor = healerAnchor(u, g);
+    if (anchor) {
+      u.target = null;
+      const d = dist(anchor.x, anchor.y, u.x, u.y);
+      if (d > CLERIC_TETHER) {
+        u.state = 'follow';
+        const spot = g.world.nearestFree(anchor.tx, anchor.ty, 7);
+        if (spot && (spot.x !== u.tx || spot.y !== u.ty)) u.goTo(spot.x, spot.y, 3);
+        return;
+      }
+      if (d > CLERIC_TETHER * 0.45) { u.state = 'follow'; return; }
     }
   }
 
@@ -658,7 +688,13 @@ function tryHeal(u, g, since) {
   if (u.mana < HEAL_COST) return false;
   u.mana -= HEAL_COST;
   u.healCool = h.rate;
-  best.heal(h.amount * (1 + (u.level - 1) * 0.2));
+  const given = best.heal(h.amount * (1 + (u.level - 1) * 0.2));
+  // Rank for mending, paid on health actually restored -- so there is nothing
+  // to farm by bandaging the healthy. Keeping people alive is the job.
+  if (given > 0) {
+    u.gainXp(given * XP_PER_HEAL);
+    u.lastSupport = g.time;
+  }
   g.fx.ring(best.x, best.y - 6, '#7fd8a0', 9);
   g.audio.play('heal');
   u.state = 'heal';
@@ -674,15 +710,16 @@ function tryBless(u, g, since) {
   if (!u.def.heal) return false;
   u.blessCool = (u.blessCool || 0) - since;
   if (u.blessCool > 0 || u.mana < BLESSING.cost) return false;
-  let best = null, bestScore = 0;
+  // Anyone who comes near gets one -- a villager hauling ore as readily as a
+  // warrior mid-swing. The score only decides who is first in the queue.
+  let best = null, bestScore = -1;
   for (const a of g.units) {
     if (a.dead || a.faction !== 'realm' || a === u) continue;
     if (a.blessed > 0) continue;
     if (dist(a.x, a.y, u.x, u.y) > BLESSING.range) continue;
-    // in a fight, or being chewed on, or simply a soldier worth buffing
-    const fighting = (a.target && !a.target.dead) ? 2 : 0;
-    const bitten = g.time - (a.lastHit || -99) < 4 ? 2 : 0;
-    const soldier = a.isHero ? 1 : 0;
+    const fighting = (a.target && !a.target.dead) ? 3 : 0;
+    const bitten = g.time - (a.lastHit || -99) < 4 ? 3 : 0;
+    const soldier = a.isHero ? 2 : 0;
     const score = fighting + bitten + soldier;
     if (score > bestScore) { bestScore = score; best = a; }
   }
@@ -690,11 +727,29 @@ function tryBless(u, g, since) {
   u.mana -= BLESSING.cost;
   u.blessCool = BLESSING.rate;
   best.blessed = BLESSING.lasts;
+  u.gainXp(XP_PER_BLESSING);
+  u.lastSupport = g.time;
   g.fx.ring(best.x, best.y - 6, BLESSING.colour, 11);
   g.fx.text(best.x, best.y - 18, 'BLESSED', BLESSING.colour, 18);
   g.audio.play('heal');
   u.state = 'bless';
   return true;
+}
+
+/**
+ * Where a cleric wants to be: with the soldiers. They are not a scout and not
+ * a duellist -- on their own they are a robe with a mace. The nearest hero
+ * who is not another cleric is the anchor; failing that, the town.
+ */
+function healerAnchor(u, g) {
+  let best = null, bestD = Infinity;
+  for (const a of g.units) {
+    if (a.dead || a.faction !== 'realm' || a === u) continue;
+    if (!a.isHero || a.def.heal) continue;         // stand with the fighters
+    const d = dist(a.x, a.y, u.x, u.y);
+    if (d < bestD) { bestD = d; best = a; }
+  }
+  return best;
 }
 
 /** Put some ground between a caster and whatever is reaching for them. */
@@ -740,6 +795,10 @@ function findPatient(u, g) {
 /** Everything a hero might want, scored on one scale. */
 function chooseGoal(u, g) {
   const def = u.def;
+  // Clerics are not fighters and do not go looking. They keep station with
+  // the soldiers and answer flags only to stand where they are wanted --
+  // hunting lairs is somebody else's trade.
+  if (def.heal) return null;
   const opts = [];
   const greed = def.greed;
   const holding = u.stance === 'defend';

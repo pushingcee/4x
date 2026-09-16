@@ -131,19 +131,50 @@ export const MISSIONS = {
  * in trouble, and makes them hit harder and fold slower while it lasts.
  */
 export const BLESSING = {
-  lasts: 20, dmgMul: 1.25, soak: 0.82, cost: 16, rate: 2.5, range: 96,
+  lasts: 20, dmgMul: 1.25, soak: 0.82, cost: 16, rate: 2.5, range: 110,
   colour: '#ffe9a0',
   desc: '+25% damage and a fifth of the harm turned aside'
 };
+
+/** How close a cleric tries to stay to the soldiers they are there to keep alive. */
+export const CLERIC_TETHER = 120;
 
 /**
  * What a caster's mana is actually for. It regenerates slowly on its own and
  * faster standing still, so intelligence buys both a deeper pool and more of
  * the things that come out of it.
  */
-export const MANA_REGEN = 1.6;
-export const MANA_REST = 4.0;
+/**
+ * Mana comes back faster the cleverer you are. The flat part is what anybody
+ * gets; the rest is bought with intelligence above the baseline of five, so
+ * INT buys both a deeper pool and a faster one -- which is the whole reason
+ * to put a quarrier through the temple rather than a woodcutter.
+ */
+export const MANA_REGEN = 1.2;          // per second, working
+export const MANA_REST = 3.0;           // per second, standing about
+export const MANA_REGEN_PER_INT = 0.12; // added to both, per point over five
 export const HEAL_COST = 12;
+
+/**
+ * Rank earned for supporting rather than killing. Healing pays per point of
+ * health actually restored -- topping somebody already full restores nothing
+ * and so earns nothing, which is what keeps it honest -- and a blessing pays
+ * a small flat amount for the same reason a bandage does.
+ */
+export const XP_PER_HEAL = 0.03;
+export const XP_PER_BLESSING = 1;
+
+/**
+ * Shared credit for a kill. Everyone who hurt it gets a cut rather than only
+ * whoever happened to land the last blow, and the party as a whole earns a
+ * little more than a lone hero would -- so bringing friends is worth it even
+ * though each individual share is smaller.
+ */
+export const XP_SHARE_BONUS = 0.15;     // per extra contributor...
+export const XP_SHARE_BONUS_CAP = 3;    // ...counted for at most this many
+export const CREDIT_WINDOW = 12;        // seconds a hit still counts as taking part
+/** A healer's weight in the split, against 1 for everyone doing the hitting. */
+export const SUPPORT_SHARE = 0.5;
 
 /**
  * How far a cleric will travel to somebody who needs them, and how hurt

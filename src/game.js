@@ -10,7 +10,8 @@ import {
   BUILDINGS, CLASSES, MONSTERS, LAIRS, FLAGS, RES_RATE, START,
   DAY_SECONDS, TAX_INTERVAL, RESURRECT_COST, HERO_CLASSES, PEACE_DAYS, STRUCTURE_DMG,
   MISSIONS, RAIDS_ENABLED, CALLING_ORDER, DISTRESS_WINDOW, RECRUIT_DMG,
-  THREAT_PER_DAY, THREAT_CAP, SEPARATION_CAP, SPECS, WORK_TALENTS
+  THREAT_PER_DAY, THREAT_CAP, SEPARATION_CAP, SPECS, WORK_TALENTS, XP_SHARE_BONUS, XP_SHARE_BONUS_CAP,
+  SUPPORT_SHARE, CREDIT_WINDOW
 } from './data.js';
 import { makeRng, clamp, dist } from './util.js';
 
@@ -299,12 +300,12 @@ export class Game {
       this.stats.kills++;
       if (src && src.kindClass === 'unit' && src.faction === 'realm') {
         src.kills++;
-        src.gainXp(u.def.xp);
         if (src.isHero) {
           src.gold += u.def.gold;
           this.fx.coin(u.x, u.y - 10, u.def.gold);
         }
       }
+      this.shareXp(u, src, u.def.xp);
     } else if (u.isHero) {
       this.stats.heroesLost++;
       this.graves.push({
@@ -355,7 +356,7 @@ export class Game {
     const reward = l.def.reward;
     this.addResource('gold', reward);
     this.notify(`${l.name} destroyed! +${reward} gold`, 'good');
-    if (src && src.kindClass === 'unit' && src.isHero) src.gainXp(l.def.xp);
+    this.shareXp(l, src, l.def.xp);
     // its brood loses cohesion and wanders
     for (const m of l.spawned) if (!m.dead) m.raiding = true;
     const i = this.world.props.findIndex(p => p.lairId === l.id);
@@ -514,6 +515,43 @@ export class Game {
     this.notify(`${w.name} becomes a ${cls.name}`, 'good');
     this.lastTrained = w;
     return w;
+  }
+
+  /**
+   * Hand out the credit for something dying. It used to go entirely to
+   * whoever landed the last blow, which meant two of any three heroes who
+   * fought a thing together got nothing at all, and a cleric who kept all
+   * three of them standing got nothing ever.
+   *
+   * Now everyone who had a hand in it recently shares, and the party earns a
+   * little more in total than a lone hero would -- so each individual share
+   * is smaller but bringing friends is still worth doing.
+   */
+  shareXp(victim, killer, amount) {
+    if (!amount) return;
+    const weight = new Map();
+    const add = (u, w) => {
+      if (!u || u.dead || u.kindClass !== 'unit' || u.faction !== 'realm') return;
+      if (!u.isHero) return;
+      weight.set(u, Math.max(weight.get(u) || 0, w));
+    };
+    if (victim.contributors) for (const u of victim.contributors()) add(u, 1);
+    add(killer, 1);
+    // Whoever kept the party standing took part in this too -- but at a lower
+    // weight than the people actually swinging. A cleric supports every kill
+    // in a fight, so on a full share they would out-level the soldiers they
+    // are there to keep alive, which is exactly backwards.
+    for (const u of this.units) {
+      if (u.dead || !u.isHero || !u.def.heal || weight.has(u)) continue;
+      if (this.time - (u.lastSupport || -99) > CREDIT_WINDOW) continue;
+      add(u, SUPPORT_SHARE);
+    }
+    if (!weight.size) return;
+    let total = 0;
+    for (const w of weight.values()) total += w;
+    const extra = Math.min(XP_SHARE_BONUS_CAP, weight.size - 1);
+    const pot = amount * (1 + XP_SHARE_BONUS * extra);
+    for (const [u, w] of weight) u.gainXp(pot * (w / total));
   }
 
   /**

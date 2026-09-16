@@ -596,6 +596,7 @@ export class UI {
     if (u.state === 'rescue') return 'to the rescue';
     if (u.state === 'guard') return 'on watch';
     if (u.state === 'mend') return 'going to the wounded';
+    if (u.state === 'follow') return 'keeping station';
     if (u.state === 'heal') return 'tending the hurt';
     if (u.state === 'bless') return 'blessing the faithful';
     if (u.state === 'stalk') return 'melting away';
@@ -1447,6 +1448,10 @@ export class UI {
       hurt anywhere in the realm rather than waiting for them &mdash; mending the wounded
       and <b>blessing</b> whoever is about to be. Both spend <b>mana</b>, which is what
       intelligence has been buying all along. Neither has specialisations yet.</p>
+      <p><b>Who earns the rank.</b> Everyone who had a hand in a kill shares it &mdash;
+      landing a hit or taking one both count &mdash; and the party earns a little more in
+      total than a lone hero would, so nobody is left out for arriving second. Clerics
+      count at half weight and earn rank directly for mending and blessing.</p>
       <p><b>Specialisations.</b> At level 5 a soldier picks one, once, for good. Warriors
       choose <b>Fury</b> (twin blades, all speed), <b>Arms</b> (one great weapon, one
       opponent) or <b>Protection</b> (shield up, soaks everything). Rangers choose

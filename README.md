@@ -142,11 +142,24 @@ useful. They go *looking*: anybody in the realm below 72% health is a reason
 to cross up to 520 pixels of map, and they hurry when they do. Two things
 come out of them:
 
-- **Mending** — 24 health every two seconds, more with rank, on whoever is
-  worst off within reach.
+- **Mending** — 24 health every two seconds, more with rank, always on
+  whoever is **worst off** within reach.
 - **Blessing** — +25% damage and a fifth of the harm turned aside, for 20
-  seconds, put on whoever is closest to a fight rather than whoever is already
-  hurt. A cleric is not only a bandage.
+  seconds, on **anyone who comes near**: a villager hauling ore as readily as
+  a warrior mid-swing. Whoever is closest to a fight simply goes first in the
+  queue. A cleric is not only a bandage.
+
+**They travel with the soldiers.** A cleric is not a scout and not a duellist
+— alone they are a robe with a mace — so with nobody hurt they keep station
+near the nearest fighting hero rather than wandering. They never pick a fight
+of their own, never take an attack goal, and back away from anything that gets
+within three tiles, mending and blessing as they retreat. They swing only when
+genuinely cornered.
+
+Mana comes back faster the cleverer they are: a flat rate everyone gets, plus
+a share per point of intelligence over five. A cleric at INT 23 regenerates
+3.4/second working; at INT 43, 5.8/second, out of a pool nearly twice the
+size. Putting a *quarrier* through the Temple is worth doing.
 
 Both cost **mana**, which is what intelligence has been quietly buying all
 along: 4 per point of INT, refilling slowly while they work and faster while
@@ -164,6 +177,38 @@ killed three of seven. With one, the same party cleared all seven and two
 walked away. Roughly fifty heals a fight and three soldiers blessed at once.
 
 Neither has specialisations yet -- those come later.
+
+### Experience, and who gets it
+
+Rank used to go entirely to whoever landed the killing blow. Three warriors
+beating a skeleton together meant one of them got all 24 experience and the
+other two got nothing, and a cleric who kept all three alive got nothing ever.
+
+Now **everyone who had a hand in it shares**, and taking part means either
+hitting the thing or being hit by it -- so a Protection warrior holding a
+camp's attention while the others do the killing earns their share of it.
+Credit lasts 12 seconds, so wandering in at the end earns nothing.
+
+The pot is a little larger than a lone hero would have earned, capped at four
+contributors, and split evenly:
+
+| Party | Each gets | Pot |
+|---|---|---|
+| Alone | 100% | 1.00x |
+| Two | 58% | 1.15x |
+| Three | 43% | 1.30x |
+| Four or more | 1.45 / n | 1.45x |
+
+So an individual share is always smaller than a solo kill, but the party as a
+whole earns more, and nobody is ever left out. Gold from a kill still goes to
+whoever struck the blow -- heroes are greedy, and that has never been fair.
+
+**Healers count at half weight.** A cleric supports every kill in a fight
+rather than some of them, so on a full share they would out-level the soldiers
+they exist to keep alive. At half they level alongside. On top of that they
+earn rank directly for the job: experience per point of health *actually*
+restored, so topping up somebody already full pays nothing and there is
+nothing to farm, plus a little for each blessing.
 
 ### Talents
 
