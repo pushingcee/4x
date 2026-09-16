@@ -113,8 +113,46 @@ export const MISSIONS = {
     id: 'ranger', name: 'Ranger', short: 'Scout', colour: '#3a8a5a',
     becomes: 'ranger', at: 'rangers_guild', drill: 42,
     desc: 'Drills at the Rangers Guild, guarding the village meanwhile, then takes to the woods as a fast archer who sees further than anyone.'
+  },
+  wizard: {
+    id: 'wizard', name: 'Wizard', short: 'Magic', colour: '#6fb6ff',
+    becomes: 'wizard', at: 'wizards_guild', drill: 58,
+    desc: 'Studies at the Wizards Guild, then throws fire that lands on everything standing together. Keeps their distance, and runs early -- a wizard in melee is a dead wizard.'
+  },
+  cleric: {
+    id: 'cleric', name: 'Cleric', short: 'Faith', colour: '#ffe9a0',
+    becomes: 'cleric', at: 'temple', drill: 54,
+    desc: 'Takes orders at the Temple, then walks the realm looking for the hurt. Mends anyone bleeding and blesses anyone about to be, wherever they are.'
   }
 };
+
+/**
+ * A cleric's blessing. Not a heal: it is put on somebody who is about to be
+ * in trouble, and makes them hit harder and fold slower while it lasts.
+ */
+export const BLESSING = {
+  lasts: 20, dmgMul: 1.25, soak: 0.82, cost: 16, rate: 2.5, range: 96,
+  colour: '#ffe9a0',
+  desc: '+25% damage and a fifth of the harm turned aside'
+};
+
+/**
+ * What a caster's mana is actually for. It regenerates slowly on its own and
+ * faster standing still, so intelligence buys both a deeper pool and more of
+ * the things that come out of it.
+ */
+export const MANA_REGEN = 1.6;
+export const MANA_REST = 4.0;
+export const HEAL_COST = 12;
+
+/**
+ * How far a cleric will travel to somebody who needs them, and how hurt
+ * somebody has to be before they are worth crossing the map for.
+ */
+export const MEND_RANGE = 520;
+/** How close a cleric will let anything hostile get before backing off. */
+export const CLERIC_KEEP = 52;
+export const MEND_AT = 0.72;
 
 /**
  * ===================================================================
@@ -265,7 +303,7 @@ export const RECRUIT_DMG = 3;
 export const MISSION_ORDER = ['miner', 'woodcutter', 'quarrier', 'builder', 'none'];
 
 /** Everything you can set a villager to, including leaving the fields for good. */
-export const CALLING_ORDER = ['miner', 'woodcutter', 'quarrier', 'builder', 'warrior', 'ranger', 'none'];
+export const CALLING_ORDER = ['miner', 'woodcutter', 'quarrier', 'builder', 'warrior', 'ranger', 'wizard', 'cleric', 'none'];
 
 /**
  * Buildings. `fw/fh` footprint in tiles. `needs` gates the build menu.
@@ -336,15 +374,15 @@ export const BUILDINGS = {
   },
   wizards_guild: {
     id: 'wizards_guild', name: 'Wizards Guild', fw: 2, fh: 2, hp: 500,
-    cost: { gold: 240, wood: 80, stone: 90 }, build: 20, needs: ['marketplace'],
-    guild: 'wizard', maxHeroes: 2,
-    desc: 'Recruits Wizards: devastating at range, fragile, and prone to running away.'
+    cost: { gold: 240, wood: 80, stone: 90 }, build: 20,
+    guild: 'wizard', maxHeroes: 2, sight: 9,
+    desc: 'Turns a villager into a Wizard: fire at range that lands on a whole pack at once, wrapped in nothing but a robe.'
   },
   temple: {
     id: 'temple', name: 'Temple', fw: 2, fh: 2, hp: 560,
-    cost: { gold: 220, wood: 90, stone: 70 }, build: 19, needs: ['marketplace'],
-    guild: 'cleric', maxHeroes: 2, resurrect: 0.5,
-    desc: 'Recruits Clerics who heal the wounded, and halves the cost of raising the dead.'
+    cost: { gold: 220, wood: 90, stone: 70 }, build: 19,
+    guild: 'cleric', maxHeroes: 2, resurrect: 0.5, sight: 9,
+    desc: 'Turns a villager into a Cleric, who goes looking for the hurt and the outnumbered instead of waiting for them. Also halves the cost of raising the dead.'
   },
   guardhouse: {
     id: 'guardhouse', name: 'Guard House', fw: 2, fh: 2, hp: 600,
@@ -365,7 +403,7 @@ export const BUILDINGS = {
  * so it can be switched back on a line at a time as features come back --
  * for now the game is deliberately just a City Centre and its peasants.
  */
-export const BUILD_ORDER = ['barracks', 'rangers_guild'];
+export const BUILD_ORDER = ['barracks', 'rangers_guild', 'wizards_guild', 'temple'];
 
 /** The full menu, kept for when the rest of the realm is reinstated. */
 export const BUILD_ORDER_FULL = ['hut', 'lumberyard', 'mining_camp', 'marketplace', 'inn', 'blacksmith',

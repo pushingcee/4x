@@ -7,7 +7,8 @@ import { toPx, toTile } from './world.js';
 import {
   BUILDINGS, CLASSES, MONSTERS, LAIRS, XP_TABLE, MAX_LEVEL, LEVEL_STATS,
   MISSIONS, STAT_ORDER, STAT_EFFECT, TRAIN_MAX, RUSH_SPEED, LAIR_ALARM_RATE, LAIR_ALARM_TIME,
-  WORK_TALENTS, TALENT_RANKS, TALENT_POINTS, SPECS, SPEC_LEVEL, POWERS, ABILITIES, STEALTH_REVEAL
+  WORK_TALENTS, TALENT_RANKS, TALENT_POINTS, SPECS, SPEC_LEVEL, POWERS, ABILITIES, STEALTH_REVEAL,
+  BLESSING, MANA_REGEN, MANA_REST
 } from './data.js';
 import { clamp, dist, heroName, peasantName } from './util.js';
 
@@ -256,6 +257,7 @@ export class Unit {
     this.hidden = 0;           // seconds of being unseen
     this.stealthIn = 0;        // countdown to slipping out of sight again
     this.withdraw = 0;         // breaking off after a strike from the dark
+    this.blessed = 0;          // seconds left of a cleric's blessing
     this.strikeMul = 0;        // a charged blow waiting to land
     this.stance = 'defend';    // soldiers only: defend the realm, or roam it
     this.rushing = 0;          // seconds left of answering a distress call
@@ -441,7 +443,8 @@ export class Unit {
   get power() {
     const strBonus = Math.max(0.25, 1 + (this.stats.str - 5) * STAT_EFFECT.dmgPerPoint);
     const sp = this.specDef;
-    return (this.dmg + this.bonusDmg) * strBonus * ((sp && sp.dmgMul) || 1);
+    const blessing = this.blessed > 0 ? BLESSING.dmgMul : 1;
+    return (this.dmg + this.bonusDmg) * strBonus * ((sp && sp.dmgMul) || 1) * blessing;
   }
 
   /** Seconds between swings, quickened by agility -- and halved in a Rampage. */
@@ -731,6 +734,7 @@ export class Unit {
 
   damageTaken(n, src) {
     if (this.guarded > 0) n *= 0.5;         // Shield Wall
+    if (this.blessed > 0) n *= BLESSING.soak;
     const pw = this.chargeDef;
     if (pw && pw.onHurt) this.gainCharge(pw.onHurt);
     if (this.hidden > 0) this.reveal();     // being hit gives you away
@@ -753,6 +757,13 @@ export class Unit {
     if (this.fleeing > 0) this.fleeing -= dt;
     if (this.rushing > 0) this.rushing -= dt;
     this.tickSpec(dt);
+    if (this.blessed > 0) this.blessed -= dt;
+    // Mana pays for mending and blessing, so it has to refill -- faster when
+    // they are standing about than when they are working a fight.
+    if (this.maxMana > 0 && this.mana < this.maxMana) {
+      const rest = !this.target && !this.moving;
+      this.mana = Math.min(this.maxMana, this.mana + (rest ? MANA_REST : MANA_REGEN) * dt);
+    }
     this.thinkIn -= dt;
     this.thinkAcc = (this.thinkAcc || 0) + dt;
     if (this.thinkIn <= 0) {

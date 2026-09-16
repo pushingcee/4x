@@ -125,6 +125,46 @@ top, so nothing can ever go *down* by being promoted:
 A villager who mastered mining becomes a STR 18 / CON 17 warrior with 214 health, where
 one straight off the farm starts at 13 / 12 and 179. Veterans make better soldiers.
 
+### Wizards and Clerics
+
+Two more guilds, and two callings that are nothing like the first two.
+
+A **Wizards Guild** turns a villager into a **Wizard**: fire at a hundred
+pixels' reach that lands on *everything* standing together, not just what it
+was aimed at. Full damage on the target and 60% on everyone within a
+fireball's width of it, so the tighter a pack marches the worse it goes for
+them. A wizard is also made of paper -- 66 base health and the earliest nerve
+of anyone in the realm -- so they open at range and leave before it gets
+close.
+
+A **Temple** turns one into a **Cleric**, and a cleric does not wait to be
+useful. They go *looking*: anybody in the realm below 72% health is a reason
+to cross up to 520 pixels of map, and they hurry when they do. Two things
+come out of them:
+
+- **Mending** — 24 health every two seconds, more with rank, on whoever is
+  worst off within reach.
+- **Blessing** — +25% damage and a fifth of the harm turned aside, for 20
+  seconds, put on whoever is closest to a fight rather than whoever is already
+  hurt. A cleric is not only a bandage.
+
+Both cost **mana**, which is what intelligence has been quietly buying all
+along: 4 per point of INT, refilling slowly while they work and faster while
+they stand still. A cleric in a hard fight runs the pool most of the way down,
+so how much they can do really is how clever they are.
+
+Crucially a cleric keeps out of reach -- they back off from anything that gets
+within about three tiles, mending and blessing as they retreat, and stand off
+on the near side of a patient rather than walking into the melee to reach
+them. The first version did walk in, and died in every single test.
+
+Measured against a mixed pack of ogres and skeletons that three level-3
+warriors cannot quite handle: without a cleric the party was wiped having
+killed three of seven. With one, the same party cleared all seven and two
+walked away. Roughly fifty heals a fight and three soldiers blessed at once.
+
+Neither has specialisations yet -- those come later.
+
 ### Talents
 
 Work does not just raise attributes, it earns **talent points** — three per
@@ -201,9 +241,9 @@ hurt. A lone peasant can see off a rat; anything larger needs a warrior.
 
 ## Current scope
 
-Still deliberately small while the core is built out: City Centre, Barracks, peasants,
-warriors and flags. The shops, towers, huts and the other three hero classes are
-defined but switched off behind `BUILD_ORDER_FULL` in `src/data.js`.
+City Centre, Barracks, Rangers Guild, Wizards Guild and Temple, with peasants,
+four soldier classes and flags. The shops, towers and huts are defined but
+switched off behind `BUILD_ORDER_FULL` in `src/data.js`.
 
 Raids are on. After a few days of peace, lairs close enough to your buildings send
 parties at the town — so expanding toward a nest is what makes it hostile. Build a

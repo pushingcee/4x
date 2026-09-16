@@ -595,6 +595,10 @@ export class UI {
     if (u.state === 'defend') return 'fighting back';
     if (u.state === 'rescue') return 'to the rescue';
     if (u.state === 'guard') return 'on watch';
+    if (u.state === 'mend') return 'going to the wounded';
+    if (u.state === 'heal') return 'tending the hurt';
+    if (u.state === 'bless') return 'blessing the faithful';
+    if (u.state === 'stalk') return 'melting away';
     if (u.state === 'drill') return 'drilling';
     if (u.knightKind && u.state === 'walk') return 'reporting for duty';
     if (u.job && u.job.type === 'build') return 'building';
@@ -626,7 +630,7 @@ export class UI {
       <div class="statline" data-live="stats">
         <span>HP <b>${Math.ceil(u.hp)}/${u.maxHpNow}</b></span>
         <span>DMG <b>${u.power.toFixed(1)}</b></span>
-        <span>MANA <b>${u.maxMana}</b></span>
+        <span>MANA <b>${u.def.heal ? Math.round(u.mana) + '/' : ''}${u.maxMana}</b></span>
         <span>CRIT <b>${Math.round(u.critChance * 100)}%</b></span>
         ${u.isHero ? `<span>GOLD <b>${Math.floor(u.gold)}</b></span>
         <span>XP <b>${Math.floor(u.xp)}</b></span>
@@ -699,7 +703,8 @@ export class UI {
       const stats = el.querySelector('[data-live="stats"]');
       if (stats) {
         const bits = [`HP <b>${Math.ceil(u.hp)}/${u.maxHpNow}</b>`, `DMG <b>${u.power.toFixed(1)}</b>`,
-          `MANA <b>${u.maxMana}</b>`, `CRIT <b>${Math.round(u.critChance * 100)}%</b>`];
+          `MANA <b>${u.def.heal ? Math.round(u.mana) + '/' : ''}${u.maxMana}</b>`,
+          `CRIT <b>${Math.round(u.critChance * 100)}%</b>`];
         if (u.isHero) bits.push(`GOLD <b>${Math.floor(u.gold)}</b>`, `XP <b>${Math.floor(u.xp)}</b>`, `KILLS <b>${u.kills}</b>`);
         if (u.carry > 0) bits.push(`CARRYING <b>${Math.floor(u.carry)} ${u.carryRes}</b>`);
         stats.innerHTML = bits.map(b => `<span>${b}</span>`).join('');
@@ -1169,7 +1174,7 @@ export class UI {
           </div>
           <span class="cnt">${crew.length}</span>
           <span class="pm">
-            <button disabled title="A soldier cannot go back to the fields">&minus;</button>
+            <button disabled title="Knighthood cannot be undone -- but tap a soldier to give them a calling again">&minus;</button>
             <button data-arm="${id}">+</button>
           </span>
         </div>`;
@@ -1436,6 +1441,12 @@ export class UI {
       <p><b>Nothing is ever lost.</b> Knighting keeps every point and every talent, and a
       soldier can be given a working calling again whenever you like. Tell a warrior to
       mine and they will go and mine.</p>
+      <p><b>Wizards and Clerics.</b> A <b>Wizards Guild</b> makes a villager into a
+      <b>Wizard</b>: fire at range that lands on a whole pack at once, wrapped in nothing
+      but a robe. A <b>Temple</b> makes one into a <b>Cleric</b>, who goes looking for the
+      hurt anywhere in the realm rather than waiting for them &mdash; mending the wounded
+      and <b>blessing</b> whoever is about to be. Both spend <b>mana</b>, which is what
+      intelligence has been buying all along. Neither has specialisations yet.</p>
       <p><b>Specialisations.</b> At level 5 a soldier picks one, once, for good. Warriors
       choose <b>Fury</b> (twin blades, all speed), <b>Arms</b> (one great weapon, one
       opponent) or <b>Protection</b> (shield up, soaks everything). Rangers choose

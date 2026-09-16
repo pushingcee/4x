@@ -441,6 +441,12 @@ export class Renderer {
       ctx.fillStyle = u.frenzy > 0 ? '#ff7a3a' : '#6fb6ff';
       ctx.fillRect(x + 6, y - 9, 4, 2);
     }
+    // and a cleric's blessing, so you can see who is carrying one
+    if (u.blessed > 0) {
+      ctx.fillStyle = '#ffe9a0';
+      ctx.fillRect(x + 7, y - 12, 2, 2);
+      ctx.fillRect(x + 6, y - 11, 4, 1);
+    }
     ctx.globalAlpha = 1;
   }
 

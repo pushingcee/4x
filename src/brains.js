@@ -8,7 +8,10 @@
 // ===================================================================
 import { toPx, toTile } from './world.js';
 import { TILE } from './art.js';
-import { RES_RATE, CLASSES, BUILDINGS, MISSIONS, STANCES } from './data.js';
+import {
+  RES_RATE, CLASSES, BUILDINGS, MISSIONS, STANCES,
+  BLESSING, HEAL_COST, MEND_RANGE, MEND_AT, CLERIC_KEEP
+} from './data.js';
 import { dist, clamp } from './util.js';
 
 const tileDist = (a, b) => dist(a.x, a.y, b.x, b.y) / TILE;
@@ -541,15 +544,45 @@ export function heroBrain(u, since) {
   if (u.target && !u.target.dead) {
     const d = u.distTo(u.target);
     if (d < 260) {
-      // clerics prefer patching people up mid-fight
-      if (def.heal && tryHeal(u, g, since)) return;
+      // clerics prefer patching people up mid-fight, and buffing whoever is
+      // swinging, over swinging themselves -- a cleric's mace is a last resort
+      if (def.heal && (tryHeal(u, g, since) || tryBless(u, g, since))) return;
       u.state = 'fight';
       u.fight(since);
       return;
     }
     u.target = null;
   }
-  if (def.heal && tryHeal(u, g, since)) return;
+  if (def.heal && (tryHeal(u, g, since) || tryBless(u, g, since))) return;
+
+  // --- 2b. a cleric goes looking ------------------------------------
+  // The difference between a cleric and a soldier who knows first aid: they
+  // cross the map to somebody bleeding instead of mending whoever wanders by.
+  // They do it from arm's length, though: a cleric standing in the middle of
+  // a melee is a dead cleric, and a dead cleric heals nobody.
+  if (def.heal) {
+    const close = g.nearestEnemy(u.x, u.y, CLERIC_KEEP, 'realm');
+    if (close) {
+      u.target = null;
+      u.state = 'mend';
+      // bless and mend on the way out -- backing off is not idling
+      tryHeal(u, g, since) || tryBless(u, g, since);
+      backAwayFrom(u, g, close, CLERIC_KEEP + 30);
+      return;
+    }
+    const patient = findPatient(u, g);
+    if (patient) {
+      u.target = null;
+      u.state = 'mend';
+      if (dist(patient.x, patient.y, u.x, u.y) > def.heal.range * 0.75) {
+        u.rushing = 1.0;                    // hurry: they are bleeding
+        // stand off on the near side rather than walking onto them
+        const spot = standOff(g, patient, u, def.heal.range * 0.7);
+        if (spot && (spot.x !== u.tx || spot.y !== u.ty)) u.goTo(spot.x, spot.y, 1);
+      }
+      return;
+    }
+  }
 
   // --- 3. score the world -------------------------------------------
   const best = chooseGoal(u, g);
@@ -615,17 +648,93 @@ function tryHeal(u, g, since) {
   for (const a of g.units) {
     if (a.dead || a.faction !== 'realm' || a === u) continue;
     const f = a.hp / a.maxHpNow;
-    if (f >= 0.72) continue;
+    if (f >= MEND_AT) continue;
     if (dist(a.x, a.y, u.x, u.y) > h.range) continue;
     if (f < worst) { worst = f; best = a; }
   }
+  // nobody else is hurt? a cleric bleeding out is still somebody who is hurt
+  if (!best && u.hp < u.maxHpNow * 0.6) best = u;
   if (!best) return false;
+  if (u.mana < HEAL_COST) return false;
+  u.mana -= HEAL_COST;
   u.healCool = h.rate;
   best.heal(h.amount * (1 + (u.level - 1) * 0.2));
   g.fx.ring(best.x, best.y - 6, '#7fd8a0', 9);
   g.audio.play('heal');
   u.state = 'heal';
   return true;
+}
+
+/**
+ * A blessing goes on somebody who is about to need it rather than somebody
+ * who already did: whoever is closest to a fight and not already blessed.
+ * It is the cleric's other half -- they are not only a bandage.
+ */
+function tryBless(u, g, since) {
+  if (!u.def.heal) return false;
+  u.blessCool = (u.blessCool || 0) - since;
+  if (u.blessCool > 0 || u.mana < BLESSING.cost) return false;
+  let best = null, bestScore = 0;
+  for (const a of g.units) {
+    if (a.dead || a.faction !== 'realm' || a === u) continue;
+    if (a.blessed > 0) continue;
+    if (dist(a.x, a.y, u.x, u.y) > BLESSING.range) continue;
+    // in a fight, or being chewed on, or simply a soldier worth buffing
+    const fighting = (a.target && !a.target.dead) ? 2 : 0;
+    const bitten = g.time - (a.lastHit || -99) < 4 ? 2 : 0;
+    const soldier = a.isHero ? 1 : 0;
+    const score = fighting + bitten + soldier;
+    if (score > bestScore) { bestScore = score; best = a; }
+  }
+  if (!best) return false;
+  u.mana -= BLESSING.cost;
+  u.blessCool = BLESSING.rate;
+  best.blessed = BLESSING.lasts;
+  g.fx.ring(best.x, best.y - 6, BLESSING.colour, 11);
+  g.fx.text(best.x, best.y - 18, 'BLESSED', BLESSING.colour, 18);
+  g.audio.play('heal');
+  u.state = 'bless';
+  return true;
+}
+
+/** Put some ground between a caster and whatever is reaching for them. */
+function backAwayFrom(u, g, foe, want) {
+  const dx = u.x - foe.x, dy = u.y - foe.y;
+  const len = Math.hypot(dx, dy) || 1;
+  const spot = g.world.nearestFree(
+    toTile(u.x + (dx / len) * want), toTile(u.y + (dy / len) * want), 7);
+  if (spot && (spot.x !== u.tx || spot.y !== u.ty)) u.goTo(spot.x, spot.y, 1);
+}
+
+/**
+ * A tile within reach of the patient but on the side away from the fighting,
+ * so a cleric can work without being part of it.
+ */
+function standOff(g, patient, u, want) {
+  const foe = g.nearestEnemy(patient.x, patient.y, 200, 'realm');
+  let dx, dy;
+  if (foe) { dx = patient.x - foe.x; dy = patient.y - foe.y; }
+  else { dx = u.x - patient.x; dy = u.y - patient.y; }
+  const len = Math.hypot(dx, dy) || 1;
+  return g.world.nearestFree(
+    toTile(patient.x + (dx / len) * want), toTile(patient.y + (dy / len) * want), 7);
+}
+
+/**
+ * Somebody, anywhere in the realm, who needs a cleric. This is what makes a
+ * cleric different from a soldier who happens to know first aid: they go
+ * looking, across the whole map, instead of mending whoever wanders past.
+ */
+function findPatient(u, g) {
+  let best = null, worst = MEND_AT;
+  for (const a of g.units) {
+    if (a.dead || a.faction !== 'realm' || a === u) continue;
+    const f = a.hp / a.maxHpNow;
+    if (f >= worst) continue;
+    if (dist(a.x, a.y, u.x, u.y) > MEND_RANGE) continue;
+    worst = f; best = a;
+  }
+  return best;
 }
 
 /** Everything a hero might want, scored on one scale. */
