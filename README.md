@@ -178,6 +178,64 @@ walked away. Roughly fifty heals a fight and three soldiers blessed at once.
 
 Neither has specialisations yet -- those come later.
 
+### Loot
+
+Monsters carry things, and the stronger the monster the likelier it is
+carrying something worth having -- a rat almost never, an ogre two times in
+five, a razed camp always. Whatever falls goes to one of the heroes who was
+actually there, chosen at random among them.
+
+Seven slots: **weapon, chest, neck, two earrings, two rings.** Weapons are
+class-locked, so loot that lands in the wrong hands is carried to market
+rather than silently wasted:
+
+| Class | Carries |
+|---|---|
+| Warrior | swords, axes |
+| Ranger | swords and daggers — **assassins** take swords, **mercenaries** daggers |
+| Wizard, Cleric | staves, wands |
+
+Four tiers, and what they carry:
+
+| Tier | What it rolls |
+|---|---|
+| **Common** | one attribute |
+| **Rare** | one attribute, larger — or two |
+| **Epic** | two attributes and a modifier, with flavour text |
+| **Legendary** | two attributes well above epic, a modifier, and a name of its own |
+
+Beyond attributes an item can carry flat **damage** (axes hit flatly harder),
+**mana**, **critical chance** (daggers find the gap), **lifesteal**, or —
+legendary only — **spell power**, which multiplies a wizard's fire and a
+cleric's mending alike.
+
+Names are built from what the thing is and what it does, so they read:
+*Band of the Bear*, *Thorn Brigandine of Deep Waters*, *Grim Waraxe of the
+Bear*. Legendaries get names instead of descriptions — *Serathil*,
+*Ironhowl*, *The Unbroken Circle*, *Coat of the Drowned King* — and epics and
+legendaries carry a line of flavour.
+
+**Heroes judge loot on their own terms** and nobody else's:
+
+| Class | Wants |
+|---|---|
+| Warrior | STR > CON > AGI |
+| Ranger | AGI > STR > CON — and a longbowman, who never closes, discounts strength |
+| Wizard, Cleric | INT > CON > the rest |
+
+They wear it if it beats what is in that slot by their own reckoning, and
+carry it to market if it does not.
+
+### The Marketplace
+
+Five shelves, restocked over time, and the stock improves as the realm does.
+Heroes walk in on their own: they sell everything in their bag, then buy the
+one thing on the shelf that beats what they are wearing and that they can
+actually afford. **You tax both ends of every deal** — a quarter of what they
+sell and near a third of what they spend — so a marketplace is an income, not
+an expense. What they sell goes straight back onto the shelf for somebody else
+to find.
+
 ### Experience, and who gets it
 
 Rank used to go entirely to whoever landed the killing blow. Three warriors
@@ -289,6 +347,12 @@ hurt. A lone peasant can see off a rat; anything larger needs a warrior.
 City Centre, Barracks, Rangers Guild, Wizards Guild and Temple, with peasants,
 four soldier classes and flags. The shops, towers and huts are defined but
 switched off behind `BUILD_ORDER_FULL` in `src/data.js`.
+
+**No camp is ever empty.** Every lair keeps a standing garrison from the first
+day -- a rat nest three, a goblin camp four, an ogre den three -- and camps
+more than twenty-six tiles from home keep more, up to three extra. Walking
+into one is a fight you chose rather than a coin flip on whether anybody
+happens to be home.
 
 Raids are on. After a few days of peace, lairs close enough to your buildings send
 parties at the town — so expanding toward a nest is what makes it hostile. Build a

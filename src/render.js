@@ -455,7 +455,8 @@ export class Renderer {
     const pw = u.chargeDef;
     // A soldier with an ability nearly ready is worth seeing even at full health
     const showCharge = pw && (u.abilityReady || u.charge > u.maxCharge * 0.5);
-    if (!hurt && !u.selected && !showCharge) return;
+    const showMana = u.isCaster && u.maxMana > 0;
+    if (!hurt && !u.selected && !showCharge && !showMana) return;
     // clear the mission badge when there is one
     const badged = u.mission && u.mission !== 'none' && (u.kind === 'peasant' || u.isHero);
     const w = 12, x = Math.round(u.x - w / 2), y = Math.round(u.y - (badged ? 25 : 19));
@@ -468,11 +469,20 @@ export class Renderer {
     }
     if (u.isHero) drawText(ctx, String(u.level), x + w + 2, y - 2, '#ffc94a');
     // rage or focus, so you can see an ability coming
+    let row = y + 2;
     if (showCharge) {
       const cf = clamp(u.charge / u.maxCharge, 0, 1);
-      ctx.fillStyle = '#120c1c'; ctx.fillRect(x - 1, y + 2, w + 2, 3);
+      ctx.fillStyle = '#120c1c'; ctx.fillRect(x - 1, row, w + 2, 3);
       ctx.fillStyle = u.abilityReady ? '#ffffff' : pw.colour;
-      ctx.fillRect(x, y + 3, Math.max(1, Math.round(w * cf)), 1);
+      ctx.fillRect(x, row + 1, Math.max(1, Math.round(w * cf)), 1);
+      row += 3;
+    }
+    // and a mana bar for anyone who actually spends it
+    if (u.isCaster && u.maxMana > 0) {
+      const mf = clamp(u.mana / u.maxMana, 0, 1);
+      ctx.fillStyle = '#120c1c'; ctx.fillRect(x - 1, row, w + 2, 3);
+      ctx.fillStyle = '#6fb6ff';
+      ctx.fillRect(x, row + 1, Math.max(1, Math.round(w * mf)), 1);
     }
   }
 

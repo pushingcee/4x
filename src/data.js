@@ -369,9 +369,9 @@ export const BUILDINGS = {
   },
   marketplace: {
     id: 'marketplace', name: 'Marketplace', fw: 2, fh: 2, hp: 380,
-    cost: { gold: 130, wood: 70, stone: 20 }, build: 12, needs: ['palace'],
-    tax: 4, shop: 'potion',
-    desc: 'Heroes spend their loot here and you tax every coin. Sells healing potions.'
+    cost: { gold: 130, wood: 70, stone: 20 }, build: 12,
+    tax: 4, shop: 'market', market: true,
+    desc: 'Five shelves of arms and trinkets. Heroes sell you what they cannot use and buy what beats what they are wearing -- and you tax both ends of every deal.'
   },
   blacksmith: {
     id: 'blacksmith', name: 'Blacksmith', fw: 2, fh: 2, hp: 420,
@@ -434,7 +434,7 @@ export const BUILDINGS = {
  * so it can be switched back on a line at a time as features come back --
  * for now the game is deliberately just a City Centre and its peasants.
  */
-export const BUILD_ORDER = ['barracks', 'rangers_guild', 'wizards_guild', 'temple'];
+export const BUILD_ORDER = ['marketplace', 'barracks', 'rangers_guild', 'wizards_guild', 'temple'];
 
 /** The full menu, kept for when the rest of the realm is reinstated. */
 export const BUILD_ORDER_FULL = ['hut', 'lumberyard', 'mining_camp', 'marketplace', 'inn', 'blacksmith',
@@ -541,10 +541,48 @@ export const MONSTERS = {
  * poke the nest and the nest pokes back, exactly as it should be.
  */
 export const LAIRS = {
-  rat: { id: 'rat', name: 'Rat Nest', hp: 380, spawn: 'rat', every: 18, max: 4, reward: 140, prop: 'lair_rat', xp: 40, wake: 2 },
-  goblin: { id: 'goblin', name: 'Goblin Camp', hp: 820, spawn: 'goblin', every: 17, max: 5, reward: 320, prop: 'lair_goblin', xp: 90, wake: 6 },
-  skeleton: { id: 'skeleton', name: 'Haunted Graveyard', hp: 1300, spawn: 'skeleton', every: 18, max: 5, reward: 640, prop: 'lair_skeleton', xp: 170, wake: 11 },
-  ogre: { id: 'ogre', name: 'Ogre Den', hp: 1900, spawn: 'ogre', every: 22, max: 3, reward: 1150, prop: 'lair_ogre', xp: 320, wake: 16 }
+  rat: { id: 'rat', name: 'Rat Nest', hp: 380, spawn: 'rat', every: 18, max: 4, garrison: 3, reward: 140, prop: 'lair_rat', xp: 40, wake: 2 },
+  goblin: { id: 'goblin', name: 'Goblin Camp', hp: 820, spawn: 'goblin', every: 17, max: 5, garrison: 4, reward: 320, prop: 'lair_goblin', xp: 90, wake: 6 },
+  skeleton: { id: 'skeleton', name: 'Haunted Graveyard', hp: 1300, spawn: 'skeleton', every: 18, max: 5, garrison: 4, reward: 640, prop: 'lair_skeleton', xp: 170, wake: 11 },
+  ogre: { id: 'ogre', name: 'Ogre Den', hp: 1900, spawn: 'ogre', every: 22, max: 3, garrison: 3, reward: 1150, prop: 'lair_ogre', xp: 320, wake: 16 }
+};
+
+/**
+ * A camp is never empty. Garrisons stand there from the first day, so walking
+ * into one is always a fight -- finding half of them deserted and razing those
+ * for free made the map a lottery rather than a decision.
+ *
+ * Camps further from home also keep a bigger guard, so the danger reads off
+ * the map: near ones are a first outing, distant ones are an expedition.
+ */
+export const GARRISON_NEAR = 26;         // tiles within which a camp keeps only its base guard
+export const GARRISON_PER_RING = 15;     // one extra defender per this many tiles beyond that
+export const GARRISON_EXTRA_CAP = 3;
+
+/**
+ * Loot. Weak things rarely carry anything worth having and strong things
+ * usually do, so the reason to go after an ogre den is not only the bounty.
+ * `bias` tilts the tier roll: an ogre is likelier to be carrying something
+ * good, never certain to be.
+ */
+export const DROPS = {
+  rat: { chance: 0.05, bias: 0 },
+  slime: { chance: 0.07, bias: 0 },
+  goblin: { chance: 0.13, bias: 0.15 },
+  skeleton: { chance: 0.22, bias: 0.4 },
+  ogre: { chance: 0.40, bias: 0.9 },
+  demon: { chance: 0.55, bias: 1.4 }
+};
+/** Shelf size and how often a new thing appears on it. */
+export const MARKET_SLOTS = 5;
+export const MARKET_RESTOCK = 22;
+
+/** A razed camp always coughs something up, and the big ones cough up well. */
+export const LAIR_DROPS = {
+  rat: { count: 1, bias: 0.2 },
+  goblin: { count: 1, bias: 0.6 },
+  skeleton: { count: 2, bias: 1.0 },
+  ogre: { count: 2, bias: 1.8 }
 };
 
 /** No raids at all before this day: time to get a mine and a guild going. */

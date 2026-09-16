@@ -8,9 +8,11 @@ import {
   BUILDINGS, CLASSES, MONSTERS, LAIRS, XP_TABLE, MAX_LEVEL, LEVEL_STATS,
   MISSIONS, STAT_ORDER, STAT_EFFECT, TRAIN_MAX, RUSH_SPEED, LAIR_ALARM_RATE, LAIR_ALARM_TIME,
   WORK_TALENTS, TALENT_RANKS, TALENT_POINTS, SPECS, SPEC_LEVEL, POWERS, ABILITIES, STEALTH_REVEAL,
+  GARRISON_NEAR, GARRISON_PER_RING, GARRISON_EXTRA_CAP,
   BLESSING, MANA_REGEN, MANA_REST, MANA_REGEN_PER_INT, XP_PER_HEAL, CREDIT_WINDOW
 } from './data.js';
 import { clamp, dist, heroName, peasantName } from './util.js';
+import { SLOT_KEYS, slotOf, canUse, scoreFor } from './items.js';
 
 let NEXT_ID = 1;
 export const newId = () => NEXT_ID++;
@@ -123,6 +125,7 @@ export class Building extends Structure {
   update(dt) {
     if (this.hitFlash > 0) this.hitFlash -= dt;
     if (!this.complete) return;
+    if (this.def.market) this.game.restockMarket(this, dt);
 
     // watch towers shoot, and see in the dark
     if (this.def.attack) {
@@ -207,19 +210,35 @@ export class Lair extends Structure {
    * Waking a lair fills it at once. A nest that only trickles out defenders
    * is a free trophy for the first hero who stumbles on it.
    */
-  wake(announce) {
-    if (this.active) return;
-    this.active = true;
+  /** How many defenders this camp keeps standing, before it is ever provoked. */
+  get garrisonSize() {
     const g = this.game;
-    if (announce) g.notify(`${this.def.name} has noticed you`, 'bad');
-    for (let i = 0; i < this.def.max; i++) {
+    const away = Math.hypot(this.tx - g.world.start.x, this.ty - g.world.start.y);
+    const beyond = Math.max(0, away - GARRISON_NEAR);
+    const extra = Math.min(GARRISON_EXTRA_CAP, Math.floor(beyond / GARRISON_PER_RING));
+    return Math.min(this.def.max, (this.def.garrison || 2) + extra);
+  }
+
+  /** Put defenders on the ground. Used for the standing guard and for waking. */
+  muster(n) {
+    const g = this.game;
+    for (let i = this.spawned.filter(u => !u.dead).length; i < n; i++) {
       if (!g.monsterBudgetOk()) break;
       const t = this.approach(null);
       const m = g.spawnUnit(this.def.spawn, toPx(t.x) + (Math.random() - 0.5) * 12,
         toPx(t.y) + (Math.random() - 0.5) * 12, 'monster');
       m.lair = this;
+      m.homeX = this.x; m.homeY = this.y;
       this.spawned.push(m);
     }
+  }
+
+  wake(announce) {
+    if (this.active) return;
+    this.active = true;
+    const g = this.game;
+    if (announce) g.notify(`${this.def.name} has noticed you`, 'bad');
+    this.muster(this.def.max);
   }
 
   damage(n, src) {
@@ -275,6 +294,8 @@ export class Unit {
     this.stealthIn = 0;        // countdown to slipping out of sight again
     this.withdraw = 0;         // breaking off after a strike from the dark
     this.blessed = 0;          // seconds left of a cleric's blessing
+    this.gear = {};            // slot key -> item worn
+    this.bag = [];             // picked up, not worn: sold at the market
     this.strikeMul = 0;        // a charged blow waiting to land
     this.stance = 'defend';    // soldiers only: defend the realm, or roam it
     this.rushing = 0;          // seconds left of answering a distress call
@@ -423,15 +444,71 @@ export class Unit {
    * laid on top, and their rank. Every term adds -- nothing here replaces
    * anything else, so a promotion can never make you worse at something.
    */
+  /** Attribute points from everything currently worn. */
+  get gearStats() {
+    const out = { str: 0, agi: 0, con: 0, int: 0 };
+    for (const k in this.gear) {
+      const it = this.gear[k];
+      if (!it) continue;
+      for (const s of STAT_ORDER) out[s] += it.stats[s] || 0;
+    }
+    return out;
+  }
+  /** One modifier totalled across everything worn. */
+  gearMod(kind) {
+    let n = 0;
+    for (const k in this.gear) {
+      const it = this.gear[k];
+      if (it && it.mods && it.mods[kind]) n += it.mods[kind];
+    }
+    return n;
+  }
+
   get stats() {
     const t = this.trained, b = this.baseStats, c = this.classBonus, l = this.levelBonus;
-    const p = this.specBonus;
+    const p = this.specBonus, e = this.gearStats;
     return {
-      str: b.str + t.str + c.str + l + p.str,
-      agi: b.agi + t.agi + c.agi + l + p.agi,
-      con: b.con + t.con + c.con + l + p.con,
-      int: b.int + t.int + c.int + l + p.int
+      str: b.str + t.str + c.str + l + p.str + e.str,
+      agi: b.agi + t.agi + c.agi + l + p.agi + e.agi,
+      con: b.con + t.con + c.con + l + p.con + e.con,
+      int: b.int + t.int + c.int + l + p.int + e.int
     };
+  }
+
+  // ---- loot -----------------------------------------------------
+  /**
+   * Take an item. Worn if it beats what is already in that slot on this
+   * hero's own terms, and otherwise kept to sell -- a warrior does not throw
+   * away a wand, they carry it to market.
+   */
+  takeItem(item) {
+    if (!item) return null;
+    if (!canUse(this, item)) { this.bag.push(item); return 'bag'; }
+    const key = this.bestSlotFor(item);
+    const worn = this.gear[key];
+    if (!worn || scoreFor(this, item) > scoreFor(this, worn)) {
+      this.gear[key] = item;
+      if (worn) this.bag.push(worn);
+      this.hp = Math.min(this.maxHpNow, this.hp);
+      return 'worn';
+    }
+    this.bag.push(item);
+    return 'bag';
+  }
+  /** Of the slots this fits, the emptiest or the weakest. */
+  bestSlotFor(item) {
+    const keys = SLOT_KEYS.filter(k => slotOf(k) === item.slot);
+    if (!keys.length) return item.slot;
+    let worst = keys[0], worstScore = Infinity;
+    for (const k of keys) {
+      const s = this.gear[k] ? scoreFor(this, this.gear[k]) : -1;
+      if (s < worstScore) { worstScore = s; worst = k; }
+    }
+    return worst;
+  }
+  /** Everything worn, as a flat list for the sheet. */
+  gearList() {
+    return SLOT_KEYS.map(k => ({ key: k, item: this.gear[k] || null }));
   }
 
   /**
@@ -461,8 +538,14 @@ export class Unit {
     const strBonus = Math.max(0.25, 1 + (this.stats.str - 5) * STAT_EFFECT.dmgPerPoint);
     const sp = this.specDef;
     const blessing = this.blessed > 0 ? BLESSING.dmgMul : 1;
-    return (this.dmg + this.bonusDmg) * strBonus * ((sp && sp.dmgMul) || 1) * blessing;
+    const steel = this.gearMod('dmg');
+    return (this.dmg + this.bonusDmg + steel) * strBonus * ((sp && sp.dmgMul) || 1) * blessing;
   }
+
+  /** What a staff or a pendant adds to a spell, as a multiplier. */
+  get spellPower() { return 1 + this.gearMod('spell') / 100; }
+  /** Anyone whose damage comes out of a book rather than an arm. */
+  get isCaster() { return !!this.def.heal || this.kind === 'wizard'; }
 
   /** Seconds between swings, quickened by agility -- and halved in a Rampage. */
   get attackRate() {
@@ -477,9 +560,10 @@ export class Unit {
   }
 
   get critChance() {
-    return Math.min(STAT_EFFECT.critCap, this.stats.int * STAT_EFFECT.critPerPoint);
+    return Math.min(STAT_EFFECT.critCap,
+      this.stats.int * STAT_EFFECT.critPerPoint + this.gearMod('crit') / 100);
   }
-  get maxMana() { return this.stats.int * STAT_EFFECT.manaPerPoint; }
+  get maxMana() { return this.stats.int * STAT_EFFECT.manaPerPoint + this.gearMod('mana'); }
   /** Mana per second. Intelligence buys the rate as well as the pool. */
   manaRegen(resting) {
     const base = resting ? MANA_REST : MANA_REGEN;
@@ -601,6 +685,7 @@ export class Unit {
     if (crit) dmg *= STAT_EFFECT.critMultiplier;
     // A blow charged by an ability, spent on this swing and this swing only.
     if (this.strikeMul > 0) { dmg *= this.strikeMul; this.strikeMul = 0; }
+    if (this.isCaster) dmg *= this.spellPower;
     // Coming out of the dark is worth more than coming at them head on.
     const sp = this.specDef;
     if (this.hidden > 0) {
@@ -610,6 +695,8 @@ export class Unit {
     const pw = this.chargeDef;
     if (pw && pw.onHit) this.gainCharge(pw.onHit);
     if (this.frenzy > 0) this.heal(dmg * 0.25);   // Rampage drinks it back
+    const steal = this.gearMod('lifesteal');
+    if (steal > 0) this.heal(dmg * steal / 100);
     if (this.def.ranged) {
       this.game.spawnProjectile(this, t, dmg, this.kind === 'wizard' ? 'fire' : 'arrow', crit);
       this.game.audio.play(this.kind === 'wizard' ? 'cast' : 'bow');

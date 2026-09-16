@@ -7,6 +7,7 @@
 // Peasants are the exception — those you may boss around directly.
 // ===================================================================
 import { toPx, toTile } from './world.js';
+import { canUse, scoreFor } from './items.js';
 import { TILE } from './art.js';
 import {
   RES_RATE, CLASSES, BUILDINGS, MISSIONS, STANCES,
@@ -688,7 +689,7 @@ function tryHeal(u, g, since) {
   if (u.mana < HEAL_COST) return false;
   u.mana -= HEAL_COST;
   u.healCool = h.rate;
-  const given = best.heal(h.amount * (1 + (u.level - 1) * 0.2));
+  const given = best.heal(h.amount * (1 + (u.level - 1) * 0.2) * u.spellPower);
   // Rank for mending, paid on health actually restored -- so there is nothing
   // to farm by bandaging the healthy. Keeping people alive is the job.
   if (given > 0) {
@@ -792,6 +793,16 @@ function findPatient(u, g) {
   return best;
 }
 
+/** Is anything on that shelf actually an upgrade for this hero, and affordable? */
+function marketHasBetter(u, b) {
+  if (!b.stock || !b.stock.length) return false;
+  for (const it of b.stock) {
+    if (!canUse(u, it) || it.value > u.gold) continue;
+    if (scoreFor(u, it) > scoreFor(u, u.gear[u.bestSlotFor(it)])) return true;
+  }
+  return false;
+}
+
 /** Everything a hero might want, scored on one scale. */
 function chooseGoal(u, g) {
   const def = u.def;
@@ -857,14 +868,19 @@ function chooseGoal(u, g) {
   }
 
   // (d) spend the loot — heroes are terrible savers, and your taxes love it
-  if (u.gold >= 50) {
+  // A full bag is its own reason to walk into town, whatever the purse says.
+  const hauling = u.bag && u.bag.length > 0;
+  if (u.gold >= 50 || hauling) {
     for (const b of g.buildings) {
       if (!b.complete || !b.def.shop) continue;
       if (b.def.shop === 'weapon' && u.gold < g.smithPrice(u)) continue;
       if (b.def.shop === 'potion' && u.potions >= 2) continue;
       if (b.def.shop === 'rest' && u.hp > u.maxHpNow * 0.9) continue;
+      if (b.def.shop === 'market' && !hauling && !marketHasBetter(u, b)) continue;
       const d = dist(u.x, u.y, b.x, b.y);
-      const value = (b.def.shop === 'weapon' ? 90 : 55) * (0.6 + greed);
+      const value = b.def.shop === 'market'
+        ? (hauling ? 130 : 105) * (0.6 + greed)
+        : (b.def.shop === 'weapon' ? 90 : 55) * (0.6 + greed);
       opts.push({ kind: 'shop', building: b, score: value / (1 + (d / TILE) * 0.2) });
     }
   }

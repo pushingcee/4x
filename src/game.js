@@ -9,14 +9,18 @@ import { Fx } from './fx.js';
 import {
   BUILDINGS, CLASSES, MONSTERS, LAIRS, FLAGS, RES_RATE, START,
   DAY_SECONDS, TAX_INTERVAL, RESURRECT_COST, HERO_CLASSES, PEACE_DAYS, STRUCTURE_DMG,
-  XP_TABLE, MAX_LEVEL,
+  XP_TABLE, MAX_LEVEL, DROPS, LAIR_DROPS, MARKET_SLOTS, MARKET_RESTOCK,
   MISSIONS, RAIDS_ENABLED, CALLING_ORDER, DISTRESS_WINDOW, RECRUIT_DMG,
   THREAT_PER_DAY, THREAT_CAP, SEPARATION_CAP, SPECS, WORK_TALENTS, XP_SHARE_BONUS, XP_SHARE_BONUS_CAP,
   SUPPORT_SHARE, CREDIT_WINDOW
 } from './data.js';
 import { makeRng, clamp, dist } from './util.js';
+import { rollItem, scoreFor, canUse, describe, TIERS } from './items.js';
 
-const MONSTER_CAP = 32;
+// Every camp now keeps a standing garrison, which on a nine-lair map is most
+// of thirty monsters before a single raid sets out. The old cap of 32 would
+// have left the far camps empty -- exactly the thing garrisons exist to stop.
+const MONSTER_CAP = 78;
 const WILDLIFE_CAP = 10;
 
 export class Game {
@@ -83,6 +87,11 @@ export class Game {
       const t = w.nearestFree(s.x + (i - 1) * 2, s.y + 3, 6);
       this.spawnUnit('peasant', toPx(t.x), toPx(t.y), 'realm');
     }
+    // Every camp keeps a standing guard from the first day. Walking into one
+    // is meant to be a fight you chose, not a coin flip on whether anybody
+    // happens to be home.
+    for (const l of this.lairs) l.muster(l.garrisonSize);
+
     this.revealAround(palace.x, palace.y, 13);
     this.camera = { x: palace.x, y: palace.y };
   }
@@ -307,6 +316,7 @@ export class Game {
         }
       }
       this.shareXp(u, src, u.def.xp);
+      this.rollDrop(u, src);
     } else if (u.isHero) {
       this.stats.heroesLost++;
       this.graves.push({
@@ -358,6 +368,8 @@ export class Game {
     this.addResource('gold', reward);
     this.notify(`${l.name} destroyed! +${reward} gold`, 'good');
     this.shareXp(l, src, l.def.xp);
+    const hoard = LAIR_DROPS[l.def.id];
+    if (hoard) this.rollDrop({ x: l.x, y: l.y, kind: l.def.id }, src, hoard);
     // its brood loses cohesion and wanders
     for (const m of l.spawned) if (!m.dead) m.raiding = true;
     const i = this.world.props.findIndex(p => p.lairId === l.id);
@@ -553,6 +565,119 @@ export class Game {
       this.notify(`${made.length} veterans answer the call`, 'good');
     }
     return made;
+  }
+
+  /**
+   * Loot. Not everything carries something -- a rat almost never does and an
+   * ogre often will -- and whatever falls goes to one of the heroes who was
+   * actually there, chosen at random among them. They wear it if it beats
+   * what they have, by their own class's reckoning, and otherwise carry it to
+   * market.
+   */
+  rollDrop(victim, killer, forced = null) {
+    const table = forced || DROPS[victim.kind];
+    if (!table) return null;
+    const count = table.count || 1;
+    const out = [];
+    for (let i = 0; i < count; i++) {
+      if (!forced && this.rng() > table.chance) continue;
+      const item = rollItem(this.rng, { tierBias: table.bias || 0 });
+      const taker = this.pickLooter(victim);
+      if (!taker) { this.groundLoot(item, victim.x, victim.y); out.push(item); continue; }
+      const where = taker.takeItem(item);
+      const tier = TIERS[item.tier];
+      this.fx.text(taker.x, taker.y - 26, item.name, tier.colour, 30);
+      if (tier.rank >= 2) {
+        this.notify(`${taker.name} finds ${item.name} (${tier.name.toLowerCase()})`, 'good');
+        this.fx.ring(taker.x, taker.y - 6, tier.colour, 14);
+        this.audio.play('level');
+      } else if (where === 'worn') {
+        this.notify(`${taker.name} puts on ${item.name}`);
+      }
+      out.push(item);
+    }
+    return out.length ? out[0] : null;
+  }
+
+  /** Whichever hero was nearby when it fell, picked at random among them. */
+  pickLooter(victim) {
+    const near = this.units.filter(u => !u.dead && u.isHero
+      && dist(u.x, u.y, victim.x, victim.y) < 260);
+    const pool = near.length ? near : this.units.filter(u => !u.dead && u.isHero);
+    if (!pool.length) return null;
+    return pool[Math.floor(this.rng() * pool.length) % pool.length];
+  }
+
+  /** Nobody to take it: it goes straight to the market shelf instead. */
+  groundLoot(item) {
+    const market = this.buildings.find(b => !b.dead && b.complete && b.def.market);
+    if (market) this.stockMarket(market, item);
+  }
+
+  // -----------------------------------------------------------------
+  // the marketplace
+  // -----------------------------------------------------------------
+  /** Put an item on the shelf, dropping the cheapest if the shelf is full. */
+  stockMarket(b, item) {
+    if (!b.stock) b.stock = [];
+    b.stock.push(item);
+    if (b.stock.length > MARKET_SLOTS) {
+      b.stock.sort((x, y) => y.value - x.value);
+      b.stock.length = MARKET_SLOTS;
+    }
+  }
+
+  /** The shelf refills itself over time, so there is always something to want. */
+  restockMarket(b, dt) {
+    if (!b.stock) b.stock = [];
+    b.restockIn = (b.restockIn === undefined ? 8 : b.restockIn) - dt;
+    if (b.restockIn > 0) return;
+    b.restockIn = MARKET_RESTOCK;
+    if (b.stock.length >= MARKET_SLOTS) return;
+    // what the shelf offers improves as the realm does
+    const bias = Math.min(1.6, (this.day - 1) * 0.05);
+    this.stockMarket(b, rollItem(this.rng, { tierBias: bias }));
+  }
+
+  /**
+   * A hero at the market: sells whatever they are carrying, then buys the one
+   * thing on the shelf that beats what they are wearing and that they can
+   * actually afford. Their gold, their decision -- you only take the tax.
+   */
+  heroTrades(u, b) {
+    if (!b.stock) b.stock = [];
+    let sold = 0;
+    for (const it of u.bag) {
+      const price = Math.round(it.value * 0.5);
+      u.gold += price;
+      this.addResource('gold', Math.round(price * 0.25));   // your cut
+      this.stockMarket(b, it);
+      sold += price;
+    }
+    if (sold > 0) {
+      u.bag.length = 0;
+      this.fx.coin(b.x, b.y - 12, sold);
+      this.audio.play('coin');
+    }
+
+    let best = null, bestGain = 0, bestIdx = -1;
+    for (let i = 0; i < b.stock.length; i++) {
+      const it = b.stock[i];
+      if (!canUse(u, it) || it.value > u.gold) continue;
+      const key = u.bestSlotFor(it);
+      const gain = scoreFor(u, it) - scoreFor(u, u.gear[key]);
+      if (gain > bestGain) { bestGain = gain; best = it; bestIdx = i; }
+    }
+    if (best) {
+      u.gold -= best.value;
+      this.addResource('gold', Math.round(best.value * 0.3));   // your cut again
+      b.stock.splice(bestIdx, 1);
+      u.takeItem(best);
+      this.notify(`${u.name} buys ${best.name}`, 'good');
+      this.fx.text(u.x, u.y - 24, 'BOUGHT', TIERS[best.tier].colour, 26);
+      this.audio.play('coin');
+    }
+    return !!best || sold > 0;
   }
 
   /**
@@ -994,6 +1119,10 @@ export class Game {
     u.shopCool = 1.4;
     const kind = b.def.shop;
     let price = 0;
+    if (kind === 'market') {
+      if (!this.heroTrades(u, b)) u.state = 'idle';
+      return;                       // the market takes its own cut as it goes
+    }
     if (kind === 'potion') {
       price = 45;
       if (u.gold < price || u.potions >= 2) { u.state = 'idle'; return; }

@@ -5,6 +5,7 @@ import { Game } from './game.js';
 import { Renderer } from './render.js';
 import { UI } from './ui.js';
 import { Audio } from './audio.js';
+import * as ITEMS from './items.js';
 
 const boot = document.getElementById('boot');
 const bar = document.getElementById('bootbar');
@@ -67,6 +68,7 @@ async function start() {
 
   // expose for debugging from the console
   window.REALM = { game, renderer, ui, audio };
+  window.REALM_ITEMS = ITEMS;
 
   if (!localStorage.getItem('realm.seen')) {
     try { localStorage.setItem('realm.seen', '1'); } catch (_) { /* private mode */ }

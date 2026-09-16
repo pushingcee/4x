@@ -6,9 +6,13 @@ import { TILE, buildingSprite, unitSprite, propSprite, flagSprite, makeCanvas, P
 import {
   BUILDINGS, BUILD_ORDER, CLASSES, FLAGS, MONSTERS, LAIRS, RES_RATE, RESURRECT_COST,
   MISSIONS, MISSION_ORDER, CALLING_ORDER, STATS, STAT_ORDER, TRAIN_MAX, MAX_LEVEL,
-  STANCES, STANCE_ORDER, WORK_TALENTS, TALENT_RANKS, SPECS, SPEC_LEVEL, ABILITIES
+  STANCES, STANCE_ORDER, WORK_TALENTS, TALENT_RANKS, SPECS, SPEC_LEVEL, ABILITIES,
+  MARKET_SLOTS
 } from './data.js';
 import { toTile, toPx } from './world.js';
+import {
+  SLOT_KEYS, SLOTS, slotOf, describe, tierColour, TIERS, canUse, scoreFor
+} from './items.js';
 import { fmt, clamp, dist } from './util.js';
 
 const $ = (s) => document.querySelector(s);
@@ -149,6 +153,57 @@ function specBlock(u) {
       <span class="sdesc ab">${ABILITIES[sp.ability].name}: ${ABILITIES[sp.ability].desc}</span>
     </button>`).join('')}
   </div>`;
+}
+
+/**
+ * The five shelves. Heroes come here on their own and spend their own gold --
+ * you get a cut of every deal in both directions -- so this is a window on
+ * the trade rather than a shop you operate.
+ */
+function marketBlock(b) {
+  const stock = b.stock || [];
+  const rows = [];
+  for (let i = 0; i < MARKET_SLOTS; i++) {
+    const it = stock[i];
+    rows.push(`<div class="gearrow ${it ? '' : 'empty'}">
+      <span class="gslot">${i + 1}</span>
+      <span class="grow2">${it
+        ? itemLine(it, `<span class="iprice">${it.value}g</span>`)
+        : '<span class="istat">empty &mdash; something will turn up</span>'}</span>
+    </div>`);
+  }
+  return `<div class="gear" data-live="market">
+    <div class="head">SHELVES &mdash; heroes buy and sell here themselves</div>
+    ${rows.join('')}</div>`;
+}
+
+/** One line of loot: what it is, what it gives, and what it is worth. */
+function itemLine(it, extra = '') {
+  if (!it) return '';
+  const t = TIERS[it.tier];
+  return `<span class="iname" style="--ic:${t.colour}">${it.name}</span>
+    <span class="istat">${describe(it)}</span>
+    ${it.flavour ? `<span class="iflav">&ldquo;${it.flavour}&rdquo;</span>` : ''}
+    ${extra}`;
+}
+
+/** Everything a hero is wearing, plus whatever they are hauling to market. */
+function gearBlock(u) {
+  const rows = SLOT_KEYS.map(k => {
+    const it = u.gear[k];
+    const label = SLOTS[slotOf(k)].name;
+    return `<div class="gearrow ${it ? '' : 'empty'}">
+      <span class="gslot">${label}</span>
+      <span class="grow2">${it ? itemLine(it) : '<span class="istat">empty</span>'}</span>
+    </div>`;
+  }).join('');
+  const bag = u.bag && u.bag.length
+    ? `<div class="gearrow bag"><span class="gslot">Bag</span><span class="grow2">
+        ${u.bag.map(it => `<span class="iname" style="--ic:${tierColour(it)}">${it.name}</span>`).join(', ')}
+        <span class="istat">carried to market</span></span></div>`
+    : '';
+  return `<div class="gear" data-live="gear">
+    <div class="head">EQUIPMENT</div>${rows}${bag}</div>`;
 }
 
 /** What a soldier does when nothing is shouting at them. */
@@ -543,9 +598,12 @@ export class UI {
   selectionSignature() {
     const sel = this.game.selection;
     return sel.length + '|' + (this.openTree || '-') + '|' + sel.map(e => [
+      e.stock ? e.stock.map(i => i.id).join('.') : '-',
       e.id, e.kindClass, e.kind || e.defId || e.type,
       e.mission, e.complete, e.amount > 0, this.r.follow === e,
       e.spec || '-', e.canSpec ? 'y' : 'n',
+      e.gear ? SLOT_KEYS.map(k => (e.gear[k] ? e.gear[k].id : 0)).join('.') : '-',
+      e.bag ? e.bag.length : 0,
       e.talents ? JSON.stringify(e.talents) : '-',
       e.talentEarned ? MISSION_ORDER.map(m => e.talentEarned(m)).join('') : '-'
     ].join(',')).join(';');
@@ -644,7 +702,7 @@ export class UI {
         ? `${missionPicker(u.mission, u.isHero)}${drillBlock(u)}${trainBlock(u)}
            ${this.openTree && WORK_TALENTS[this.openTree] ? talentTree(u, this.openTree) : ''}`
         : ''}
-      ${u.isHero ? `${specBlock(u)}${stancePicker(u.stance)}` : ''}
+      ${u.isHero ? `${specBlock(u)}${gearBlock(u)}${stancePicker(u.stance)}` : ''}
       <div class="acts">
         <button class="btn small ${following ? 'danger' : 'primary'}" data-act="follow">${following ? 'Stop following' : 'Follow'}</button>
         <button class="btn small" data-act="center">Centre</button>
@@ -745,6 +803,7 @@ export class UI {
         ${def.tax ? `<span>TAX <b>+${def.tax}</b></span>` : ''}
         ${def.guild ? `<span>HEROES <b>${g.units.filter(u => !u.dead && u.homeId === b.id).length}/${def.maxHeroes}</b></span>` : ''}
       </div>
+      ${def.market ? marketBlock(b) : ''}
       <div class="hint">${def.desc}</div>
       <div class="acts">${actions}
         <button class="btn small" data-act="center">Centre</button>
@@ -1448,6 +1507,17 @@ export class UI {
       hurt anywhere in the realm rather than waiting for them &mdash; mending the wounded
       and <b>blessing</b> whoever is about to be. Both spend <b>mana</b>, which is what
       intelligence has been buying all along. Neither has specialisations yet.</p>
+      <p><b>Loot.</b> Monsters carry things &mdash; rarely if they are weak, often if they
+      are not, always from a razed camp &mdash; and whatever falls goes to one of the
+      heroes who was there. Seven slots: weapon, chest, neck, two earrings, two rings.
+      Weapons are class-locked, and each hero judges an item by what their own class
+      wants: a warrior weighs strength, a ranger agility, a caster intelligence. They
+      wear what beats what they have and carry the rest to market.</p>
+      <p><b>The Marketplace.</b> Five shelves that restock themselves. Heroes sell you
+      what they cannot use and buy what beats what they are wearing, with their own gold
+      &mdash; and you take a cut of both ends.</p>
+      <p><b>No camp is empty.</b> Every lair keeps a garrison from the first day, and the
+      further from home the bigger it is. Walking into one is always a fight.</p>
       <p><b>Who earns the rank.</b> Everyone who had a hand in a kill shares it &mdash;
       landing a hit or taking one both count &mdash; and the party earns a little more in
       total than a lone hero would, so nobody is left out for arriving second. Clerics
