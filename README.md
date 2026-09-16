@@ -319,6 +319,22 @@ python3 -m http.server 8000
 
 Add `?seed=12345` to the URL to replay a specific realm.
 
+### Testing hatch
+
+Levelling a soldier to the rank cap honestly is a campaign's work, which is a
+lot to ask before trying a specialisation out. So:
+
+| URL | What you get |
+|---|---|
+| `?test=1` | three level-5 warriors and three level-5 rangers outside the City Centre, plus 1500 gold to build with |
+| `?heroes=warrior:2,cleric:1,wizard:1` | whatever you name, in whatever numbers |
+| `?test=1&level=3` | the same party at a different rank |
+
+They arrive at full health on walkable ground, ranked high enough that the
+specialisation picker is waiting on their sheet. Combine with `?seed=` to test
+the same party on the same map twice. Without one of these parameters nothing
+is spawned and the game starts exactly as it always did.
+
 ## Deployment
 
 Pushing to the default branch runs `.github/workflows/deploy.yml`, which publishes

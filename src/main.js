@@ -23,6 +23,25 @@ function seedFromUrl() {
   return (Math.random() * 1e9) >>> 0;
 }
 
+/**
+ * A testing hatch. `?test=1` starts you with three level-5 warriors and three
+ * level-5 rangers standing outside the City Centre, ready to pick a
+ * specialisation; `?heroes=warrior:2,cleric:1` spawns whatever you name, and
+ * `?level=3` ranks them differently. Nothing happens without the parameter.
+ */
+function testPartyFromUrl(game) {
+  const p = new URLSearchParams(location.search);
+  const want = p.get('heroes');
+  const on = want || p.get('test') === '1' || p.has('test');
+  if (!on) return;
+  const level = parseInt(p.get('level'), 10);
+  game.spawnTestParty(want || 'warrior:3,ranger:3', Number.isFinite(level) ? level : undefined);
+  // enough in the coffers to put up the guilds and try things out
+  game.res.gold += 1500;
+  game.res.wood += 800;
+  game.res.stone += 500;
+}
+
 async function start() {
   const seed = seedFromUrl();
   await step(12, 'raising mountains...');
@@ -35,6 +54,8 @@ async function start() {
   const renderer = new Renderer(canvas, game);
   renderer.topInset = 36;
   await step(82, 'waking the monsters...');
+
+  testPartyFromUrl(game);
 
   const ui = new UI(game, renderer, audio, document.getElementById('app'));
   renderer.centerOn(game.palace.x, game.palace.y + 12);

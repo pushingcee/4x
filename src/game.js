@@ -9,6 +9,7 @@ import { Fx } from './fx.js';
 import {
   BUILDINGS, CLASSES, MONSTERS, LAIRS, FLAGS, RES_RATE, START,
   DAY_SECONDS, TAX_INTERVAL, RESURRECT_COST, HERO_CLASSES, PEACE_DAYS, STRUCTURE_DMG,
+  XP_TABLE, MAX_LEVEL,
   MISSIONS, RAIDS_ENABLED, CALLING_ORDER, DISTRESS_WINDOW, RECRUIT_DMG,
   THREAT_PER_DAY, THREAT_CAP, SEPARATION_CAP, SPECS, WORK_TALENTS, XP_SHARE_BONUS, XP_SHARE_BONUS_CAP,
   SUPPORT_SHARE, CREDIT_WINDOW
@@ -515,6 +516,43 @@ export class Game {
     this.notify(`${w.name} becomes a ${cls.name}`, 'good');
     this.lastTrained = w;
     return w;
+  }
+
+  /**
+   * Drop a ready-made party next to the City Centre. This is a testing hatch,
+   * reached with ?test=1 (or ?heroes=warrior:3,cleric:1), not something the
+   * game does on its own -- levelling a soldier to the rank cap the honest way
+   * is a campaign's work, and trying out a specialisation should not require
+   * one first.
+   */
+  spawnTestParty(spec = 'warrior:3,ranger:3', level = MAX_LEVEL) {
+    const made = [];
+    let ring = 3;
+    for (const part of String(spec).split(',')) {
+      const [kind, nRaw] = part.split(':');
+      const cls = CLASSES[kind];
+      if (!cls || !HERO_CLASSES.includes(kind)) continue;
+      const n = Math.max(1, Math.min(8, parseInt(nRaw, 10) || 1));
+      for (let i = 0; i < n; i++) {
+        const a = (made.length / 6) * Math.PI * 2 + 0.4;
+        const t = this.world.nearestFree(
+          Math.round(toTile(this.palace.x) + Math.cos(a) * ring),
+          Math.round(toTile(this.palace.y) + Math.sin(a) * ring), 9);
+        const u = this.spawnUnit(kind, toPx(t.x), toPx(t.y), 'realm');
+        u.level = Math.max(1, Math.min(MAX_LEVEL, level));
+        u.xp = XP_TABLE[u.level - 1] || 0;
+        u.hp = u.maxHpNow;
+        u.mana = u.maxMana;
+        u.gold = 40;
+        u.stance = 'defend';
+        made.push(u);
+        if (made.length % 6 === 0) ring += 2;
+      }
+    }
+    if (made.length) {
+      this.notify(`${made.length} veterans answer the call`, 'good');
+    }
+    return made;
   }
 
   /**
