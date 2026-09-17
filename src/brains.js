@@ -102,10 +102,6 @@ function useAbilityWisely(u, g) {
 export function peasantBrain(u, since) {
   const g = u.game;
 
-  // A villager called up to a guild stops being a worker: they drill, and
-  // they stand between the monsters and everyone still holding a shovel.
-  if (u.knightKind) return recruitBrain(u, g, since);
-
   // 1. danger. A peasant will run from something it merely sees, but if the
   //    thing is already biting them, running just means dying tired.
   const foe = g.nearestEnemy(u.x, u.y, 64, 'realm');
@@ -211,96 +207,14 @@ function missionStalled(u, g, mission) {
   idleAround(u, g, u.homeX, u.homeY, 5);
 }
 
-/**
- * Militia. Marked for knighthood, not yet knighted: they drill down the clock,
- * guard whoever is still working, and only run when they are nearly finished.
- */
-function recruitBrain(u, g, since) {
-  u.knightLeft = Math.max(0, (u.knightLeft || 0) - since);
-
-  // wounded badly enough that dying would waste the training
-  if (u.hp < u.maxHpNow * 0.3) {
-    const foe = g.nearestEnemy(u.x, u.y, 70, 'realm');
-    if (foe) {
-      u.fleeing = 2;
-      u.state = 'flee';
-      u.target = null;
-      const safe = g.nearestBuilding(u.x, u.y, b => b.complete) || g.palace;
-      if (safe && !touching(u, safe, 2)) walkTo(u, g, safe);
-      return;
-    }
-  }
-
-  // ready: report to the guild and be knighted
-  if (u.knightLeft <= 0) {
-    const hall = g.buildings.find(b => b.id === u.knightHall && !b.dead && b.complete)
-      || g.nearestBuilding(u.x, u.y, b => b.complete && b.def.guild === u.knightKind);
-    if (!hall) { g.cancelKnighthood(u); return; }
-    if (touching(u, hall, 1.6)) { g.knightVillager(u, u.knightKind, hall); return; }
-    u.state = 'walk';
-    walkTo(u, g, hall);
-    return;
-  }
-
-  // something already biting them, or biting anyone else
-  if (u.target && !u.target.dead && u.distTo(u.target) < 170) {
-    u.state = 'defend';
-    u.fight(since);
-    return;
-  }
-  u.target = null;
-
-  const victim = g.distressed();
-  if (victim && victim !== u) {
-    const foe = (victim.lastAttacker && !victim.lastAttacker.dead
-      && dist(victim.lastAttacker.x, victim.lastAttacker.y, victim.x, victim.y) < 160)
-      ? victim.lastAttacker
-      : g.nearestEnemy(victim.x, victim.y, 140, 'realm', false);
-    if (foe) {
-      u.rushing = 1.2;
-      u.state = 'rescue';
-      u.engage(foe);
-      u.fight(since);
-      return;
-    }
-  }
-
-  // anything prowling near the people they are supposed to be protecting
-  const near = g.nearestEnemy(u.x, u.y, 150, 'realm', false);
-  if (near) {
-    const threatens = g.units.some(v => !v.dead && v.kind === 'peasant' && !v.knightKind
-      && dist(v.x, v.y, near.x, near.y) < 150)
-      || !!g.nearestBuilding(near.x, near.y, b => b.complete, 150);
-    if (threatens) {
-      u.state = 'defend';
-      u.engage(near);
-      u.fight(since);
-      return;
-    }
-  }
-
-  // otherwise walk the rows among the people still working
-  u.postFor = (u.postFor || 0) - since;
-  if (!u.post || u.post.dead || u.postFor <= 0) {
-    const folk = g.units.filter(v => !v.dead && v.kind === 'peasant' && v !== u && !v.knightKind);
-    const anchors = folk.length ? folk : g.buildings.filter(b => !b.dead);
-    u.post = anchors.length ? anchors[(Math.random() * anchors.length) | 0] : g.palace;
-    u.postFor = 6 + Math.random() * 6;
-  }
-  const p = u.post && !u.post.dead ? u.post : g.palace;
-  idleAround(u, g, p ? p.x : u.homeX, p ? p.y : u.homeY, 4);
-  u.state = 'drill';
-}
-
 function carryCap(u) {
-  const base = RES_RATE[u.job?.node?.kind]?.carry || 12;
-  return base * u.talentMul(u.mission, 'capacity');
+  return RES_RATE[u.job?.node?.kind]?.carry || 12;
 }
 
 function doHarvest(u, g, since) {
   const node = u.job && u.job.node;
   if (!node || node.amount <= 0) { u.job = null; u.state = 'idle'; return; }
-  const cap = RES_RATE[node.kind].carry * u.talentMul(u.mission, 'capacity');
+  const cap = RES_RATE[node.kind].carry;
   if (u.carry >= cap) return deliver(u, g);
 
   if (touching(u, node)) {
@@ -309,14 +223,10 @@ function doHarvest(u, g, since) {
     u.path = null;
     const info = RES_RATE[node.kind];
     const boost = g.depotBoost(node.tx, node.ty, info.res);
-    const got = Math.min(
-      info.rate * (1 + boost) * u.talentMul(u.mission, 'rate') * since,
-      cap - u.carry, node.amount);
+    const got = Math.min(info.rate * (1 + boost) * since, cap - u.carry, node.amount);
     u.carry += got;
     node.amount -= got;
     u.carryRes = info.res;
-    // the calling only teaches you anything while you are actually swinging
-    u.train(u.mission, got);
     if (Math.random() < 0.28) {
       g.fx.puff(u.x + (Math.random() - .5) * 8, u.y - 4,
         info.res === 'gold' ? '#ffc94a' : info.res === 'stone' ? '#b6bccb' : '#b4753a', 2);
@@ -363,8 +273,7 @@ function doBuild(u, g, since, site) {
   if (touching(u, site, 1.5)) {
     u.state = 'build';
     u.path = null;
-    site.addProgress(since * u.talentMul('builder', 'rate') / site.def.build);
-    u.train('builder', since);
+    site.addProgress(since / site.def.build);
     if (Math.random() < 0.4) g.fx.puff(site.x + (Math.random() - .5) * site.fw * TILE, site.bottom - 6, '#d8cfe6', 1);
   } else {
     u.state = 'walk';
@@ -375,8 +284,7 @@ function doBuild(u, g, since, site) {
 function doRepair(u, g, since, b) {
   if (touching(u, b, 1.5)) {
     u.path = null;
-    b.hp = Math.min(b.maxHp, b.hp + b.maxHp * 0.06 * since * u.talentMul('builder', 'rate'));
-    u.train('builder', since * 0.5);   // mending counts, but for less
+    b.hp = Math.min(b.maxHp, b.hp + b.maxHp * 0.06 * since);
     if (Math.random() < 0.3) g.fx.puff(b.x, b.bottom - 8, '#ffd070', 1);
   } else {
     walkTo(u, g, b);

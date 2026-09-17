@@ -65,9 +65,6 @@ export const STAT_EFFECT = {
   critMultiplier: 1.75
 };
 
-/** Stat points a calling can grant, and how much work that takes. */
-export const TRAIN_MAX = 5;
-
 /**
  * Peasant missions. You do not tell a peasant which rock to hit -- you tell
  * them what they are for, and they go find the work themselves, forever,
@@ -83,46 +80,42 @@ export const MISSIONS = {
   miner: {
     id: 'miner', name: 'Miner', short: 'Mine', colour: '#ffc94a',
     nodes: ['goldmine'], res: 'gold',
-    trains: ['str', 'con'], trainFull: 260,
     desc: 'Seeks out the nearest gold mine and works it until it is empty, then finds another.'
   },
   woodcutter: {
     id: 'woodcutter', name: 'Woodcutter', short: 'Wood', colour: '#b4753a',
     nodes: ['tree', 'pine'], res: 'wood',
-    trains: ['agi', 'str'], trainFull: 260,
     desc: 'Fells the nearest woodland, tree by tree, and hauls the timber home.'
   },
   quarrier: {
     id: 'quarrier', name: 'Quarrier', short: 'Stone', colour: '#b6bccb',
     nodes: ['quarry'], res: 'stone',
-    trains: ['con', 'int'], trainFull: 260,
     desc: 'Cuts stone at the nearest quarry and keeps going once it is exhausted.'
   },
   builder: {
     id: 'builder', name: 'Builder', short: 'Build', colour: '#7fd8a0',
     build: true,
-    trains: ['int', 'agi'], trainFull: 150,
     desc: 'Runs to whatever is half-built or damaged and works on it.'
   },
   warrior: {
     id: 'warrior', name: 'Warrior', short: 'War', colour: '#e07a50',
-    becomes: 'warrior', at: 'barracks', drill: 50,
-    desc: 'Drills at the Barracks, standing guard over the other villagers until ready. Everything they learned in the fields goes with them -- and from then on they answer flags, not orders.'
+    becomes: 'warrior', at: 'barracks',
+    desc: 'Hired at the Barracks. Answers flags, not orders, and charges anything.'
   },
   ranger: {
     id: 'ranger', name: 'Ranger', short: 'Scout', colour: '#3a8a5a',
-    becomes: 'ranger', at: 'rangers_guild', drill: 42,
-    desc: 'Drills at the Rangers Guild, guarding the village meanwhile, then takes to the woods as a fast archer who sees further than anyone.'
+    becomes: 'ranger', at: 'rangers_guild',
+    desc: 'Hired at the Rangers Guild. A fast archer who sees further than anyone.'
   },
   wizard: {
     id: 'wizard', name: 'Wizard', short: 'Magic', colour: '#6fb6ff',
-    becomes: 'wizard', at: 'wizards_guild', drill: 58,
-    desc: 'Studies at the Wizards Guild, then throws fire that lands on everything standing together. Keeps their distance, and runs early -- a wizard in melee is a dead wizard.'
+    becomes: 'wizard', at: 'wizards_guild',
+    desc: 'Hired at the Wizards Guild. Throws fire that lands on everything standing together, and runs early.'
   },
   cleric: {
     id: 'cleric', name: 'Cleric', short: 'Faith', colour: '#ffe9a0',
-    becomes: 'cleric', at: 'temple', drill: 54,
-    desc: 'Takes orders at the Temple, then walks the realm looking for the hurt. Mends anyone bleeding and blesses anyone about to be, wherever they are.'
+    becomes: 'cleric', at: 'temple',
+    desc: 'Hired at the Temple. Walks the realm looking for the hurt, mending anyone bleeding and blessing anyone about to be.'
   }
 };
 
@@ -184,48 +177,6 @@ export const MEND_RANGE = 520;
 /** How close a cleric will let anything hostile get before backing off. */
 export const CLERIC_KEEP = 52;
 export const MEND_AT = 0.72;
-
-/**
- * ===================================================================
- * TALENTS -- what a villager chooses to do with what the work taught them.
- * ===================================================================
- *
- * Every working calling has a tree of three talents, three ranks each, and
- * hands out three points as its training track fills -- so the points never
- * cover the whole tree and the choice is real. Points are earned per calling
- * and spent in that calling's tree; a villager who mastered mining and
- * woodcutting has two trees to spend in, and keeps both forever.
- */
-export const TALENT_RANKS = 3;
-export const TALENT_POINTS = 3;
-
-/**
- * The three talents are the same three ideas in every tree -- carry more,
- * work faster, walk quicker -- under names that fit the job. Same shape
- * everywhere means a player learns the tree once.
- */
-export const WORK_TALENTS = {
-  miner: [
-    { id: 'capacity', name: 'Deep Pockets', per: 0.25, desc: '+25% ore per load' },
-    { id: 'rate', name: 'Steady Swing', per: 0.20, desc: '+20% faster at the seam' },
-    { id: 'haste', name: 'Sure Footing', per: 0.12, desc: '+12% movement while working' }
-  ],
-  woodcutter: [
-    { id: 'capacity', name: 'Big Bundles', per: 0.25, desc: '+25% timber per load' },
-    { id: 'rate', name: 'Sharp Axe', per: 0.20, desc: '+20% faster felling' },
-    { id: 'haste', name: 'Trailblazer', per: 0.12, desc: '+12% movement while working' }
-  ],
-  quarrier: [
-    { id: 'capacity', name: 'Broad Back', per: 0.25, desc: '+25% stone per load' },
-    { id: 'rate', name: 'True Chisel', per: 0.20, desc: '+20% faster cutting' },
-    { id: 'haste', name: 'Quarry Legs', per: 0.12, desc: '+12% movement while working' }
-  ],
-  builder: [
-    { id: 'capacity', name: 'Full Hod', per: 0.25, desc: '+25% carried to site' },
-    { id: 'rate', name: 'Scaffolding', per: 0.20, desc: '+20% faster building and mending' },
-    { id: 'haste', name: 'On The Run', per: 0.12, desc: '+12% movement while working' }
-  ]
-};
 
 /**
  * ===================================================================
@@ -327,13 +278,14 @@ export const SPECS = {
 /** How long a unit stays unseen after breaking stealth by striking. */
 export const STEALTH_REVEAL = 2.5;
 
-/** A villager under arms but not yet knighted: militia, and a little tougher. */
-export const RECRUIT_DMG = 3;
-
-/** The work callings: what the Folk tab counts and what training tracks exist. */
+/** The work callings: what the Folk tab counts. */
 export const MISSION_ORDER = ['miner', 'woodcutter', 'quarrier', 'builder', 'none'];
 
-/** Everything you can set a villager to, including leaving the fields for good. */
+/**
+ * Every calling plus the four soldier classes. The soldier entries are not
+ * callings a villager can take -- nobody is promoted out of the fields any
+ * more -- they are here so the Realm tab has a row per guild to count.
+ */
 export const CALLING_ORDER = ['miner', 'woodcutter', 'quarrier', 'builder', 'warrior', 'ranger', 'wizard', 'cleric', 'none'];
 
 /**
@@ -359,13 +311,13 @@ export const BUILDINGS = {
     id: 'lumberyard', name: 'Lumberyard', fw: 2, fh: 2, hp: 320,
     cost: { gold: 70, wood: 20, stone: 10 }, build: 9,
     depot: true, boost: { wood: 0.6 }, radius: 11,
-    desc: 'Drop-off for timber. Peasants cutting wood nearby haul 60% more.'
+    desc: 'Drop-off for timber. Woodcutters within eleven tiles fell 60% faster.'
   },
   mining_camp: {
     id: 'mining_camp', name: 'Mining Camp', fw: 2, fh: 2, hp: 340,
     cost: { gold: 70, wood: 40, stone: 0 }, build: 9,
     depot: true, boost: { gold: 0.5, stone: 0.5 }, radius: 11,
-    desc: 'Drop-off for ore and stone. Nearby miners work 50% faster.'
+    desc: 'Drop-off for ore and stone. Miners and quarriers within eleven tiles work 50% faster.'
   },
   marketplace: {
     id: 'marketplace', name: 'Marketplace', fw: 2, fh: 2, hp: 380,
@@ -389,7 +341,7 @@ export const BUILDINGS = {
     id: 'barracks', name: 'Barracks', fw: 2, fh: 2, hp: 560,
     cost: { gold: 130, wood: 90, stone: 30 }, build: 14,
     guild: 'warrior', maxHeroes: 3, sight: 9,
-    desc: 'Turns a villager into a Warrior for a fee. They patrol, explore and answer reward flags -- but they pick their own fights.'
+    desc: 'Hires Warriors. They patrol, explore and answer reward flags -- but they pick their own fights.'
   },
   warriors_guild: {
     id: 'warriors_guild', name: 'Warriors Guild', fw: 2, fh: 2, hp: 620,
@@ -401,25 +353,25 @@ export const BUILDINGS = {
     id: 'rangers_guild', name: 'Rangers Guild', fw: 2, fh: 2, hp: 520,
     cost: { gold: 160, wood: 110, stone: 10 }, build: 15, needs: ['palace'],
     guild: 'ranger', maxHeroes: 3, sight: 10,
-    desc: 'Turns a villager into a Ranger: fast, sharp-eyed, deadly at range and never where you left them.'
+    desc: 'Hires Rangers: fast, sharp-eyed, deadly at range and never where you left them.'
   },
   wizards_guild: {
     id: 'wizards_guild', name: 'Wizards Guild', fw: 2, fh: 2, hp: 500,
     cost: { gold: 240, wood: 80, stone: 90 }, build: 20,
     guild: 'wizard', maxHeroes: 2, sight: 9,
-    desc: 'Turns a villager into a Wizard: fire at range that lands on a whole pack at once, wrapped in nothing but a robe.'
+    desc: 'Hires Wizards: fire at range that lands on a whole pack at once, wrapped in nothing but a robe.'
   },
   temple: {
     id: 'temple', name: 'Temple', fw: 2, fh: 2, hp: 560,
     cost: { gold: 220, wood: 90, stone: 70 }, build: 19,
     guild: 'cleric', maxHeroes: 2, resurrect: 0.5, sight: 9,
-    desc: 'Turns a villager into a Cleric, who goes looking for the hurt and the outnumbered instead of waiting for them. Also halves the cost of raising the dead.'
+    desc: 'Hires Clerics, who go looking for the hurt and the outnumbered instead of waiting for them. Also halves the cost of raising the dead.'
   },
   guardhouse: {
     id: 'guardhouse', name: 'Guard House', fw: 2, fh: 2, hp: 600,
     cost: { gold: 110, wood: 60, stone: 40 }, build: 12, needs: ['palace'],
     garrison: 3, garrisonRange: 150,
-    desc: 'Two guards patrol nearby and never wander off. Unlike heroes, they obey.'
+    desc: 'Three guards patrol nearby and never wander off. Unlike heroes, they obey.'
   },
   tower: {
     id: 'tower', name: 'Watch Tower', fw: 1, fh: 1, hp: 440,
@@ -430,15 +382,19 @@ export const BUILDINGS = {
 };
 
 /**
- * What the player can actually put down. Everything else stays defined above
- * so it can be switched back on a line at a time as features come back --
- * for now the game is deliberately just a City Centre and its peasants.
+ * What the player can actually put down, in the order the menu shows it.
+ *
+ * The realm is no longer a City Centre and a ring of peasants walking further
+ * and further for worse and worse seams. Depots go out to the seams, and the
+ * things that keep a depot alive go out with them -- which is the whole game
+ * now: the rich ground is the far ground, and the far ground is where the
+ * lairs are.
  */
-export const BUILD_ORDER = ['marketplace', 'barracks', 'rangers_guild', 'wizards_guild', 'temple'];
+export const BUILD_ORDER = ['hut', 'lumberyard', 'mining_camp', 'guardhouse', 'tower',
+  'marketplace', 'inn', 'blacksmith', 'barracks', 'rangers_guild', 'wizards_guild', 'temple'];
 
-/** The full menu, kept for when the rest of the realm is reinstated. */
-export const BUILD_ORDER_FULL = ['hut', 'lumberyard', 'mining_camp', 'marketplace', 'inn', 'blacksmith',
-  'warriors_guild', 'rangers_guild', 'temple', 'wizards_guild', 'guardhouse', 'tower'];
+/** Kept as an alias: nothing is switched off behind a flag any more. */
+export const BUILD_ORDER_FULL = BUILD_ORDER;
 
 /**
  * Lairs near your buildings send raiding parties once the peace ends. Distance
@@ -459,29 +415,33 @@ export const CLASSES = {
     id: 'peasant', name: 'Peasant', hp: 34, dmg: 5, rate: 1.1, range: 12, speed: 30,
     sight: 6, cost: { gold: 30 }, greed: 0, courage: 0, wander: 6, pop: 1,
     stats: { str: 5, agi: 5, con: 5, int: 5 },
-    desc: 'Digs, chops, builds, repairs, panics. Grows into whatever you make them do.'
+    desc: 'Digs, chops, builds, repairs, panics. The realm runs on them.'
   },
   warrior: {
     id: 'warrior', name: 'Warrior', hp: 130, dmg: 14, rate: 0.85, range: 14, speed: 33,
     sight: 8, cost: { gold: 115 }, greed: 0.55, courage: 0.22, wander: 17, pop: 0,
+    stats: { str: 8, agi: 5, con: 8, int: 5 },
     knight: { str: 8, agi: 2, con: 7, int: 0 },
     xpMul: 1, desc: 'Melee bruiser. Brave to the point of stupidity.'
   },
   ranger: {
     id: 'ranger', name: 'Ranger', hp: 84, dmg: 11, rate: 1.0, range: 86, speed: 44,
     sight: 11, cost: { gold: 105 }, greed: 0.9, courage: 0.4, wander: 30, pop: 0,
+    stats: { str: 5, agi: 8, con: 6, int: 5 },
     knight: { str: 2, agi: 9, con: 3, int: 1 },
     ranged: true, desc: 'Scout and archer. Explores on her own, loves a bounty.'
   },
   wizard: {
     id: 'wizard', name: 'Wizard', hp: 66, dmg: 26, rate: 1.7, range: 100, speed: 29,
     sight: 9, cost: { gold: 180 }, greed: 0.7, courage: 0.55, wander: 14, pop: 0,
+    stats: { str: 5, agi: 5, con: 6, int: 8 },
     knight: { str: 0, agi: 1, con: 1, int: 11 },
     ranged: true, splash: 26, desc: 'Fireballs from afar. Flees early, and rightly so.'
   },
   cleric: {
     id: 'cleric', name: 'Cleric', hp: 96, dmg: 9, rate: 1.2, range: 16, speed: 33,
     sight: 9, cost: { gold: 150 }, greed: 0.3, courage: 0.35, wander: 16, pop: 0,
+    stats: { str: 5, agi: 5, con: 7, int: 8 },
     knight: { str: 1, agi: 1, con: 4, int: 8 },
     heal: { amount: 24, range: 80, rate: 2.0 }, desc: 'Heals wounded allies, smites the odd skeleton.'
   },
@@ -629,8 +589,10 @@ export const FLAGS = {
 };
 
 /**
- * With the City Centre as the only depot, every load walks the whole way
- * home. Bigger packs keep the ratio of working to trudging sane.
+ * A load walks to the nearest depot, and at the start of the game the City
+ * Centre is the only one there is -- so these numbers are tuned for the long
+ * trudge home. A Lumberyard or a Mining Camp out at the seam is what shortens
+ * it, which is exactly the decision the outposts exist to offer.
  */
 export const RES_RATE = {
   goldmine: { res: 'gold', rate: 1.5, carry: 20 },

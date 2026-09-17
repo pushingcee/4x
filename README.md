@@ -19,7 +19,11 @@ work themselves.
 - **Tap a peasant** and pick a calling: **Mine**, **Wood**, **Stone**, **Build** or **Idle**.
 - Or open the **Folk** tab to move the workforce around in bulk, or pick one villager
   by name and give them a calling of their own.
-- **Build** a Barracks, train warriors, then raise a **Flag** to tempt them somewhere.
+- **Build** a Lumberyard or a Mining Camp out beside a far seam — it becomes the depot
+  everything is hauled to, and it makes the crew around it faster.
+- Cover an outpost with a **Guard House** or a **Watch Tower**, because raiders go for
+  whatever building is nearest and that is now yours.
+- **Build** a Barracks and **hire** a warrior, then raise a **Flag** to tempt them somewhere.
 
 Keyboard, if you are at a desk: `B` peasants, `K` realm, `P` select peasants,
 `M` full map, `C` follow the selected unit, `space` pause, arrows pan, `+`/`-` zoom,
@@ -49,7 +53,7 @@ their own.
 
 Every unit has four attributes. Five is the baseline — a unit with straight fives
 behaves exactly as its raw definition says — and **every single point counts**, so
-nothing a veteran learns is ever rounded away.
+nothing a level ever grants is rounded away.
 
 | Attribute | Effect |
 |---|---|
@@ -58,78 +62,115 @@ nothing a veteran learns is ever rounded away.
 | **Constitution** | +7 health per point |
 | **Intelligence** | +4 mana per point, and +0.8% critical chance per point (capped at 45%) |
 
-Peasants start at 5 across the board; hero classes start lopsided (a warrior is strong
-and tough and never crits, a wizard is frail and crits often) which is the seed of the
-class system.
+Peasants sit at 5 across the board and stay there — they are workers, not projects.
+Hero classes arrive lopsided, and that is the whole class system: a warrior is strong
+and tough and never crits, a wizard is frail and crits often.
 
-**Work is what changes them.** Each calling trains two attributes, up to five points
-each, and progress only accrues while a peasant is *actually doing the job* — walking
-to the seam and hauling the load home teach nothing.
+A hero's numbers come from exactly four places, and every one of them is visible on
+their sheet:
 
-| Calling | Trains |
+| Source | What it gives |
 |---|---|
-| Miner | STR + CON |
-| Woodcutter | AGI + STR |
-| Quarrier | CON + INT |
-| Builder | INT + AGI |
+| **Class baseline** | what the profession is, e.g. a warrior at STR 8 / CON 8 |
+| **Class bonus** | the layer on top, +8 STR / +7 CON for a warrior |
+| **Rank** | **+5 to every attribute** per level, to a cap of level 5 |
+| **Gear and specialisation** | what they looted and what they chose at the cap |
 
-Points earned are permanent and stack across callings, so a peasant who has mastered
-mining and then woodcutting ends up at STR 15. Veterans are worth keeping.
+A freshly hired warrior is STR 16 / CON 15 with 200 health. **Rank is the only
+progression a unit has, and rank comes from fighting** — the table runs
+60 / 180 / 420 / 850 experience, so level 5 is a campaign's work rather than an
+afternoon's. What that buys, measured against the same hero on their first day:
 
-**Nothing is ever lost.** Knighting a villager keeps every point and every
-talent they earned, and a soldier can be given a working calling again at any
-time — tell a warrior to mine and they will go and mine, with all their
-training intact. A knighthood is a layer on top of who somebody is, not a
-replacement for it.
+| Hero at level 5 | Health | Damage |
+|---|---|---|
+| Warrior (Fury) | ×1.70 | ×1.53 |
+| Warrior (Protection) | ×2.23 | ×1.44 |
+| Ranger (Longbowman) | ×2.25 | ×1.83 |
+| Wizard | ×2.75 | ×1.44 |
+| Cleric | ×2.01 | ×1.43 |
 
-Tap any peasant and their sheet shows all four tracks at once — mastered, part-done,
-and never started — so you can see exactly what a given villager has become.
+There used to be a second track: villagers trained attributes by working, and a knight
+was a villager who had been walked through every calling first. It is gone. It read as
+a checklist with one correct order rather than a decision — the fastest route to a good
+knight was always the same five instructions in the same order — and it made the answer
+to every question "grind another villager".
 
-**Warriors grow by rank instead.** They cap at **level 5**, and every level grants
-**+5 to every attribute** — the only thing levels do, so a hero's numbers come from one
-place. Ranks are *earned*, not handed out: the table runs 60 / 180 / 420 / 850 experience,
-so level 5 is the work of a whole campaign rather than an afternoon.
+Progression now lives on the map instead. Every load walks to the nearest **depot**, so
+**distance is the whole economy** — and the answer to distance is to move the depot.
 
-The two systems multiply. A villager taken through **every** calling and then knighted
-and levelled to 5 ends up with roughly **2.2× the health and 2.7× the damage** of a
-conscript pulled straight off the farm — near **six times** the staying power in a
-straight fight. Raising a veteran is the strongest thing you can do with your time.
+## Outposts
 
-Every load walks back to the City Centre, so **distance is the whole economy**. Where
-the seams fell on your map decides how rich you are.
+At the start the City Centre is the only depot on the map, so every load walks the whole
+way home and the rich far seams are barely worth working. Two buildings change that:
 
-## Warriors and flags
+| Outpost | What it does |
+|---|---|
+| **Lumberyard** | A depot for timber. Woodcutters within 11 tiles fell **60% faster**. |
+| **Mining Camp** | A depot for ore and stone. Miners and quarriers within 11 tiles work **50% faster**. |
+
+Plant one beside a distant seam and it becomes the nearest depot for everything around
+it: the walk collapses, and the crew gets faster into the bargain.
+
+**An outpost is a bet, not a free upgrade.** Raiders march on whatever building is
+nearest to them, and the far ground is where the lairs are — so a Lumberyard out at the
+edge of the map is the first thing a camp finds. Two buildings answer that:
+
+| Cover | What it does |
+|---|---|
+| **Guard House** | Keeps three guards who patrol within 150px and **never wander off**. |
+| **Watch Tower** | Shoots bolts at anything hostile in range, and lifts the fog around it. |
+
+Both cost the stone you went out there to cut, which is the loop: the far seam pays for
+the outpost, the outpost pays for its cover, the cover lets you sit close enough to a
+lair to be worth raiding, and clearing that lair opens the ground past it.
+
+**The depot and the cover multiply.** Ten peasants put on the furthest gold seam of the
+seed-4242 map — 506px from home, no soldiers anywhere — over four minutes, averaged
+across forty runs:
+
+| | Gold in four minutes |
+|---|---|
+| Bare seam | 46 |
+| Guard House + Watch Tower, no depot | 89 |
+| Mining Camp, no cover | 38 |
+| **Mining Camp + cover** | **319** |
+
+That is about **seven times** a bare far seam, and neither building gets close on its
+own: a depot with nobody guarding it is a depot your crew never lives long enough to
+reach, and cover with no depot just means they survive a walk that was never worth
+making.
+
+That run is deliberately the worst case — the furthest seam, unescorted, with the peace
+already over — and the crew is still wiped inside four minutes. Outposts buy you the
+economy of the far ground; they do not buy you the right to be there. That part is what
+soldiers are for.
+
+Losing an outpost is a setback, not a defeat. Losing the City Centre still is.
+
+## Hiring soldiers, and flags
 
 Build a **Barracks** (Warriors) or a **Rangers Guild** (fast archers who see further)
-and you can knight villagers into soldiers — but a soldier is never conjured out of
-gold, and never on the spot. Set a villager's calling to **War** or **Scout** and they
-are **called up**: they down tools, take up a spear, and drill for the best part of a
-minute before they are knighted. The guild's own button calls up whoever is idle, and
-only pulls somebody off a job if nobody is standing around.
+and hire from it. **A hero costs gold and nothing else** — no villager puts down a pick,
+nobody drills, and your workforce does not shrink. Each guild holds only two or three,
+so the number of soldiers you can field is a question of what you have built, not of
+how many villagers you have ground through the fields.
 
-**A recruit is already useful.** While drilling they stop gathering and become militia —
-they walk among the people still working, hit harder than an ordinary villager, and go
-for anything that threatens a worker. Change their calling before the drill finishes and
-they go back to the fields with the fee refunded. Recruits hold a place in their guild's
-roster, so three drilling villagers fill a three-soldier Barracks.
+| | STR | AGI | CON | INT | Health |
+|---|---|---|---|---|---|
+| Warrior | 16 | 7 | 15 | 5 | 200 |
+| Ranger | 7 | 17 | 9 | 6 | 112 |
+| Wizard | 5 | 6 | 7 | 19 | 80 |
+| Cleric | 6 | 6 | 11 | 16 | 138 |
 
-A class is a **layer, not a replacement**. Knighting keeps everything a villager already
-was — their baseline and everything the work taught them — and adds the class bonus on
-top, so nothing can ever go *down* by being promoted:
-
-| | STR | AGI | CON | INT |
-|---|---|---|---|---|
-| Warrior | +8 | +2 | +7 | — |
-| Ranger | +2 | +9 | +3 | +1 |
-
-A villager who mastered mining becomes a STR 18 / CON 17 warrior with 214 health, where
-one straight off the farm starts at 13 / 12 and 179. Veterans make better soldiers.
+A hero can still be given a working **calling** — tell a warrior to mine and they will
+go and mine. Being sworn to a guild is what somebody *is*; a calling is only what they
+are doing this afternoon.
 
 ### Wizards and Clerics
 
-Two more guilds, and two callings that are nothing like the first two.
+Two more guilds, and two classes that are nothing like the first two.
 
-A **Wizards Guild** turns a villager into a **Wizard**: fire at a hundred
+A **Wizards Guild** hires a **Wizard**: fire at a hundred
 pixels' reach that lands on *everything* standing together, not just what it
 was aimed at. Full damage on the target and 60% on everyone within a
 fireball's width of it, so the tighter a pack marches the worse it goes for
@@ -137,7 +178,7 @@ them. A wizard is also made of paper -- 66 base health and the earliest nerve
 of anyone in the realm -- so they open at range and leave before it gets
 close.
 
-A **Temple** turns one into a **Cleric**, and a cleric does not wait to be
+A **Temple** hires a **Cleric**, and a cleric does not wait to be
 useful. They go *looking*: anybody in the realm below 72% health is a reason
 to cross up to 520 pixels of map, and they hurry when they do. Two things
 come out of them:
@@ -268,22 +309,17 @@ earn rank directly for the job: experience per point of health *actually*
 restored, so topping up somebody already full pays nothing and there is
 nothing to farm, plus a little for each blessing.
 
-### Talents
+### What happened to talents
 
-Work does not just raise attributes, it earns **talent points** — three per
-calling, handed out as that calling's training track fills. Each calling has a
-tree of three talents at three ranks each, so three points never cover a tree
-and the choice is a real one:
+Every calling used to hand out three **talent points**, spent per villager in that
+calling's own tree — carry more, work faster, walk quicker. Three trees times three
+talents times three ranks, chosen individually for every peasant you owned.
 
-| Talent | Per rank |
-|---|---|
-| Capacity (Deep Pockets, Big Bundles, Broad Back, Full Hod) | +25% carried per load |
-| Rate (Steady Swing, Sharp Axe, True Chisel, Scaffolding) | +20% faster at the work |
-| Legwork (Sure Footing, Trailblazer, Quarry Legs, On The Run) | +12% movement while working |
-
-Points are earned and spent per calling, and **Rethink** hands a tree's points
-back, so nothing you pick is a trap. A miner with three ranks of Deep Pockets
-hauls 35 gold a trip instead of 20.
+They are gone, and the ideas survived them: the same three effects now come from
+**buildings** instead. A Lumberyard is Big Bundles for everybody standing near it, and
+you decide it once, by choosing where to put the thing, instead of twenty times in a
+menu. The decision moved from a stat sheet onto the map, which is where you were
+looking anyway.
 
 ### Specialisations
 
@@ -344,9 +380,10 @@ hurt. A lone peasant can see off a rat; anything larger needs a warrior.
 
 ## Current scope
 
-City Centre, Barracks, Rangers Guild, Wizards Guild and Temple, with peasants,
-four soldier classes and flags. The shops, towers and huts are defined but
-switched off behind `BUILD_ORDER_FULL` in `src/data.js`.
+Everything defined in `src/data.js` is now buildable: City Centre, Peasant Hut,
+Lumberyard, Mining Camp, Guard House, Watch Tower, Marketplace, Inn, Blacksmith,
+Barracks, Rangers Guild, Wizards Guild and Temple — with peasants, four hero classes
+and flags. Nothing is switched off behind a flag any more.
 
 **No camp is ever empty.** Every lair keeps a standing garrison from the first
 day -- a rat nest three, a goblin camp four, an ogre den three -- and camps
@@ -355,9 +392,10 @@ into one is a fight you chose rather than a coin flip on whether anybody
 happens to be home.
 
 Raids are on. After a few days of peace, lairs close enough to your buildings send
-parties at the town — so expanding toward a nest is what makes it hostile. Build a
-Barracks and warriors will meet them in the field; build nothing and your peasants get
-picked off around day 17 and the City Centre erodes from there.
+parties at whatever building is **nearest to them** — so expanding toward a nest is what
+makes it hostile, and a forward outpost is what it finds first. Build a Barracks and
+warriors will meet them in the field; build nothing and your peasants get picked off
+around day 17 and the City Centre erodes from there.
 
 **A camp fights back.** Hit one and it sounds the alarm: for the next 25 seconds it
 musters reinforcements at nearly twice the usual rate, so a raiding party has to kill
@@ -369,8 +407,9 @@ the realm has to grow at least as fast as the dark does.
 Roughly where the ladder sits: a rat nest falls to a single fresh warrior, a goblin camp
 **wipes** two of them but falls to three at level 2, a skeleton camp costs a life at
 three level 3s, and an ogre den wants three level-5 veterans — and still takes one of
-them. Gold buys courage, too: a fat enough bounty will talk soldiers into a fight they
-would otherwise refuse.
+them. Since heroes no longer inherit a villager's training, rank is the only thing that
+closes that gap, and rank comes from the smaller fights first. Gold buys courage, too: a
+fat enough bounty will talk soldiers into a fight they would otherwise refuse.
 
 ## Running it locally
 
@@ -413,14 +452,14 @@ styles.css          16-bit UI skin, mobile-first
 src/
   main.js           boot, frame loop, onboarding
   game.js           simulation core: economy, flags, spawning, victory
-  brains.js         peasant callings, plus the dormant hero / guard / monster AI
+  brains.js         peasant callings, plus the hero / guard / monster AI
   entities.js       units, buildings, lairs, projectiles
   world.js          map generation, fog of war, A*
   render.js         camera, depth-sorted drawing, pixel font, minimap
   ui.js             DOM panels and all pointer input
   art.js            every sprite, generated at runtime from code
   audio.js          WebAudio chiptune SFX and music
-  data.js           missions, balance numbers, and what is switched on
+  data.js           missions, buildings, classes, and every balance number
   fx.js             particles and floating text
   util.js           RNG, math, binary heap
 ```

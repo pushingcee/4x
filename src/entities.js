@@ -6,8 +6,8 @@ import { TILE } from './art.js';
 import { toPx, toTile } from './world.js';
 import {
   BUILDINGS, CLASSES, MONSTERS, LAIRS, XP_TABLE, MAX_LEVEL, LEVEL_STATS,
-  MISSIONS, STAT_ORDER, STAT_EFFECT, TRAIN_MAX, RUSH_SPEED, LAIR_ALARM_RATE, LAIR_ALARM_TIME,
-  WORK_TALENTS, TALENT_RANKS, TALENT_POINTS, SPECS, SPEC_LEVEL, POWERS, ABILITIES, STEALTH_REVEAL,
+  STAT_ORDER, STAT_EFFECT, RUSH_SPEED, LAIR_ALARM_RATE, LAIR_ALARM_TIME,
+  SPECS, SPEC_LEVEL, POWERS, ABILITIES, STEALTH_REVEAL,
   GARRISON_NEAR, GARRISON_PER_RING, GARRISON_EXTRA_CAP,
   BLESSING, MANA_REGEN, MANA_REST, MANA_REGEN_PER_INT, XP_PER_HEAL, CREDIT_WINDOW
 } from './data.js';
@@ -283,8 +283,6 @@ export class Unit {
     this.baseStats = { str: 5, agi: 5, con: 5, int: 5, ...(def.stats || {}) };
     // A class is a layer on top of whoever you already were, never a rewrite.
     this.classBonus = { str: 0, agi: 0, con: 0, int: 0, ...(def.knight || {}) };
-    this.training = {};        // mission id -> work done toward its stat track
-    this.talents = {};         // mission id -> { talentId: ranks spent }
     this.spec = null;          // chosen once at the rank cap, then permanent
     this.charge = 0;           // rage or focus, whichever this class runs on
     this.abilityCd = 0;
@@ -344,20 +342,7 @@ export class Unit {
 
   get isHero() { return this.faction === 'realm' && !!CLASSES[this.kind] && this.kind !== 'peasant' && this.kind !== 'guard'; }
 
-  /** Points earned by actually doing the work, per attribute. */
-  get trained() {
-    const out = { str: 0, agi: 0, con: 0, int: 0 };
-    for (const id in this.training) {
-      const m = MISSIONS[id];
-      if (!m || !m.trains) continue;
-      const frac = Math.min(1, this.training[id] / m.trainFull);
-      const points = Math.floor(frac * TRAIN_MAX);
-      for (const k of m.trains) out[k] += points;
-    }
-    return out;
-  }
-
-  /** Points granted purely by rank: +3 to everything per level gained. */
+  /** Points granted purely by rank: LEVEL_STATS to everything per level gained. */
   get levelBonus() { return (this.level - 1) * LEVEL_STATS; }
 
   /** The specialisation chosen at the rank cap, if any. */
@@ -373,48 +358,6 @@ export class Unit {
   /** True once they are ranked high enough to choose, and have not yet. */
   get canSpec() {
     return !this.spec && this.level >= SPEC_LEVEL && !!SPECS[this.kind];
-  }
-
-  // ---- talents --------------------------------------------------
-  /** Points a calling has handed out, earned as its training track filled. */
-  talentEarned(missionId) {
-    const m = MISSIONS[missionId];
-    if (!m || !WORK_TALENTS[missionId]) return 0;
-    const frac = Math.min(1, (this.training[missionId] || 0) / m.trainFull);
-    return Math.floor(frac * TALENT_POINTS);
-  }
-  talentSpent(missionId) {
-    const t = this.talents[missionId];
-    let n = 0;
-    for (const k in t) n += t[k];
-    return n;
-  }
-  talentFree(missionId) { return this.talentEarned(missionId) - this.talentSpent(missionId); }
-  talentRank(missionId, talentId) {
-    const t = this.talents[missionId];
-    return (t && t[talentId]) || 0;
-  }
-  /** Spend one point. Returns false if there is none free, or the rank is capped. */
-  spendTalent(missionId, talentId) {
-    const tree = WORK_TALENTS[missionId];
-    if (!tree || !tree.some(t => t.id === talentId)) return false;
-    if (this.talentFree(missionId) <= 0) return false;
-    if (this.talentRank(missionId, talentId) >= TALENT_RANKS) return false;
-    const t = this.talents[missionId] || (this.talents[missionId] = {});
-    t[talentId] = (t[talentId] || 0) + 1;
-    return true;
-  }
-  /** Take every point in a tree back, so a choice is never a trap. */
-  clearTalents(missionId) {
-    if (this.talents[missionId]) this.talents[missionId] = {};
-  }
-  /** Multiplier a talent grants for the calling currently being worked. */
-  talentMul(missionId, talentId) {
-    const tree = WORK_TALENTS[missionId];
-    if (!tree) return 1;
-    const def = tree.find(t => t.id === talentId);
-    if (!def) return 1;
-    return 1 + def.per * this.talentRank(missionId, talentId);
   }
 
   // ---- class resource -------------------------------------------
@@ -465,13 +408,13 @@ export class Unit {
   }
 
   get stats() {
-    const t = this.trained, b = this.baseStats, c = this.classBonus, l = this.levelBonus;
+    const b = this.baseStats, c = this.classBonus, l = this.levelBonus;
     const p = this.specBonus, e = this.gearStats;
     return {
-      str: b.str + t.str + c.str + l + p.str + e.str,
-      agi: b.agi + t.agi + c.agi + l + p.agi + e.agi,
-      con: b.con + t.con + c.con + l + p.con + e.con,
-      int: b.int + t.int + c.int + l + p.int + e.int
+      str: b.str + c.str + l + p.str + e.str,
+      agi: b.agi + c.agi + l + p.agi + e.agi,
+      con: b.con + c.con + l + p.con + e.con,
+      int: b.int + c.int + l + p.int + e.int
     };
   }
 
@@ -509,29 +452,6 @@ export class Unit {
   /** Everything worn, as a flat list for the sheet. */
   gearList() {
     return SLOT_KEYS.map(k => ({ key: k, item: this.gear[k] || null }));
-  }
-
-  /**
-   * Log work toward a calling's attribute track. Called from the brain when a
-   * peasant actually swings a pick, never on a timer -- time served is not
-   * the same thing as work done.
-   */
-  train(missionId, amount) {
-    const m = MISSIONS[missionId];
-    if (!m || !m.trains || amount <= 0) return;
-    const before = Math.floor(Math.min(1, (this.training[missionId] || 0) / m.trainFull) * TRAIN_MAX);
-    this.training[missionId] = Math.min(m.trainFull, (this.training[missionId] || 0) + amount);
-    const after = Math.floor(Math.min(1, this.training[missionId] / m.trainFull) * TRAIN_MAX);
-    if (after > before) {
-      this.hp = Math.min(this.maxHpNow, this.hp + STAT_EFFECT.hpPerPoint); // new toughness is usable now
-      if (after === TRAIN_MAX) {
-        this.game.notify(`${this.name} has mastered ${m.name.toLowerCase()} work`, 'good');
-        this.game.fx.text(this.x, this.y - 18, 'MASTERED', '#ffc94a', 26);
-        this.game.audio.play('level');
-      } else {
-        this.game.fx.text(this.x, this.y - 16, '+' + m.trains.map(k => k.toUpperCase()).join(' +'), '#7fd8a0', 20);
-      }
-    }
   }
 
   get power() {
@@ -614,9 +534,7 @@ export class Unit {
     const d = Math.hypot(dx, dy);
     // adrenaline in flight; and a soldier answering a worker's scream runs
     const haste = this.fleeing > 0 ? 1.3 : this.rushing > 0 ? RUSH_SPEED : 1;
-    // and the legwork talent, which only counts while actually on the job
-    const legs = this.job ? this.talentMul(this.mission, 'haste') : 1;
-    const step = this.speed * haste * legs * dt;
+    const step = this.speed * haste * dt;
     this.moving = true;
     if (d <= step) {
       this.x = gx; this.y = gy;

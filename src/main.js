@@ -80,15 +80,19 @@ async function start() {
       <p><b>2.</b> Tap one and choose a calling: <b>Mine</b>, <b>Wood</b>, <b>Stone</b> or <b>Build</b>.
       They will hunt down the nearest seam themselves and keep at it forever.</p>
       <p><b>3.</b> Use the <b>Folk</b> tab to move your workforce around, or pick one villager
-      by name. Work trains them: every calling raises two attributes.</p>
-      <p><b>4.</b> <b>Build</b> a Barracks, call a villager up to <b>War</b> and let them drill,
-      then raise an attack <b>Flag</b> on a monster lair and watch the greedy fool charge in.</p>
-      <p><b>5.</b> Work earns <b>talent points</b>, and at level 5 a soldier picks a
-      <b>specialisation</b> for good. Nothing is ever lost on the way &mdash; knight a
-      veteran and they keep it all, and you can send them back to the fields any time.</p>
+      by name.</p>
+      <p><b>4.</b> Every load walks home to the nearest <b>depot</b>, so the far seams are
+      barely worth working. Put a <b>Lumberyard</b> or a <b>Mining Camp</b> out beside one and
+      it becomes the depot &mdash; and everyone working nearby gets faster.</p>
+      <p><b>5.</b> The far ground is also where the lairs are, and raiders go for the nearest
+      building they can find. Cover an outpost with a <b>Guard House</b> or a <b>Watch Tower</b>,
+      or lose it.</p>
+      <p><b>6.</b> <b>Build</b> a Barracks and <b>hire</b> a warrior &mdash; heroes cost gold,
+      not villagers &mdash; then raise an attack <b>Flag</b> on a lair and watch the greedy fool
+      charge in. At level 5 they pick a <b>specialisation</b>, once, for good.</p>
       <p><b>Send enough.</b> A struck camp sounds the alarm and pours out reinforcements,
-      and the monsters toughen as the days pass. Veterans win these fights: a villager who
-      worked every calling before being knighted is worth several raw recruits.</p>
+      and the monsters toughen as the days pass. Rank is what wins these fights, and rank
+      comes from fighting.</p>
       <p><b>Getting around.</b> One finger pans, two fingers pinch to zoom, and
       <b>Zoom</b> steps through Close / Mid / Far / Wide. Tap the little map in the corner
       to open the whole realm, then tap anywhere on it to jump there.</p>

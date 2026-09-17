@@ -10,8 +10,8 @@ import {
   BUILDINGS, CLASSES, MONSTERS, LAIRS, FLAGS, RES_RATE, START,
   DAY_SECONDS, TAX_INTERVAL, RESURRECT_COST, HERO_CLASSES, PEACE_DAYS, STRUCTURE_DMG,
   XP_TABLE, MAX_LEVEL, DROPS, LAIR_DROPS, MARKET_SLOTS, MARKET_RESTOCK,
-  MISSIONS, RAIDS_ENABLED, CALLING_ORDER, DISTRESS_WINDOW, RECRUIT_DMG,
-  THREAT_PER_DAY, THREAT_CAP, SEPARATION_CAP, SPECS, WORK_TALENTS, XP_SHARE_BONUS, XP_SHARE_BONUS_CAP,
+  MISSIONS, RAIDS_ENABLED, CALLING_ORDER, DISTRESS_WINDOW,
+  THREAT_PER_DAY, THREAT_CAP, SEPARATION_CAP, SPECS, XP_SHARE_BONUS, XP_SHARE_BONUS_CAP,
   SUPPORT_SHARE, CREDIT_WINDOW
 } from './data.js';
 import { makeRng, clamp, dist } from './util.js';
@@ -271,6 +271,11 @@ export class Game {
   }
 
   /** What a raiding monster marches toward. */
+  /**
+   * Raiders march on the nearest building, which since the outposts came back
+   * means the forward ones: a lumberyard planted out by a far seam is the
+   * first thing a camp finds, and that is the whole point of it.
+   */
   raidTarget(u) {
     const b = this.nearestBuilding(u.x, u.y, b => !b.dead, 2400);
     if (b) return b;
@@ -467,67 +472,11 @@ export class Game {
     return b;
   }
 
-  /** Who to call up: idle hands first, then whoever is closest. */
-  pickTrainee(x, y) {
-    const pool = this.units.filter(u => !u.dead && u.kind === 'peasant' && !u.knightKind);
-    if (!pool.length) return null;
-    const idle = pool.filter(u => u.mission === 'none');
-    // only pull somebody off a job if nobody is standing around
-    const from = idle.length ? idle : pool;
-    return from.sort((a, b) => dist(a.x, a.y, x, y) - dist(b.x, b.y, x, y))[0];
-  }
-
   /** Take a unit off the board without the fanfare of a death. */
   retireUnit(u) {
     if (u.job && u.job.type === 'build' && u.job.site) u.job.site.builders--;
     u.job = null;
     u.dead = true;
-  }
-
-  /**
-   * Knight a villager into a soldier class. Soldiers are not conjured out of
-   * gold -- somebody's miner puts down the pick. They keep who they were:
-   * their baseline and everything the work taught them carry over, and the
-   * class bonus is laid on top rather than replacing any of it.
-   */
-  knightVillager(u, kind, hall) {
-    if (!u || u.dead || u.kind !== 'peasant') return null;
-    const cls = CLASSES[kind];
-    if (!cls) return null;
-    const home = hall
-      || this.nearestBuilding(u.x, u.y, b => b.complete && b.def.guild === kind);
-    if (!home) {
-      const need = Object.values(BUILDINGS).find(d => d.guild === kind);
-      this.notify(`Build a ${need ? need.name : 'guild'} first`, 'bad');
-      return null;
-    }
-    if (!home.complete) { this.notify(`${home.name} is not finished yet`, 'bad'); return null; }
-    // the drilling villager already paid and already holds their place
-    if (!u.knightKind && this.guildRoll(home, kind) >= home.def.maxHeroes) {
-      this.notify(`${home.name} is full`, 'bad');
-      return null;
-    }
-    if (!u.knightKind) {
-      if (!this.canAfford(cls.cost)) { this.notify(`Not enough gold to train a ${cls.name}`, 'bad'); return null; }
-      this.spend(cls.cost);
-    }
-
-    const w = this.spawnUnit(kind, u.x, u.y, 'realm');
-    w.name = u.name;
-    w.baseStats = { ...u.baseStats };   // they are still themselves
-    w.training = { ...u.training };     // and still know what the work taught them
-    w.hp = w.maxHpNow;
-    w.gold = 20;
-    w.stance = 'defend';
-    w.homeId = home.id; w.homeX = home.x; w.homeY = home.y;
-    this.retireUnit(u);
-    this.recomputePop();
-    this.fx.ring(w.x, w.y - 8, MISSIONS[kind] ? MISSIONS[kind].colour : '#e07a50', 15);
-    this.fx.text(w.x, w.y - 20, kind === 'ranger' ? 'TAKES THE BOW' : 'TAKES UP ARMS', '#e07a50', 24);
-    this.audio.play('recruit');
-    this.notify(`${w.name} becomes a ${cls.name}`, 'good');
-    this.lastTrained = w;
-    return w;
   }
 
   /**
@@ -741,95 +690,15 @@ export class Game {
     return sp;
   }
 
-  /** Put a talent point into one of a calling's talents. */
-  spendTalent(u, missionId, talentId) {
-    if (!u || u.dead) return false;
-    const ok = u.spendTalent(missionId, talentId);
-    if (ok) {
-      this.fx.text(u.x, u.y - 16, '+' + (WORK_TALENTS[missionId]
-        .find(t => t.id === talentId) || {}).name, '#7fd8a0', 20);
-      this.audio.play('coin');
-    }
-    return ok;
-  }
-
-  /** Hand every point in a tree back, so a bad pick is never permanent. */
-  resetTalents(u, missionId) {
-    if (!u || u.dead) return false;
-    u.clearTalents(missionId);
-    this.notify(`${u.name} rethinks their ${(MISSIONS[missionId] || {}).name || missionId} training`);
-    return true;
-  }
-
-  /**
-   * Everyone already promised to a guild: soldiers of that class plus the
-   * villagers currently drilling for it. Both count against its capacity.
-   */
+  /** How many of a guild's places are taken. */
   guildRoll(guildBuilding, kind) {
     let n = 0;
     for (const u of this.units) {
       if (u.dead) continue;
       if (u.homeId === guildBuilding.id && u.kind === kind) n++;
-      else if (u.kind === 'peasant' && u.knightKind === kind && u.knightHall === guildBuilding.id) n++;
     }
     return n;
   }
-
-  /**
-   * Mark a villager for knighthood. They do not become a soldier on the spot --
-   * they down tools, take up a spear, guard the other villagers while they
-   * drill, and are knighted when the drilling is done.
-   */
-  markForKnighthood(u, kind, hall) {
-    if (!u || u.dead || u.kind !== 'peasant') return null;
-    if (u.knightKind) { this.notify(`${u.name} is already drilling`, 'bad'); return null; }
-    const cls = CLASSES[kind];
-    const m = MISSIONS[kind];
-    if (!cls || !m) return null;
-    const home = hall
-      || this.nearestBuilding(u.x, u.y, b => b.complete && b.def.guild === kind);
-    if (!home) {
-      const need = Object.values(BUILDINGS).find(d => d.guild === kind);
-      this.notify(`Build a ${need ? need.name : 'guild'} first`, 'bad');
-      return null;
-    }
-    if (!home.complete) { this.notify(`${home.name} is not finished yet`, 'bad'); return null; }
-    if (this.guildRoll(home, kind) >= home.def.maxHeroes) { this.notify(`${home.name} is full`, 'bad'); return null; }
-    if (!this.canAfford(cls.cost)) { this.notify(`Not enough gold to train a ${cls.name}`, 'bad'); return null; }
-    this.spend(cls.cost);
-
-    if (u.job && u.job.type === 'build' && u.job.site) u.job.site.builders--;
-    u.job = null;
-    u.prevJob = null;
-    u.carry = 0;
-    u.mission = kind;
-    u.knightKind = kind;
-    u.knightHall = home.id;
-    u.knightLeft = m.drill;
-    u.knightTotal = m.drill;
-    u.knightPaid = cls.cost.gold || 0;
-    u.bonusDmg = RECRUIT_DMG;      // a spear in hand counts for something
-    u.stalledOn = null;
-    u.path = null; u.needPath = null;
-    this.fx.text(u.x, u.y - 18, 'CALLED UP', m.colour, 22);
-    this.audio.play('order');
-    this.notify(`${u.name} is called up to the ${home.name}`, 'good');
-    return u;
-  }
-
-  /** Change of heart: give the villager back their life, and the gold back. */
-  cancelKnighthood(u, quiet) {
-    if (!u || !u.knightKind) return false;
-    if (u.knightPaid) { this.res.gold += u.knightPaid; }
-    if (!quiet) this.notify(`${u.name} returns to the fields`, '');
-    u.knightKind = null; u.knightHall = null;
-    u.knightLeft = 0; u.knightTotal = 0; u.knightPaid = 0;
-    u.bonusDmg = 0;
-    return true;
-  }
-
-  /** Kept for older call sites; warriors are just one kind of knighting. */
-  trainWarrior(u, hall) { return this.knightVillager(u, 'warrior', hall); }
 
   /**
    * The most recent worker to be attacked, if the cry is still fresh.
@@ -874,12 +743,6 @@ export class Game {
     if (!cls || !building || building.dead) return null;
     if (!building.complete) { this.notify(`${building.name} is not finished yet`, 'bad'); return null; }
     if (this.pop + (cls.pop || 0) > this.popCap) { this.notify('Population cap reached — build huts', 'bad'); return null; }
-    if (building.def.guild === kind) {
-      // a guild arms a villager rather than summoning a stranger
-      const trainee = this.pickTrainee(building.x, building.y);
-      if (!trainee) { this.notify('No villager free to train', 'bad'); return null; }
-      return this.markForKnighthood(trainee, kind, building);
-    }
     if (building.def.guild) {
       const alive = this.units.filter(u => !u.dead && u.homeId === building.id).length;
       if (alive >= building.def.maxHeroes) { this.notify(`${building.name} is full`, 'bad'); return null; }
@@ -940,23 +803,16 @@ export class Game {
     const m = MISSIONS[missionId];
     if (!m) return 0;
 
-    // "Warrior" is not a job you do in the fields -- it changes what you are
-    if (m.becomes) {
-      const made = [];
-      for (const u of units) { if (this.markForKnighthood(u, m.becomes)) made.push(u); }
-      this.lastTrained = made[made.length - 1] || null;
-      this.trainedBatch = made;
-      return made.length;
-    }
+    // Soldier classes are hired at their guild, not grown out of the fields.
+    if (m.becomes) return 0;
 
-    // Anyone in the realm can take a calling -- villagers and veterans alike.
-    // A knighthood is a layer on top of who somebody is, so sending a warrior
-    // back to the seam costs them nothing they earned.
+    // Anyone in the realm can take a calling -- villagers and heroes alike.
+    // A hero put back on a seam loses nothing: the class is what they are,
+    // and the calling is only what they are doing this afternoon.
     let n = 0, first = null;
     for (const u of units) {
       if (!u || u.dead) continue;
       if (u.kind !== 'peasant' && !u.isHero) continue;
-      if (u.knightKind) this.cancelKnighthood(u);
       if (u.job && u.job.type === 'build' && u.job.site) u.job.site.builders--;
       u.mission = missionId;
       u.job = null;

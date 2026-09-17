@@ -5,8 +5,8 @@
 import { TILE, buildingSprite, unitSprite, propSprite, flagSprite, makeCanvas, PAL } from './art.js';
 import {
   BUILDINGS, BUILD_ORDER, CLASSES, FLAGS, MONSTERS, LAIRS, RES_RATE, RESURRECT_COST,
-  MISSIONS, MISSION_ORDER, CALLING_ORDER, STATS, STAT_ORDER, TRAIN_MAX, MAX_LEVEL,
-  STANCES, STANCE_ORDER, WORK_TALENTS, TALENT_RANKS, SPECS, SPEC_LEVEL, ABILITIES,
+  MISSIONS, MISSION_ORDER, CALLING_ORDER, STATS, STAT_ORDER, MAX_LEVEL,
+  STANCES, STANCE_ORDER, SPECS, SPEC_LEVEL, ABILITIES,
   MARKET_SLOTS
 } from './data.js';
 import { toTile, toPx } from './world.js';
@@ -45,10 +45,9 @@ function costText(cost, game) {
   return bits.join(' ') || 'free';
 }
 
-/** The four attributes, with what this unit's calling has added so far. */
-/** Everything above the baseline of 5: training, class and rank together. */
+/** Everything above the baseline of 5: class, rank and specialisation. */
 function earned(u, k) {
-  return u.trained[k] + (u.classBonus ? u.classBonus[k] : 0) + u.levelBonus
+  return (u.classBonus ? u.classBonus[k] : 0) + u.levelBonus
     + (u.specBonus ? u.specBonus[k] : 0);
 }
 
@@ -61,62 +60,6 @@ function attrBlock(u) {
       title="${s.name}: ${s.desc}${bonus ? ` (${bonus} earned above the baseline of 5)` : ''}">
       <b>${st[k]}${bonus ? `<i>+${bonus}</i>` : ''}</b><span>${s.short}</span></div>`;
   }).join('') + `</div>`;
-}
-
-/** How far along a unit is in one calling's attribute track. */
-function trainProgress(u, id) {
-  const m = MISSIONS[id];
-  const done = Math.min(1, (u.training[id] || 0) / m.trainFull);
-  return { m, done, points: Math.floor(done * TRAIN_MAX) };
-}
-
-/**
- * Every calling this unit could learn, so you can see at a glance what is
- * mastered, what is part-done, and what they have never touched.
- */
-function trainBlock(u) {
-  const rows = MISSION_ORDER.filter(id => MISSIONS[id].trains);
-  return `<div class="trainlist" data-live="train">
-    <div class="head">TRAINING &mdash; kept for life, whatever they become</div>` + rows.map(id => {
-    const { m, done, points } = trainProgress(u, id);
-    const cls = done >= 1 ? 'done' : done <= 0 ? 'none' : '';
-    const free = u.talentFree ? u.talentFree(id) : 0;
-    return `<div class="trow ${cls}" data-trow="${id}">
-      <span class="sw" style="background:${m.colour}"></span>
-      <span class="tn">${m.name} <i>${m.trains.map(k => STATS[k].short).join('&middot;')}</i></span>
-      <span class="tbar" style="--tc:${m.colour}"><i style="width:${done * 100}%"></i></span>
-      <span class="tp">${points}/${TRAIN_MAX}</span>
-      ${WORK_TALENTS[id] ? `<button class="tal ${free > 0 ? 'ready' : ''}" data-tree="${id}"
-        title="${m.name} talents">${free > 0 ? '+' + free : '&hellip;'}</button>` : ''}
-    </div>`;
-  }).join('') + `</div>`;
-}
-
-/** One calling's talent tree: three talents, three ranks, three points. */
-function talentTree(u, id) {
-  const tree = WORK_TALENTS[id];
-  if (!tree) return '';
-  const m = MISSIONS[id];
-  const free = u.talentFree(id), earnedPts = u.talentEarned(id);
-  return `<div class="talents" data-live="talents">
-    <div class="head" style="color:${m.colour}">${m.name.toUpperCase()} TALENTS
-      &mdash; ${free} of ${earnedPts} point${earnedPts === 1 ? '' : 's'} unspent</div>
-    ${tree.map(t => {
-      const r = u.talentRank(id, t.id);
-      const full = r >= TALENT_RANKS;
-      return `<div class="talrow ${full ? 'full' : ''}">
-        <span class="tn">${t.name}<i>${t.desc}</i></span>
-        <span class="pips">${Array.from({ length: TALENT_RANKS },
-          (_, i) => `<b class="${i < r ? 'on' : ''}" style="--mc:${m.colour}"></b>`).join('')}</span>
-        <button class="btn small" data-talent="${id}:${t.id}"
-          ${free <= 0 || full ? 'disabled' : ''}>+</button>
-      </div>`;
-    }).join('')}
-    <div class="talfoot">
-      <button class="btn small" data-talreset="${id}">Rethink</button>
-      <button class="btn small" data-talclose="1">Done</button>
-    </div>
-  </div>`;
 }
 
 /** The one permanent choice: which kind of soldier they become at the cap. */
@@ -215,28 +158,13 @@ function stancePicker(current) {
   }).join('') + `</div>`;
 }
 
-/** How far through drilling a called-up villager is. */
-function drillBlock(u) {
-  if (!u.knightKind) return '';
-  const m = MISSIONS[u.knightKind];
-  const total = u.knightTotal || 1;
-  const done = Math.min(1, 1 - (u.knightLeft || 0) / total);
-  return `<div class="trainlist" data-live="drill">
-    <div class="trow" data-drill>
-      <span class="sw" style="background:${m.colour}"></span>
-      <span class="tn">Drilling <i>${m.name}</i></span>
-      <span class="tbar" style="--tc:${m.colour}"><i style="width:${done * 100}%"></i></span>
-      <span class="tp">${Math.ceil(u.knightLeft || 0)}s</span>
-    </div></div>`;
-}
-
 /**
- * The row of calling buttons. Someone already knighted is offered the work
- * callings only -- they cannot be called up a second time, and a button that
- * silently does nothing is worse than no button.
+ * The row of calling buttons. Only the work callings: soldier classes are
+ * hired at their guild rather than grown out of a villager, so they are not
+ * something you can set anybody to.
  */
-function missionPicker(currentId, sworn = false) {
-  const ids = sworn ? CALLING_ORDER.filter(id => !MISSIONS[id].becomes) : CALLING_ORDER;
+function missionPicker(currentId) {
+  const ids = CALLING_ORDER.filter(id => !MISSIONS[id].becomes);
   return `<div class="missions">` + ids.map(id => {
     const m = MISSIONS[id];
     return `<button class="btn small mbtn ${currentId === id ? 'on' : ''}"
@@ -597,15 +525,13 @@ export class UI {
    */
   selectionSignature() {
     const sel = this.game.selection;
-    return sel.length + '|' + (this.openTree || '-') + '|' + sel.map(e => [
+    return sel.length + '|' + sel.map(e => [
       e.stock ? e.stock.map(i => i.id).join('.') : '-',
       e.id, e.kindClass, e.kind || e.defId || e.type,
       e.mission, e.complete, e.amount > 0, this.r.follow === e,
       e.spec || '-', e.canSpec ? 'y' : 'n',
       e.gear ? SLOT_KEYS.map(k => (e.gear[k] ? e.gear[k].id : 0)).join('.') : '-',
-      e.bag ? e.bag.length : 0,
-      e.talents ? JSON.stringify(e.talents) : '-',
-      e.talentEarned ? MISSION_ORDER.map(m => e.talentEarned(m)).join('') : '-'
+      e.bag ? e.bag.length : 0
     ].join(',')).join(';');
   }
 
@@ -629,7 +555,7 @@ export class UI {
       el.innerHTML = `
         <div class="sel-head"><div><h3>${sel.length} selected</h3>
         <div class="meta">${peasants.length} peasant${peasants.length === 1 ? '' : 's'}</div></div></div>
-        ${peasants.length ? missionPicker(shared, peasants.every(p => p.isHero)) : ''}
+        ${peasants.length ? missionPicker(shared) : ''}
         <div class="hint">Or tap a <b>mine</b>, <b>quarry</b> or <b>tree</b> to start them there.</div>
         <div class="acts">
           <button class="btn small" data-act="idle">Select idle only</button>
@@ -658,8 +584,6 @@ export class UI {
     if (u.state === 'heal') return 'tending the hurt';
     if (u.state === 'bless') return 'blessing the faithful';
     if (u.state === 'stalk') return 'melting away';
-    if (u.state === 'drill') return 'drilling';
-    if (u.knightKind && u.state === 'walk') return 'reporting for duty';
     if (u.job && u.job.type === 'build') return 'building';
     if (u.job && u.job.type === 'harvest' && u.job.node) {
       const k = u.job.node.kind;
@@ -698,10 +622,7 @@ export class UI {
         ${u.upgrades ? `<span>WEAPON <b>+${u.upgrades}</b></span>` : ''}` : ''}
         ${u.carry > 0 ? `<span>CARRYING <b>${Math.floor(u.carry)} ${u.carryRes}</b></span>` : ''}
       </div>
-      ${isMine && (u.kind === 'peasant' || u.isHero)
-        ? `${missionPicker(u.mission, u.isHero)}${drillBlock(u)}${trainBlock(u)}
-           ${this.openTree && WORK_TALENTS[this.openTree] ? talentTree(u, this.openTree) : ''}`
-        : ''}
+      ${isMine && (u.kind === 'peasant' || u.isHero) ? missionPicker(u.mission) : ''}
       ${u.isHero ? `${specBlock(u)}${gearBlock(u)}${stancePicker(u.stance)}` : ''}
       <div class="acts">
         <button class="btn small ${following ? 'danger' : 'primary'}" data-act="follow">${following ? 'Stop following' : 'Follow'}</button>
@@ -710,12 +631,9 @@ export class UI {
       </div>
       ${u.isHero ? `<div class="hint">${STANCES[u.stance].desc} They still take no orders &mdash;
         raise a <b>flag</b> and pay enough to tempt them.</div>` : ''}
-      ${u.kind === 'peasant' ? `<div class="hint">${u.knightKind
-        ? `Called up and drilling. Until they are ready they guard the other villagers and fight anything that threatens them. Pick another calling to send them back to work &mdash; the fee is returned.`
-        : MISSIONS[u.mission].desc}</div>` : ''}
-      ${u.isHero ? `<div class="hint">Everything the work taught them is still theirs.
-        Give them a <b>calling</b> and they will go and do it &mdash; a knighthood adds to
-        who somebody is, it does not stop them swinging a pick.</div>` : ''}`;
+      ${u.kind === 'peasant' ? `<div class="hint">${MISSIONS[u.mission].desc}</div>` : ''}
+      ${u.isHero ? `<div class="hint">A hero can still be given a <b>calling</b> and will go and
+        do it &mdash; being sworn to a guild does not stop anybody swinging a pick.</div>` : ''}`;
     el.querySelector('.pic').replaceWith(spriteEl(unitSprite(u.sprite, 0, 1), 16, 16, 36));
     this.wireSelActions(el, u);
     // keep the live numbers moving without touching the buttons
@@ -737,27 +655,6 @@ export class UI {
           const bonus = earned(u, k);
           if (cell) cell.querySelector('b').innerHTML = `${st[k]}${bonus ? `<i>+${bonus}</i>` : ''}`;
         });
-      }
-      const drill = el.querySelector('[data-live="drill"]');
-      if (drill) {
-        if (!u.knightKind) { this.renderSelection(true); return; }
-        const total = u.knightTotal || 1;
-        const done = Math.min(1, 1 - (u.knightLeft || 0) / total);
-        const bar = drill.querySelector('.tbar i');
-        if (bar) bar.style.width = done * 100 + '%';
-        const left = drill.querySelector('.tp');
-        if (left) left.textContent = `${Math.ceil(u.knightLeft || 0)}s`;
-      } else if (u.knightKind) { this.renderSelection(true); return; }
-      const train = el.querySelector('[data-live="train"]');
-      if (train) {
-        for (const row of train.querySelectorAll('[data-trow]')) {
-          const { done, points } = trainProgress(u, row.dataset.trow);
-          const bar = row.querySelector('.tbar i');
-          if (bar) bar.style.width = done * 100 + '%';
-          const pts = row.querySelector('.tp');
-          if (pts) pts.textContent = `${points}/${TRAIN_MAX}`;
-          row.className = 'trow ' + (done >= 1 ? 'done' : done <= 0 ? 'none' : '');
-        }
       }
       const stats = el.querySelector('[data-live="stats"]');
       if (stats) {
@@ -785,7 +682,7 @@ export class UI {
       }
       if (def.guild) {
         const c = CLASSES[def.guild];
-        actions += `<button class="btn small primary" data-recruit="${def.guild}">Call up a villager (${c.cost.gold}g) ${g.guildRoll(b, def.guild)}/${def.maxHeroes}</button>`;
+        actions += `<button class="btn small primary" data-recruit="${def.guild}">Hire ${c.name} (${c.cost.gold}g) ${g.guildRoll(b, def.guild)}/${def.maxHeroes}</button>`;
       }
     }
     el.innerHTML = `
@@ -956,37 +853,6 @@ export class UI {
         }
       });
     });
-    el.querySelectorAll('[data-tree]').forEach(btn => {
-      btn.addEventListener('click', () => {
-        this.audio.play('ui');
-        this.openTree = this.openTree === btn.dataset.tree ? null : btn.dataset.tree;
-        this.renderSelection(true);
-      });
-    });
-    el.querySelectorAll('[data-talclose]').forEach(btn => {
-      btn.addEventListener('click', () => {
-        this.audio.play('ui');
-        this.openTree = null;
-        this.renderSelection(true);
-      });
-    });
-    el.querySelectorAll('[data-talent]').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const [mid, tid] = btn.dataset.talent.split(':');
-        if (g.spendTalent(e, mid, tid)) {
-          this.notify(`${e.name} takes ${(WORK_TALENTS[mid].find(t => t.id === tid) || {}).name}`);
-          this.audio.play('order');
-        } else this.notify('No points to spend', 'bad');
-        this.renderSelection(true);
-      });
-    });
-    el.querySelectorAll('[data-talreset]').forEach(btn => {
-      btn.addEventListener('click', () => {
-        g.resetTalents(e, btn.dataset.talreset);
-        this.audio.play('ui');
-        this.renderSelection(true);
-      });
-    });
     el.querySelectorAll('[data-spec]').forEach(btn => {
       btn.addEventListener('click', () => {
         if (g.chooseSpec(e, btn.dataset.spec)) this.audio.play('order');
@@ -1013,12 +879,8 @@ export class UI {
           && (x.kind === 'peasant' || x.isHero));
         const targets = folk.length ? folk : (e && (e.kind === 'peasant' || e.isHero) ? [e] : []);
         if (!targets.length) return;
-        const made = g.assignMission(targets, btn.dataset.mission);
-        if (MISSIONS[btn.dataset.mission].becomes && made) {
-          this.setSelection(g.trainedBatch || []);   // stay with the same person
-        } else {
-          this.renderSelection(true);
-        }
+        g.assignMission(targets, btn.dataset.mission);
+        this.renderSelection(true);
         if (this.tab === 'peasants') this.renderDrawer();
         this.renderTopbar();
       });
@@ -1133,25 +995,14 @@ export class UI {
   }
 
   /** The Peasants tab: hire, and move people between callings. */
-  /** "Miner · working gold · STR 10 CON 10" */
+  /** "Miner · working gold" */
   peasantLine(p) {
-    if (p.knightKind) {
-      const pct = Math.round(100 * (1 - (p.knightLeft || 0) / (p.knightTotal || 1)));
-      return `${MISSIONS[p.knightKind].name} recruit · drilling ${pct}% · ${this.unitJobText(p)}`;
-    }
-    const m = MISSIONS[p.mission];
-    const gained = p.trained;
-    const earned = STAT_ORDER.filter(k => gained[k] > 0)
-      .map(k => `${STATS[k].short} ${p.stats[k]}`).join(' ');
-    return `${m.name} · ${this.unitJobText(p)}${earned ? ' · ' + earned : ''}`;
+    return `${MISSIONS[p.mission].name} · ${this.unitJobText(p)}`;
   }
 
-  /** Soldiers plus whoever is still drilling toward that class. */
-  troopLine(crew, recruits) {
-    const bits = [];
-    if (crew.length) bits.push(this.warriorStatus(crew));
-    if (recruits.length) bits.push(`${recruits.length} drilling`);
-    return bits.length ? bits.join(', ') : 'nobody under arms';
+  /** What a guild's roster is up to. */
+  troopLine(crew) {
+    return crew.length ? this.warriorStatus(crew) : 'nobody under arms';
   }
 
   /** "2 patrolling, 1 fighting" -- or a nudge if there are none. */
@@ -1169,7 +1020,7 @@ export class UI {
   missionStatus(crew, m) {
     if (!crew.length) return m.res ? `no one gathering ${m.res}` : 'nobody assigned';
     const verb = { walk: 'walking', harvest: 'working', deliver: 'hauling', build: 'building',
-      repair: 'mending', flee: 'fleeing', idle: 'waiting', drill: 'drilling',
+      repair: 'mending', flee: 'fleeing', idle: 'waiting',
       defend: 'fighting', rescue: 'to the rescue' };
     const busy = {};
     for (const p of crew) { const v = verb[p.state] || p.state; busy[v] = (busy[v] || 0) + 1; }
@@ -1185,14 +1036,14 @@ export class UI {
 
     // Rebuilding this list every frame would swallow taps on the +/- buttons,
     // so only rebuild when the crew actually changes.
-    const sig = peasants.map(p => p.id + ':' + p.mission + ':' + (p.knightKind || '')).join(',') + '|' + canHire
+    const sig = peasants.map(p => p.id + ':' + p.mission).join(',') + '|' + canHire
       + '|' + CALLING_ORDER.filter(id => MISSIONS[id].becomes)
         .map(id => g.units.filter(u => !u.dead && u.kind === MISSIONS[id].becomes).length).join('.');
     if (!force && sig === this.peasantSig && this.peasantRefresh) { this.peasantRefresh(); return; }
     this.peasantSig = sig;
 
     let html = `
-      <div class="hint">Tap a name to select that crew. <b>+</b> promotes an idle peasant.</div>
+      <div class="hint">Tap a name to select that crew. <b>+</b> moves one villager onto that calling.</div>
       <div class="mrow">
         <div class="grow"><span class="nm">Peasants</span>
         <span class="sub">${peasants.length} of ${g.popCap} housed &middot; ${g.res.gold} gold in the treasury</span></div>
@@ -1218,10 +1069,9 @@ export class UI {
         </div>`;
     }
 
-    // soldiers are former villagers, so they belong on the same roster
+    // the guilds' rosters, counted on the same list as the callings
     const soldierKinds = CALLING_ORDER.filter(id => MISSIONS[id].becomes);
     const troops = (id) => g.units.filter(u => !u.dead && u.kind === MISSIONS[id].becomes);
-    const drilling = (id) => g.units.filter(u => !u.dead && u.knightKind === id);
     for (const id of soldierKinds) {
       const m = MISSIONS[id];
       const crew = troops(id);
@@ -1230,11 +1080,11 @@ export class UI {
           <span class="swatch" style="background:${m.colour}"></span>
           <div class="grow" data-picktroop="${id}">
             <span class="nm">${m.name}</span>
-            <span class="sub" data-troopstatus="${id}">${this.troopLine(crew, drilling(id))}</span>
+            <span class="sub" data-troopstatus="${id}">${this.troopLine(crew)}</span>
           </div>
           <span class="cnt">${crew.length}</span>
           <span class="pm">
-            <button disabled title="Knighthood cannot be undone -- but tap a soldier to give them a calling again">&minus;</button>
+            <button disabled title="A hero is hired for good -- but tap one to give them a calling again">&minus;</button>
             <button data-arm="${id}">+</button>
           </span>
         </div>`;
@@ -1266,9 +1116,7 @@ export class UI {
         this.notify(`Build a ${need ? need.name : 'guild'} first`, 'bad');
         return;
       }
-      const t = g.pickTrainee(hall.x, hall.y);
-      if (!t) { this.notify('No villager free to train', 'bad'); return; }
-      if (g.knightVillager(t, kind, hall)) { this.renderDrawer(); this.renderTopbar(); }
+      if (g.recruit(hall, kind)) { this.renderDrawer(); this.renderTopbar(); }
     }));
     body.querySelectorAll('[data-picktroop]').forEach(row => row.addEventListener('click', () => {
       const crew = troops(row.dataset.picktroop);
@@ -1298,7 +1146,7 @@ export class UI {
       }
       for (const id of soldierKinds) {
         const el = body.querySelector(`[data-troopstatus="${id}"]`);
-        if (el) el.textContent = this.troopLine(troops(id), drilling(id));
+        if (el) el.textContent = this.troopLine(troops(id));
       }
     };
 
@@ -1483,27 +1331,21 @@ export class UI {
       someone in a particular spot instead.</p>
       <p><b>Assigning.</b> Tap a peasant for their calling buttons, or open the
       <b>Peasants</b> tab to move your whole workforce around at once.</p>
-      <p><b>Work changes people.</b> Every calling trains two attributes, up to five points
-      each, and only while they are actually working &mdash; time served counts for nothing.
-      Mining builds <b>STR</b> and <b>CON</b>, woodcutting <b>AGI</b> and <b>STR</b>,
-      quarrying <b>CON</b> and <b>INT</b>, building <b>INT</b> and <b>AGI</b>. What they
-      earn is theirs for good, so a veteran who has done two jobs is worth keeping.</p>
+      <p><b>Distance is the economy.</b> Every load walks to the nearest <b>depot</b>, and at
+      the start the City Centre is the only one. The rich seams are the far ones, so the way
+      to get richer is to put a depot out there: a <b>Lumberyard</b> or a <b>Mining Camp</b>
+      shortens the walk and makes everyone working nearby faster into the bargain.</p>
+      <p><b>An outpost is a bet.</b> The far ground is where the lairs are, and raiders march
+      on the nearest building they can find &mdash; which is now yours, standing on its own a
+      long way from home. A <b>Guard House</b> keeps three soldiers who never wander off; a
+      <b>Watch Tower</b> shoots at anything hostile and lifts the fog around it. Both cost the
+      stone you went out there to cut.</p>
       <p><b>What the attributes do.</b> Strength adds melee damage, agility attack speed,
       constitution health, and intelligence both mana and critical chance &mdash; every
-      single point counts, so nothing a veteran learns is wasted. Warriors instead gain
-      <b>+5 to everything</b> per level, up to level 5, and those ranks are hard-won.
-      Take one villager through every calling before knighting them and they end up
-      worth several conscripts.</p>
-      <p><b>Talents.</b> Every calling hands out <b>three talent points</b> as its track
-      fills, spent in that calling's own tree of three talents &mdash; carry more, work
-      faster, walk quicker. Three points never fill a tree, so the choice matters, and
-      <b>Rethink</b> always hands them back.</p>
-      <p><b>Nothing is ever lost.</b> Knighting keeps every point and every talent, and a
-      soldier can be given a working calling again whenever you like. Tell a warrior to
-      mine and they will go and mine.</p>
-      <p><b>Wizards and Clerics.</b> A <b>Wizards Guild</b> makes a villager into a
-      <b>Wizard</b>: fire at range that lands on a whole pack at once, wrapped in nothing
-      but a robe. A <b>Temple</b> makes one into a <b>Cleric</b>, who goes looking for the
+      single point counts. Heroes gain <b>+5 to everything</b> per level, up to level 5,
+      and those ranks are hard-won.</p>
+      <p><b>Wizards and Clerics.</b> A <b>Wizards Guild</b> hires a <b>Wizard</b>: fire at range that lands on a whole pack at once, wrapped in nothing
+      but a robe. A <b>Temple</b> hires a <b>Cleric</b>, who goes looking for the
       hurt anywhere in the realm rather than waiting for them &mdash; mending the wounded
       and <b>blessing</b> whoever is about to be. Both spend <b>mana</b>, which is what
       intelligence has been buying all along. Neither has specialisations yet.</p>
@@ -1533,11 +1375,12 @@ export class UI {
       reinforcements far faster for a while &mdash; you have to out-kill it, not outlast
       it. Monsters also grow stronger as the days pass, so send enough, and remember a
       big enough bounty will buy courage your soldiers do not have on their own.</p>
-      <p><b>Soldiers.</b> Build a <b>Barracks</b> or a <b>Rangers Guild</b>, then set a villager's
-      calling to <b>War</b> or <b>Scout</b>. They are <b>called up</b>, not knighted on the spot:
-      they down tools and drill for a while first. A recruit is already militia &mdash; they guard
-      the other villagers and hit harder than a plain peasant. The class is added on top of who
-      they already were, so a veteran makes a better soldier and nothing ever goes down.</p>
+      <p><b>Soldiers.</b> Build a <b>Barracks</b> or a <b>Rangers Guild</b> and hire from it.
+      A hero costs gold and nothing else &mdash; no villager puts down a pick for it &mdash;
+      and each guild holds only two or three, so soldiers are what your buildings let you
+      have rather than what your workforce can be ground into. They arrive good at the job
+      and get better by fighting. A hero can still be given a <b>calling</b> if you want them
+      hauling stone between wars.</p>
       <p><b>Stances.</b> A soldier set to <b>Defend</b> walks a beat around your buildings and
       workers and sprints to anyone under attack; one set to <b>Roam</b> wanders off to scout and
       hunt lairs. Either way they take no orders &mdash; raise a <b>flag</b> and pay enough.</p>
