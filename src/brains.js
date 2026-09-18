@@ -940,6 +940,8 @@ export function monsterBrain(u, since) {
   u.raidIn = (u.raidIn === undefined ? 55 + Math.random() * 80 : u.raidIn) - since;
   if (u.raiding) {
     u.raidLeft = (u.raidLeft === undefined ? 75 : u.raidLeft) - since;
+    // a boss's escort keeps marching as long as its lord is still on its feet
+    if (u.raidLeft <= 0 && !u.boss && u.lair && u.lair.leader && !u.lair.leader.dead) u.raidLeft = 20;
     if (u.raidLeft <= 0) {
       u.raiding = false;
       u.raidLeft = undefined;

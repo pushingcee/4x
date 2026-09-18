@@ -65,6 +65,11 @@ export const PAL = {
   ogre: '#9a7a5a', ogreD: '#6e553c',
   demon: '#b4402a', demonD: '#7d2718',
   slime: '#5fd0a0', slimeD: '#2f8c68',
+  troll: '#7a9a6a', trollD: '#4f6a44', moss: '#4a8f47',
+  wraith: '#6f8fb8', wraithL: '#a8c8e8', wraithG: '#8fe0ff',
+  cult: '#5a1020', cultD: '#3a0a14',
+  spider: '#3a2a44', spiderL: '#5a4466',
+  drake: '#c85a2a', drakeD: '#8a2e1e', drakeB: '#e0a060',
 
   // fx / ui
   red: '#e05050', green: '#6ecf8e', blue: '#5aa0e6', purple: '#a06ecf',
@@ -140,7 +145,7 @@ function humanoid(ctx, o, frame) {
   const bob = frame === 1 ? -1 : 0;
   paint(ctx, HEAD, map, 0, 1 + bob);
   paint(ctx, TORSO, map, 0, 8 + bob);
-  paint(ctx, frame === 1 ? LEGS_B : LEGS_A, map, 0, 13);
+  if (!o.legless) paint(ctx, frame === 1 ? LEGS_B : LEGS_A, map, 0, 13);
 }
 
 // ---------------------------------------------------------------
@@ -220,6 +225,29 @@ const OVERLAY = {
     px(ctx, 3, 2, 1, 3, PAL.demonD); px(ctx, 12, 2, 1, 3, PAL.demonD);
     px(ctx, 2, 8, 2, 5, PAL.demonD); px(ctx, 12, 8, 2, 5, PAL.demonD);
     px(ctx, 13, 4, 1, 9, PAL.metal);
+  },
+  troll(ctx) {                                     // nose, tusks, moss, a slab of a club
+    px(ctx, 7, 5, 2, 2, PAL.trollD);
+    px(ctx, 6, 7, 1, 1, PAL.bone); px(ctx, 9, 7, 1, 1, PAL.bone);
+    px(ctx, 5, 9, 1, 1, PAL.moss); px(ctx, 9, 10, 1, 1, PAL.moss); px(ctx, 6, 2, 1, 1, PAL.moss);
+    px(ctx, 12, 3, 3, 8, PAL.woodD);
+    px(ctx, 13, 11, 1, 4, PAL.wood);
+    px(ctx, 12, 4, 1, 1, PAL.stone); px(ctx, 14, 6, 1, 1, PAL.stone); px(ctx, 13, 9, 1, 1, PAL.stone);
+  },
+  wraith(ctx, frame) {                             // hood, a void for a face, tatters, no feet
+    hood(ctx, PAL.wraith);
+    px(ctx, 6, 4, 1, 1, PAL.wraithG); px(ctx, 9, 4, 1, 1, PAL.wraithG);
+    px(ctx, 5, 12, 1, 2 - frame, PAL.wraith); px(ctx, 7, 12, 1, 3, PAL.wraith);
+    px(ctx, 9, 12, 1, 2 + frame, PAL.wraith); px(ctx, 10, 12, 1, 1, PAL.wraith);
+    px(ctx, 6, 14, 1, 1, PAL.wraithL); px(ctx, 8, 15 - frame, 1, 1, PAL.wraithL);
+    px(ctx, 1, 6 + frame, 1, 1, PAL.wraithG); px(ctx, 14, 9 - frame, 1, 1, PAL.wraithG);
+  },
+  cultist(ctx) {                                   // crimson hood, red eyes, skull staff
+    hood(ctx, PAL.cult);
+    px(ctx, 6, 4, 1, 1, PAL.spec.blood); px(ctx, 9, 4, 1, 1, PAL.spec.blood);
+    px(ctx, 7, 9, 2, 1, PAL.spec.blood);
+    staff(ctx, PAL.woodD, PAL.bone);
+    px(ctx, 12, 2, 1, 1, PAL.outline); px(ctx, 14, 2, 1, 1, PAL.outline);
   },
   slime() {}
 };
@@ -425,7 +453,10 @@ const BODY = {
   goblin: { skin: PAL.gob, hair: PAL.gobD, cloth: PAL.woodD, trim: PAL.dirtD, pants: PAL.dirtD, boot: PAL.outline },
   skeleton: { skin: PAL.bone, hair: PAL.boneD, cloth: PAL.boneD, trim: PAL.rockD, pants: PAL.boneD, boot: PAL.rockD },
   ogre: { skin: PAL.ogre, hair: PAL.ogreD, cloth: PAL.dirtD, trim: PAL.woodD, pants: PAL.dirt, boot: PAL.outline },
-  demon: { skin: PAL.demon, hair: PAL.demonD, cloth: PAL.demonD, trim: PAL.gold, pants: PAL.demonD, boot: PAL.outline }
+  demon: { skin: PAL.demon, hair: PAL.demonD, cloth: PAL.demonD, trim: PAL.gold, pants: PAL.demonD, boot: PAL.outline },
+  troll: { skin: PAL.troll, hair: PAL.trollD, cloth: PAL.dirtD, trim: PAL.woodD, pants: PAL.dirt, boot: PAL.outline },
+  wraith: { skin: PAL.outline, hair: PAL.wraith, cloth: PAL.wraith, trim: PAL.wraithL, pants: null, boot: null, legless: true },
+  cultist: { skin: PAL.skinPale, hair: PAL.hairK, cloth: PAL.cult, trim: PAL.spec.blood, pants: PAL.cultD, boot: PAL.outline }
 };
 
 // bespoke non-humanoid critters -----------------------------------
@@ -466,6 +497,43 @@ const SLIME = [
   '................'
 ];
 
+const SPIDER = [
+  '................',
+  '................',
+  '................',
+  '................',
+  '..o.........o...',
+  '...o..oooo..o...',
+  '....oobbbboo....',
+  '.oooblbbbbbooo..',
+  '....obbbbbbbbo..',
+  '.ooobbbbbbbeeo..',
+  '....obbbbbbbbo..',
+  '.oooblbbbbbooo..',
+  '....oobbbboo....',
+  '...o..oooo..o...',
+  '..o.........o...',
+  '................'
+];
+const DRAKE = [
+  '................',
+  '................',
+  '.....oo.........',
+  '....owwo........',
+  '...owwwwo.......',
+  '..owwwwwwo..oo..',
+  '.owwwwwwwo.orro.',
+  '.orrrrrrrrorreo.',
+  'orrrrrrrrrrrrro.',
+  'orrrrbbbbbrrro..',
+  '.orrrbbbbbrro...',
+  '..orrrrrrrro....',
+  '...oroo.oro.....',
+  '..oro....oro....',
+  '..ooo....ooo....',
+  '................'
+];
+
 const spriteCache = new Map();
 
 /**
@@ -487,6 +555,13 @@ export function unitSprite(kind, frame = 0, dir = 1) {
   } else if (kind === 'slime') {
     paint(ctx, SLIME, { '.': null, o: PAL.outline, s: PAL.slime, l: PAL.white, e: PAL.outline },
       0, frame === 1 ? -1 : 0);
+  } else if (kind === 'spider') {
+    paint(ctx, SPIDER, { '.': null, o: PAL.outline, b: PAL.spider, l: PAL.spiderL, e: PAL.red },
+      0, frame === 1 ? -1 : 0);
+  } else if (kind === 'drake') {
+    paint(ctx, DRAKE, { '.': null, o: PAL.outline, r: PAL.drake, w: PAL.drakeD, b: PAL.drakeB, e: PAL.spec.fireY },
+      0, frame === 1 ? -1 : 0);
+    if (frame === 1) px(ctx, 12, 3, 1, 1, PAL.spec.fire);   // a lick of flame
   } else if (SPEC_OVERLAY[kind]) {
     // `class/spec`: the class body under the specialisation's colours and kit
     const cls = kind.slice(0, kind.indexOf('/'));
@@ -871,6 +946,74 @@ export function propSprite(kind, variant = 0) {
       px(ctx, 2, 11, 5, 4, PAL.bone);                 // skull pile
       px(ctx, 3, 12, 1, 1, PAL.outline); px(ctx, 5, 12, 1, 1, PAL.outline);
       px(ctx, 14, 24, 2, 2, PAL.red); px(ctx, 18, 24, 2, 2, PAL.red);
+      break;
+    }
+    case 'lair_spider': {
+      px(ctx, 3, 20, 26, 11, '#2a2036');
+      px(ctx, 10, 12, 12, 14, PAL.outline);          // the hollow
+      px(ctx, 12, 15, 8, 11, '#120c1c');
+      // web strands
+      for (let i = 0; i < 6; i++) { px(ctx, 4 + i * 4, 6 + (i % 2) * 3, 1, 1, PAL.stoneL); px(ctx, 6 + i * 4, 9 + (i % 3), 3, 1, PAL.stoneL); }
+      px(ctx, 6, 4, 1, 16, PAL.stoneL); px(ctx, 25, 5, 1, 14, PAL.stoneL);
+      px(ctx, 3, 8, 26, 1, PAL.stoneL);
+      // egg sacs
+      px(ctx, 4, 22, 4, 4, PAL.bone); px(ctx, 24, 23, 5, 5, PAL.bone); px(ctx, 25, 24, 1, 1, PAL.white);
+      px(ctx, 15, 19, 1, 1, PAL.red); px(ctx, 17, 19, 1, 1, PAL.red);
+      break;
+    }
+    case 'lair_troll': {
+      px(ctx, 2, 21, 28, 11, PAL.rockD);
+      px(ctx, 4, 8, 24, 15, PAL.rock);
+      px(ctx, 7, 5, 18, 5, PAL.rockL);
+      for (const [mx, my] of [[5, 9], [22, 7], [9, 19], [25, 17]]) px(ctx, mx, my, 3, 2, PAL.moss);
+      px(ctx, 11, 15, 11, 15, PAL.outline);
+      px(ctx, 12, 17, 9, 13, '#1a1020');
+      px(ctx, 3, 23, 2, 8, PAL.woodD); px(ctx, 2, 20, 4, 4, PAL.woodD);   // the club, leant
+      px(ctx, 24, 26, 6, 3, PAL.bone); px(ctx, 26, 24, 3, 3, PAL.bone);
+      px(ctx, 27, 25, 1, 1, PAL.outline);
+      px(ctx, 15, 22, 1, 1, PAL.red); px(ctx, 18, 22, 1, 1, PAL.red);
+      break;
+    }
+    case 'lair_wraith': {
+      // a barrow: a turf mound with a stone door, lit from within
+      px(ctx, 2, 24, 28, 7, PAL.dirtD);
+      px(ctx, 4, 12, 24, 13, PAL.grass3);
+      px(ctx, 8, 8, 16, 6, PAL.grass3);
+      px(ctx, 6, 10, 20, 2, PAL.grass1);
+      px(ctx, 12, 16, 9, 12, PAL.stoneD);
+      px(ctx, 13, 18, 7, 10, PAL.outline);
+      px(ctx, 14, 20, 5, 8, '#1a2a3a');
+      px(ctx, 16, 22, 1, 1, PAL.wraithG); px(ctx, 15, 25, 1, 1, PAL.wraithG); px(ctx, 18, 24, 1, 1, PAL.wraithG);
+      px(ctx, 5, 14, 2, 5, PAL.stone); px(ctx, 25, 15, 2, 5, PAL.stone);   // standing stones
+      px(ctx, 9, 5, 3, 3, PAL.wraithG); px(ctx, 10, 6, 1, 1, PAL.white);   // a light over the mound
+      break;
+    }
+    case 'lair_cultist': {
+      // a shrine: paved ground, an obelisk, an altar that has seen use
+      px(ctx, 1, 22, 30, 9, PAL.stoneD);
+      for (let i = 2; i < 30; i += 5) px(ctx, i, 26, 3, 1, PAL.stone);
+      px(ctx, 13, 3, 6, 20, PAL.stoneD);
+      px(ctx, 14, 2, 4, 21, PAL.stone);
+      px(ctx, 15, 1, 2, 1, PAL.stone);
+      px(ctx, 15, 6, 2, 2, PAL.spec.blood); px(ctx, 14, 9, 4, 1, PAL.spec.blood); px(ctx, 15, 11, 2, 3, PAL.spec.blood);
+      px(ctx, 4, 17, 9, 6, PAL.stone);               // altar
+      px(ctx, 4, 17, 9, 1, PAL.stoneL);
+      px(ctx, 6, 18, 5, 2, PAL.spec.blood); px(ctx, 7, 20, 1, 3, PAL.spec.bloodD);
+      px(ctx, 22, 15, 1, 5, PAL.bone); px(ctx, 26, 16, 1, 4, PAL.bone);   // candles
+      px(ctx, 22, 13, 1, 2, PAL.spec.fireY); px(ctx, 26, 14, 1, 2, PAL.spec.fireY);
+      break;
+    }
+    case 'lair_drake': {
+      // a roost: scorched rock, a fire in the mouth of it, and an egg
+      px(ctx, 1, 20, 30, 12, PAL.rockD);
+      px(ctx, 3, 9, 26, 13, PAL.rock);
+      px(ctx, 7, 4, 18, 7, PAL.rockL);
+      px(ctx, 10, 13, 12, 15, PAL.outline);
+      px(ctx, 11, 16, 10, 12, '#1a1020');
+      px(ctx, 13, 21, 6, 7, PAL.spec.fireD); px(ctx, 14, 19, 4, 6, PAL.spec.fire); px(ctx, 15, 18, 2, 4, PAL.spec.fireY);
+      for (const [sx, sy] of [[4, 12], [24, 11], [6, 24], [26, 25]]) px(ctx, sx, sy, 2, 1, PAL.outline);   // scorch
+      px(ctx, 24, 24, 4, 5, PAL.drake); px(ctx, 25, 23, 2, 1, PAL.drake); px(ctx, 25, 25, 1, 1, PAL.drakeB);   // egg
+      px(ctx, 2, 26, 5, 2, PAL.bone); px(ctx, 4, 24, 2, 2, PAL.bone);
       break;
     }
     case 'tomb': {

@@ -499,6 +499,42 @@ more than twenty-six tiles from home keep more, up to three extra. Walking
 into one is a fight you chose rather than a coin flip on whether anybody
 happens to be home.
 
+### The far reaches
+
+The map is 120 tiles a side now, and past the ogre den it keeps going. Five
+more camps sit on the outer rings, every one of them a bigger ask than the
+ogres, each with a monster that does something an ogre does not:
+
+| Camp | Monster | What it does | Bounty |
+|---|---|---|---|
+| **Spider Hollow** | Giant Spider | fast, bites often, and the venom **slows** whoever it bites | 1500 |
+| **Troll Warren** | Troll | **regenerates** 5 a second -- unless it is burning | 1700 |
+| **Wraith Barrow** | Wraith | only **70%** of any blow gets through; hits like a nightmare | 1900 |
+| **Blood Shrine** | Blood Cultist | a **ranged caster** whose bolt splashes, like a wizard's | 2100 |
+| **Drake Roost** | Drake | 560 health, breathes **fire over a line** at short range | 2900 |
+
+They sleep until day twenty to thirty, or until somebody pokes them, and
+they keep the biggest standing guards on the map. A fire mage is the answer
+to a troll; a wraith wants raw numbers; a cultist or a drake wants to be
+rushed by something with a shield.
+
+### Raids that mean it
+
+Raids grow with the days -- two raiders just after the peace, up to seven by
+day twenty -- and from **day ten** a raid can bring a second kind of monster
+from any other camp that has woken, so it is not one shape you have learned
+to answer. From **day eighteen** a third of raids come from the far camps
+whether or not you built toward them.
+
+**Every third raid is led by a boss.** A named champion of the worst camp
+that has woken -- Goblin Warlord, Bone Lord, Ogre Chieftain, Troll King,
+Brood Mother, Wraith Lord, High Priest, Elder Drake -- with twelve extra
+attribute points on top of the day's threat, 2.4× the health and 1.5× the
+damage of its kind, an escort of two more raiders, and a raid that lasts
+170 seconds instead of 75: the escort keeps coming as long as its lord is
+standing. It wears a crown and its name over its head, pays four times the
+gold and rank, and always drops two things from the good end of the table.
+
 Raids are on. After a few days of peace, lairs close enough to your buildings send
 parties at whatever building is **nearest to them** — so expanding toward a nest is what
 makes it hostile, and a forward outpost is what it finds first. Build a Barracks and

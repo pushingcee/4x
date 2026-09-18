@@ -580,7 +580,70 @@ export const MONSTERS = {
     id: 'demon', name: 'Demon', hp: 300, dmg: 34, rate: 1.2, range: 18, speed: 30,
     sight: 11, gold: 160, xp: 130, sprite: 'demon', aggro: 300, raid: true, big: true,
     desc: 'Comes when the realm grows fat. Pray you built a temple.'
+  },
+  // ---- the far reaches: everything past the ogres -------------------
+  // `regen` heals per second (not while burning); `soak` is the share of
+  // harm that gets through; `venom` slows whoever it bites for that long;
+  // `ranged` + `bolt` + `splash` make a caster of it.
+  spider: {
+    id: 'spider', name: 'Giant Spider', hp: 300, dmg: 26, rate: 0.75, range: 14, speed: 42,
+    sight: 9, gold: 110, xp: 100, sprite: 'spider', aggro: 240, raid: true, venom: 3,
+    desc: 'Fast, and bites often. The venom slows whoever it gets its fangs into.'
+  },
+  troll: {
+    id: 'troll', name: 'Troll', hp: 400, dmg: 36, rate: 1.55, range: 17, speed: 27,
+    sight: 9, gold: 130, xp: 120, sprite: 'troll', aggro: 240, raid: true, big: true, regen: 5,
+    desc: 'Knits itself back together as you cut it. Fire stops that.'
+  },
+  wraith: {
+    id: 'wraith', name: 'Wraith', hp: 260, dmg: 42, rate: 1.1, range: 16, speed: 38,
+    sight: 11, gold: 140, xp: 130, sprite: 'wraith', aggro: 260, raid: true, soak: 0.7,
+    desc: 'Half here. Steel goes through it as often as into it, and it hits like a nightmare.'
+  },
+  cultist: {
+    id: 'cultist', name: 'Blood Cultist', hp: 280, dmg: 40, rate: 1.7, range: 92, speed: 30,
+    sight: 11, gold: 150, xp: 140, sprite: 'cultist', aggro: 280, raid: true,
+    ranged: true, bolt: 'blood', splash: 22,
+    desc: 'Throws blood-fire from a distance, and it lands on everyone standing together.'
+  },
+  drake: {
+    id: 'drake', name: 'Drake', hp: 560, dmg: 46, rate: 1.9, range: 46, speed: 34,
+    sight: 12, gold: 240, xp: 220, sprite: 'drake', aggro: 300, raid: true, big: true,
+    ranged: true, bolt: 'fire', splash: 24,
+    desc: 'Breathes fire over a whole line at once. The worst thing on the map that is not a boss.'
   }
+};
+
+/**
+ * Bosses. Every third raid is led by one: a named champion of the camp it
+ * came from, worth a fortune and carrying something. The multipliers sit on
+ * top of the ordinary monster and on top of the day's threat, so a day-30
+ * boss is a genuine event rather than a fat goblin.
+ */
+export const BOSS = {
+  every: 3,          // raids per boss wave
+  bonus: 12,         // attribute points over an ordinary one of its kind
+  hpMul: 2.4, dmgMul: 1.5, goldMul: 4, xpMul: 4,
+  escort: 2,         // extra ordinary raiders marching with it
+  raidTime: 170,     // seconds it keeps coming before giving up (ordinary: 75)
+  drop: { count: 2, bias: 2.0 },
+  names: {
+    rat: 'Rat King', slime: 'Great Ooze', goblin: 'Goblin Warlord', skeleton: 'Bone Lord',
+    ogre: 'Ogre Chieftain', demon: 'Archfiend', spider: 'Brood Mother', troll: 'Troll King',
+    wraith: 'Wraith Lord', cultist: 'High Priest', drake: 'Elder Drake'
+  }
+};
+
+/**
+ * Raids grow with the days and, past a point, with the map: once the realm
+ * is old enough, the far camps march too, whether or not you have built
+ * toward them, and a raid can bring two kinds of monster at once.
+ */
+export const RAID = {
+  minSize: 2, maxSize: 7, growEvery: 3,   // size = minSize + (days since peace) / growEvery
+  mixedDay: 10,        // from this day a raid may draw a second kind from another camp
+  farDay: 18,          // from this day any woken camp may raid, near or not
+  farChance: 0.35      // ...this often
 };
 
 /**
@@ -591,7 +654,13 @@ export const LAIRS = {
   rat: { id: 'rat', name: 'Rat Nest', hp: 380, spawn: 'rat', every: 18, max: 4, garrison: 3, reward: 140, prop: 'lair_rat', xp: 40, wake: 2 },
   goblin: { id: 'goblin', name: 'Goblin Camp', hp: 820, spawn: 'goblin', every: 17, max: 5, garrison: 4, reward: 320, prop: 'lair_goblin', xp: 90, wake: 6 },
   skeleton: { id: 'skeleton', name: 'Haunted Graveyard', hp: 1300, spawn: 'skeleton', every: 18, max: 5, garrison: 4, reward: 640, prop: 'lair_skeleton', xp: 170, wake: 11 },
-  ogre: { id: 'ogre', name: 'Ogre Den', hp: 1900, spawn: 'ogre', every: 22, max: 3, garrison: 3, reward: 1150, prop: 'lair_ogre', xp: 320, wake: 16 }
+  ogre: { id: 'ogre', name: 'Ogre Den', hp: 1900, spawn: 'ogre', every: 22, max: 3, garrison: 3, reward: 1150, prop: 'lair_ogre', xp: 320, wake: 16 },
+  // the far reaches -- every one of these is a bigger ask than the ogre den
+  spider: { id: 'spider', name: 'Spider Hollow', hp: 2200, spawn: 'spider', every: 16, max: 5, garrison: 4, reward: 1500, prop: 'lair_spider', xp: 400, wake: 20 },
+  troll: { id: 'troll', name: 'Troll Warren', hp: 2500, spawn: 'troll', every: 24, max: 3, garrison: 3, reward: 1700, prop: 'lair_troll', xp: 440, wake: 22 },
+  wraith: { id: 'wraith', name: 'Wraith Barrow', hp: 2600, spawn: 'wraith', every: 20, max: 4, garrison: 3, reward: 1900, prop: 'lair_wraith', xp: 480, wake: 24 },
+  cultist: { id: 'cultist', name: 'Blood Shrine', hp: 2600, spawn: 'cultist', every: 20, max: 4, garrison: 3, reward: 2100, prop: 'lair_cultist', xp: 520, wake: 26 },
+  drake: { id: 'drake', name: 'Drake Roost', hp: 3300, spawn: 'drake', every: 28, max: 3, garrison: 2, reward: 2900, prop: 'lair_drake', xp: 720, wake: 30 }
 };
 
 /**
@@ -618,7 +687,12 @@ export const DROPS = {
   goblin: { chance: 0.13, bias: 0.15 },
   skeleton: { chance: 0.22, bias: 0.4 },
   ogre: { chance: 0.40, bias: 0.9 },
-  demon: { chance: 0.55, bias: 1.4 }
+  demon: { chance: 0.55, bias: 1.4 },
+  spider: { chance: 0.42, bias: 1.0 },
+  troll: { chance: 0.48, bias: 1.2 },
+  wraith: { chance: 0.5, bias: 1.3 },
+  cultist: { chance: 0.52, bias: 1.4 },
+  drake: { chance: 0.65, bias: 1.8 }
 };
 /** Shelf size and how often a new thing appears on it. */
 export const MARKET_SLOTS = 5;
@@ -629,7 +703,12 @@ export const LAIR_DROPS = {
   rat: { count: 1, bias: 0.2 },
   goblin: { count: 1, bias: 0.6 },
   skeleton: { count: 2, bias: 1.0 },
-  ogre: { count: 2, bias: 1.8 }
+  ogre: { count: 2, bias: 1.8 },
+  spider: { count: 2, bias: 2.0 },
+  troll: { count: 2, bias: 2.2 },
+  wraith: { count: 3, bias: 2.3 },
+  cultist: { count: 3, bias: 2.4 },
+  drake: { count: 3, bias: 3.0 }
 };
 
 /** No raids at all before this day: time to get a mine and a guild going. */

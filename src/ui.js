@@ -1395,6 +1395,16 @@ export class UI {
       Each is worth the same twenty attribute points, and each unlocks an ability paid
       for with <b>Rage</b>, <b>Focus</b> or <b>Mana</b>. Each also changes how the hero
       looks, so a party reads at a glance from across the map.</p>
+      <p><b>The far reaches.</b> Past the ogres the map keeps going: a <b>Spider Hollow</b>
+      (fast, and the bite slows you), a <b>Troll Warren</b> (they knit back together unless
+      they are burning), a <b>Wraith Barrow</b> (steel half goes through them), a <b>Blood
+      Shrine</b> (cultists throwing blood-fire at range) and a <b>Drake Roost</b> (fire over
+      a whole line). Each is a bigger ask than the ogre den and pays like it.</p>
+      <p><b>Raids get worse.</b> They grow with the days, from day ten they can bring two
+      kinds of monster at once, and from day eighteen the far camps march too. Every
+      <b>third</b> raid is led by a <b>boss</b>: a named champion of the worst camp that
+      has woken, with an escort that stays as long as it does. It wears a crown, it does
+      not go home, and it carries something worth the trouble.</p>
       <p><b>The camps fight back.</b> Strike a lair and it raises the alarm, mustering
       reinforcements far faster for a while &mdash; you have to out-kill it, not outlast
       it. Monsters also grow stronger as the days pass, so send enough, and remember a

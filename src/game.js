@@ -13,7 +13,7 @@ import {
   XP_TABLE, MAX_LEVEL, DROPS, LAIR_DROPS, MARKET_SLOTS, MARKET_RESTOCK,
   MISSIONS, RAIDS_ENABLED, CALLING_ORDER, DISTRESS_WINDOW,
   THREAT_PER_DAY, THREAT_CAP, SEPARATION_CAP, SPECS, XP_SHARE_BONUS, XP_SHARE_BONUS_CAP,
-  SUPPORT_SHARE, CREDIT_WINDOW, DEBUFF
+  SUPPORT_SHARE, CREDIT_WINDOW, DEBUFF, BOSS, RAID
 } from './data.js';
 import { makeRng, clamp, dist } from './util.js';
 import { rollItem, scoreFor, canUse, describe, TIERS } from './items.js';
@@ -21,7 +21,7 @@ import { rollItem, scoreFor, canUse, describe, TIERS } from './items.js';
 // Every camp now keeps a standing garrison, which on a nine-lair map is most
 // of thirty monsters before a single raid sets out. The old cap of 32 would
 // have left the far camps empty -- exactly the thing garrisons exist to stop.
-const MONSTER_CAP = 78;
+const MONSTER_CAP = 120;
 const WILDLIFE_CAP = 10;
 
 export class Game {
@@ -50,6 +50,7 @@ export class Game {
     this.taxIn = TAX_INTERVAL;
     this.fogIn = 0;
     this.waveIn = DAY_SECONDS * (PEACE_DAYS + 1.5);
+    this.raids = 0;            // raids launched so far; every third is led by a boss
     this.wildIn = 25;
     this.pathBudget = 0;
     this.speed = 1;
@@ -170,7 +171,7 @@ export class Game {
     for (const u of this.units) if (!u.dead && u.faction === 'monster' && u.raiding) n++;
     return n;
   }
-  get raidCap() { return clamp(3 + Math.floor((this.day - this.peaceDays) / 4), 3, 9); }
+  get raidCap() { return clamp(4 + Math.floor((this.day - this.peaceDays) / 3), 4, 14); }
 
   /**
    * A lair only raids once your realm is close enough to bother it.
@@ -350,15 +351,22 @@ export class Game {
 
     if (u.faction === 'monster') {
       this.stats.kills++;
+      const gold = u.boss ? u.def.gold * BOSS.goldMul : u.def.gold;
       if (src && src.kindClass === 'unit' && src.faction === 'realm') {
         src.kills++;
         if (src.isHero) {
-          src.gold += u.def.gold;
-          this.fx.coin(u.x, u.y - 10, u.def.gold);
+          src.gold += gold;
+          this.fx.coin(u.x, u.y - 10, gold);
         }
       }
-      this.shareXp(u, src, u.def.xp);
-      this.rollDrop(u, src);
+      this.shareXp(u, src, u.boss ? u.def.xp * BOSS.xpMul : u.def.xp);
+      if (u.boss) {
+        this.stats.bossesSlain = (this.stats.bossesSlain || 0) + 1;
+        this.fx.burst(u.x, u.y - 6, '#ffc94a', 30, 90, 1.2);
+        this.notify(`${u.name} is slain!`, 'good');
+        this.audio.play('crash');
+        this.rollDrop(u, src, BOSS.drop);
+      } else this.rollDrop(u, src);
     } else if (u.isHero) {
       this.stats.heroesLost++;
       this.graves.push({
@@ -1290,23 +1298,79 @@ export class Game {
     }
   }
 
+  /**
+   * A named champion of its kind: bigger, harder, richer, and it does not
+   * give up and go home the way an ordinary raider does.
+   */
+  spawnBoss(kind, x, y, lair) {
+    const m = this.spawnUnit(kind, x, y, 'monster');
+    m.boss = true;
+    m.name = BOSS.names[kind] || `${MONSTERS[kind].name} Champion`;
+    m.title = `${MONSTERS[kind].name} champion`;
+    for (const k of ['str', 'agi', 'con', 'int']) m.classBonus[k] += BOSS.bonus;
+    m.maxHp = Math.round(m.maxHp * BOSS.hpMul);
+    m.dmg *= BOSS.dmgMul;
+    m.radius = 9;
+    m.hp = m.maxHpNow;
+    m.lair = lair;
+    return m;
+  }
+
+  /**
+   * A raid. Drawn from a camp close enough to have noticed you -- or, once
+   * the realm is old enough, from anywhere. Grows with the days, brings a
+   * second kind of monster along once the map has woken up, and every third
+   * one is led by a boss with an escort.
+   */
   launchRaid() {
-    const live = this.lairs.filter(l => !l.dead && l.active && this.lairThreatensUs(l, 26));
-    if (!live.length || !this.monsterBudgetOk()) return;
+    const near = this.lairs.filter(l => !l.dead && l.active && this.lairThreatensUs(l, 26));
+    const far = this.day >= RAID.farDay && this.rng.chance(RAID.farChance)
+      ? this.lairs.filter(l => !l.dead && l.active && !near.includes(l)) : [];
+    const pool = far.length ? far : near;
+    if (!pool.length || !this.monsterBudgetOk()) return;
+    this.raids++;
+    const boss = this.raids % BOSS.every === 0;
+    // a boss wave comes from the worst camp that has woken, never the rat nest
+    const lair = boss
+      ? pool.reduce((a, b) => (b.def.xp > a.def.xp ? b : a))
+      : this.rng.pick(pool);
+
     // the further into the game, the nastier the visitors
-    const lair = this.rng.pick(live);
-    const size = clamp(1 + Math.floor((this.day - PEACE_DAYS) / 4), 1, 4);
-    let kind = lair.def.spawn;
-    if (this.day > 16 && this.rng.chance(0.3)) kind = 'demon';
+    let size = clamp(RAID.minSize + Math.floor((this.day - PEACE_DAYS) / RAID.growEvery), RAID.minSize, RAID.maxSize);
+    if (boss) size += BOSS.escort;
+    const kinds = [lair.def.spawn];
+    if (this.day > 16 && this.rng.chance(0.3)) kinds.push('demon');
+    if (this.day >= RAID.mixedDay) {
+      // a second kind from any other woken camp, so a raid is not one shape
+      const others = this.lairs.filter(l => !l.dead && l.active && l !== lair);
+      if (others.length && this.rng.chance(0.6)) kinds.push(this.rng.pick(others).def.spawn);
+    }
+
+    const spot = () => {
+      const t = this.world.nearestFree(lair.tx + this.rng.int(-2, 2), lair.ty + this.rng.int(-2, 2), 6);
+      return [toPx(t.x), toPx(t.y)];
+    };
+    const march = (m) => { m.lair = lair; m.raiding = true; m.raidIn = 0; };
+    let leader = null;
+    if (boss) {
+      const [x, y] = spot();
+      leader = this.spawnBoss(lair.def.spawn, x, y, lair);
+      march(leader);
+      leader.raidLeft = BOSS.raidTime;
+      lair.leader = leader;
+    }
     for (let i = 0; i < size; i++) {
       if (!this.monsterBudgetOk()) break;
-      const t = this.world.nearestFree(lair.tx + this.rng.int(-2, 2), lair.ty + this.rng.int(-2, 2), 6);
-      const m = this.spawnUnit(kind, toPx(t.x), toPx(t.y), 'monster');
-      m.lair = lair;
-      m.raiding = true;
-      m.raidIn = 0;
+      const [x, y] = spot();
+      const m = this.spawnUnit(kinds[i % kinds.length], x, y, 'monster');
+      march(m);
+      if (leader) m.raidLeft = BOSS.raidTime;   // the escort stays as long as its lord
     }
-    this.notify(`A ${MONSTERS[kind].name} raid marches on the realm!`, 'bad');
+    const what = kinds.map(k => MONSTERS[k].name).join(' and ');
+    if (leader) {
+      this.notify(`${leader.name} leads a ${what} raid on the realm!`, 'bad');
+      this.fx.text(leader.x, leader.y - 24, leader.name.toUpperCase(), '#ff5a5a', 30);
+    } else this.notify(`A ${what} raid marches on the realm!`, 'bad');
     this.audio.play('warn');
   }
 }

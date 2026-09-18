@@ -293,6 +293,7 @@ export class Unit {
     this.burnTick = 0;
     this.weakened = 0;         // seconds of hitting softer
     this.slowed = 0;           // seconds of moving slower
+    this.boss = false;         // a named champion leading a raid
     this.frenzy = 0;           // Rampage
     this.guarded = 0;          // Shield Wall
     this.hidden = 0;           // seconds of being unseen
@@ -633,13 +634,15 @@ export class Unit {
     const steal = this.gearMod('lifesteal');
     if (steal > 0) this.heal(dmg * steal / 100);
     if (this.def.ranged) {
-      const bolt = this.kind === 'wizard' ? (sp && sp.bolt) || 'fire' : 'arrow';
+      const bolt = this.kind === 'wizard' ? (sp && sp.bolt) || 'fire' : this.def.bolt || 'arrow';
       const p = this.game.spawnProjectile(this, t, dmg, bolt, crit);
       // an armed ability rides this bolt and goes off where it lands
       p.ability = this.strikeAb; this.strikeAb = null;
-      this.game.audio.play(this.kind === 'wizard' ? 'cast' : 'bow');
+      this.game.audio.play(bolt === 'arrow' ? 'bow' : 'cast');
     } else {
       this.game.applyDamage(t, dmg, this, crit);
+      // a spider's bite slows whoever it got its fangs into
+      if (this.def.venom && t.kindClass === 'unit') t.slowed = Math.max(t.slowed, this.def.venom);
       this.game.audio.play('hit');
       this.game.fx.burst(t.x, t.y - 4, crit ? '#ffc94a' : '#ffd0a0', crit ? 7 : 3, crit ? 44 : 26, 0.26);
     }
@@ -899,6 +902,7 @@ export class Unit {
     if (this.blessed > 0) n *= BLESSING.soak;
     const sp = this.specDef;
     if (sp && sp.soak) n *= sp.soak;        // plate over the robe
+    if (this.def.soak) n *= this.def.soak;  // a wraith is only half here
     const pw = this.chargeDef;
     if (pw && pw.onHurt) this.gainCharge(pw.onHurt);
     if (this.hidden > 0) this.reveal();     // being hit gives you away
@@ -923,6 +927,10 @@ export class Unit {
     this.tickSpec(dt);
     this.tickAfflictions(dt);
     if (this.dead) return;                  // a burn can be the end of you
+    // a troll knits itself back together -- unless it is on fire
+    if (this.def.regen && this.burn <= 0 && this.hp < this.maxHpNow) {
+      this.hp = Math.min(this.maxHpNow, this.hp + this.def.regen * dt);
+    }
     if (this.blessed > 0) this.blessed -= dt;
     // Mana pays for mending and blessing, so it has to refill -- faster when
     // they are standing about than when they are working a fight.

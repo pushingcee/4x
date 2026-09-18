@@ -4,8 +4,8 @@
 import { makeRng, clamp, Heap } from './util.js';
 import { T, TILE } from './art.js';
 
-export const MAP_W = 96;
-export const MAP_H = 96;
+export const MAP_W = 120;
+export const MAP_H = 120;
 
 /** Layered value noise. Cheap, deterministic, good enough for islands. */
 function valueNoise(rng, w, h, freq, octaves = 4) {
@@ -259,24 +259,40 @@ export class World {
     return true;
   }
 
+  /**
+   * Camps sit in rings around the start: the danger reads off the map. The
+   * outer rings are the far reaches -- five camps stronger than an ogre den,
+   * each on its own stretch of coast. If a ring has no room (the coastline
+   * can cut a whole side off) the band is widened inward until it fits, so
+   * every camp always exists somewhere.
+   */
   pickLairSpots(rng) {
     const spots = [];
     const kinds = [
       { kind: 'rat', min: 17, max: 28, n: 3 },
       { kind: 'goblin', min: 23, max: 38, n: 3 },
       { kind: 'skeleton', min: 30, max: 48, n: 2 },
-      { kind: 'ogre', min: 36, max: 56, n: 1 }
+      { kind: 'ogre', min: 38, max: 58, n: 1 },
+      { kind: 'spider', min: 44, max: 64, n: 1 },
+      { kind: 'troll', min: 46, max: 66, n: 1 },
+      { kind: 'wraith', min: 48, max: 68, n: 1 },
+      { kind: 'cultist', min: 50, max: 70, n: 1 },
+      { kind: 'drake', min: 52, max: 74, n: 1 }
     ];
     for (const k of kinds) {
       for (let i = 0; i < k.n; i++) {
-        for (let t = 0; t < 600; t++) {
-          const x = rng.int(2, this.w - 4), y = rng.int(2, this.h - 4);
-          const d = Math.hypot(x - this.start.x, y - this.start.y);
-          if (d < k.min || d > k.max) continue;
-          if (!this.areaFree(x, y, 2, 2)) continue;
-          if (spots.some(s => Math.hypot(s.x - x, s.y - y) < 9)) continue;
-          spots.push({ kind: k.kind, x, y });
-          break;
+        let placed = false;
+        for (let min = k.min; min >= 14 && !placed; min -= 4) {
+          for (let t = 0; t < 600; t++) {
+            const x = rng.int(2, this.w - 4), y = rng.int(2, this.h - 4);
+            const d = Math.hypot(x - this.start.x, y - this.start.y);
+            if (d < min || d > k.max) continue;
+            if (!this.areaFree(x, y, 2, 2)) continue;
+            if (spots.some(s => Math.hypot(s.x - x, s.y - y) < 9)) continue;
+            spots.push({ kind: k.kind, x, y });
+            placed = true;
+            break;
+          }
         }
       }
     }

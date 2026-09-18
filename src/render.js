@@ -419,11 +419,13 @@ export class Renderer {
     if (ghost) ctx.globalAlpha = 0.38;
     ctx.fillStyle = PAL.shadow;
     if (!ghost) ctx.fillRect(x + 4, Math.round(u.y) - 1, 8, 2);
-    if (u.def.big) {
+    if (u.def.big || u.boss) {
+      const k = u.boss ? (u.def.big ? 1.8 : 1.5) : 1.35;
       ctx.save();
       ctx.translate(Math.round(u.x), Math.round(u.y + 2));
-      ctx.scale(1.35, 1.35);
-      ctx.drawImage(s, -8, -16);
+      ctx.scale(k, k);
+      if (u.hitFlash > 0) this.drawFlashed(ctx, s, -8, -16);
+      else ctx.drawImage(s, -8, -16);
       ctx.restore();
     } else if (u.hitFlash > 0) {
       this.drawFlashed(ctx, s, x, y);
@@ -456,6 +458,16 @@ export class Renderer {
       ctx.fillStyle = '#ffe9a0';
       ctx.fillRect(x + 7, y - 12, 2, 2);
       ctx.fillRect(x + 6, y - 11, 4, 1);
+    }
+    // a boss wears a crown, and its name, so you know what is coming
+    if (u.boss) {
+      const cy = y - (u.def.big ? 18 : 12);
+      ctx.fillStyle = PAL.gold;
+      ctx.fillRect(x + 5, cy + 2, 6, 2);
+      ctx.fillRect(x + 5, cy, 1, 2); ctx.fillRect(x + 7, cy - 1, 2, 3); ctx.fillRect(x + 10, cy, 1, 2);
+      ctx.fillStyle = '#e05050';
+      ctx.fillRect(x + 7, cy + 2, 2, 1);
+      drawText(ctx, u.name, Math.round(u.x - textWidth(u.name) / 2), cy - 8, '#ff9d9d');
     }
     // what a wizard left on them: a flicker of flame, or the pall of a curse
     if (u.burn > 0) {
@@ -501,7 +513,7 @@ export class Renderer {
     // (a caster's is their mana bar, drawn below)
     const showCharge = pw && !pw.mana && (u.abilityReady || u.charge > u.maxCharge * 0.5);
     const showMana = u.isCaster && u.maxMana > 0;
-    if (!hurt && !u.selected && !showCharge && !showMana) return;
+    if (!hurt && !u.selected && !showCharge && !showMana && !u.boss) return;
     // clear the mission badge when there is one
     const badged = u.mission && u.mission !== 'none' && (u.kind === 'peasant' || u.isHero);
     const w = 12, x = Math.round(u.x - w / 2), y = Math.round(u.y - (badged ? 25 : 19));
