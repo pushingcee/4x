@@ -9,6 +9,7 @@ import { Fx } from './fx.js';
 import {
   BUILDINGS, CLASSES, MONSTERS, LAIRS, FLAGS, RES_RATE, START,
   DAY_SECONDS, TAX_INTERVAL, RESURRECT_COST, HERO_CLASSES, PEACE_DAYS, STRUCTURE_DMG,
+  WAGE_BASE, WAGE_PER_LEVEL, WAGE_GRACE,
   XP_TABLE, MAX_LEVEL, DROPS, LAIR_DROPS, MARKET_SLOTS, MARKET_RESTOCK,
   MISSIONS, RAIDS_ENABLED, CALLING_ORDER, DISTRESS_WINDOW,
   THREAT_PER_DAY, THREAT_CAP, SEPARATION_CAP, SPECS, XP_SHARE_BONUS, XP_SHARE_BONUS_CAP,
@@ -418,15 +419,73 @@ export class Game {
     this.popCap = cap; this.pop = pop;
   }
 
-  collectTax() {
+  /** What every standing building pays you each collection. */
+  taxDue() {
     let total = 0;
     for (const b of this.buildings) {
       if (b.dead || !b.complete || !b.def.tax) continue;
       total += b.def.tax;
     }
-    if (total > 0) {
-      this.addResource('gold', total);
-      if (this.palace && !this.palace.dead) this.fx.coin(this.palace.x, this.palace.y - 26, total);
+    return total;
+  }
+
+  /** What one hero draws. A veteran is worth more and costs more. */
+  wageFor(u) { return WAGE_BASE + (u.level - 1) * WAGE_PER_LEVEL; }
+
+  /** What the whole army draws each collection. */
+  wagesDue() {
+    let total = 0;
+    for (const u of this.units) if (!u.dead && u.isHero) total += this.wageFor(u);
+    return total;
+  }
+
+  /** Taxes in, wages out. This is the number the player actually lives on. */
+  netIncome() { return this.taxDue() - this.wagesDue(); }
+
+  /**
+   * Payday. Buildings pay in, soldiers draw out, and what is left over is
+   * yours. If the treasury cannot cover the payroll the shortfall is not
+   * forgiven -- it is remembered, and a soldier who goes unpaid too many
+   * times in a row walks off the job.
+   */
+  collectTax() {
+    const tax = this.taxDue();
+    if (tax > 0) {
+      this.addResource('gold', tax);
+      if (this.palace && !this.palace.dead) this.fx.coin(this.palace.x, this.palace.y - 26, tax);
+    }
+
+    const heroes = this.units.filter(u => !u.dead && u.isHero);
+    if (!heroes.length) return;
+
+    // pay the longest-serving first, so a squeeze costs you your newest hire
+    heroes.sort((a, b) => b.level - a.level || a.id - b.id);
+    const quit = [];
+    for (const u of heroes) {
+      const wage = this.wageFor(u);
+      if (this.res.gold >= wage) {
+        this.res.gold -= wage;
+        u.unpaid = 0;
+        continue;
+      }
+      // Take what there is and remember the rest. Gold escrowed on a flag
+      // lives in `reserved`, not here, so a bounty you already committed is
+      // safe from the payroll -- you cannot welch on a promise to pay for it.
+      this.res.gold = 0;
+      u.unpaid = (u.unpaid || 0) + 1;
+      if (u.unpaid > WAGE_GRACE) quit.push(u);
+      else this.notify(`${u.name} has not been paid (${u.unpaid}/${WAGE_GRACE})`, 'bad');
+    }
+    // Only ever one walks out per payday, and it is the least invested of
+    // them -- going broke should bleed the army over several paydays, with
+    // a chance to fix it, rather than emptying the barracks in one go.
+    if (quit.length) {
+      quit.sort((a, b) => a.level - b.level || b.id - a.id);
+      const u = quit[0];
+      this.notify(`${u.name} the ${u.title} leaves your service unpaid`, 'bad');
+      this.fx.text(u.x, u.y - 20, 'WALKS OUT', '#ff5a5a', 24);
+      this.retireUnit(u);
+      this.recomputePop();
     }
   }
 
