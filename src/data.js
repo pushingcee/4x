@@ -653,7 +653,7 @@ export const BOSS = {
   hpMul: 2.4, dmgMul: 1.5, goldMul: 4, xpMul: 4,
   escort: 2,         // extra ordinary raiders marching with it
   raidTime: 170,     // seconds it keeps coming before giving up (ordinary: 75)
-  drop: { count: 2, bias: 2.0 },
+  drop: { count: 2, bias: 2.0, tier: 'legendary' },   // one legendary, always, plus one more
   names: {
     rat: 'Rat King', slime: 'Great Ooze', goblin: 'Goblin Warlord', skeleton: 'Bone Lord',
     ogre: 'Ogre Chieftain', demon: 'Archfiend', spider: 'Brood Mother', troll: 'Troll King',

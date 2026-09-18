@@ -638,7 +638,9 @@ export class Game {
     const out = [];
     for (let i = 0; i < count; i++) {
       if (!forced && this.rng() > table.chance) continue;
-      const item = rollItem(this.rng, { tierBias: table.bias || 0 });
+      // a table can promise a tier for its first item -- a boss always
+      // carries a legendary -- and the rest are rolled with the bias
+      const item = rollItem(this.rng, { tierBias: table.bias || 0, tier: i === 0 ? table.tier : undefined });
       const taker = this.pickLooter(victim);
       if (!taker) { this.groundLoot(item, victim.x, victim.y); out.push(item); continue; }
       const where = taker.takeItem(item);

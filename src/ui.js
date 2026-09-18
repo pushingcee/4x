@@ -1408,7 +1408,7 @@ export class UI {
       kinds of monster at once, and from day eighteen the far camps march too. Every
       <b>third</b> raid is led by a <b>boss</b>: a named champion of the worst camp that
       has woken, with an escort that stays as long as it does. It wears a crown, it does
-      not go home, and it carries something worth the trouble.</p>
+      not go home, and it always carries a <b>legendary</b> item.</p>
       <p><b>The camps fight back.</b> Strike a lair and it raises the alarm, mustering
       reinforcements far faster for a while &mdash; you have to out-kill it, not outlast
       it. Monsters also grow stronger as the days pass, so send enough, and remember a
