@@ -2,7 +2,7 @@
 // ui.js — DOM HUD, pointer input, and every player-facing command.
 // Designed thumb-first: one-finger pan, tap to select, big buttons.
 // ===================================================================
-import { TILE, buildingSprite, unitSprite, propSprite, flagSprite, makeCanvas, PAL } from './art.js';
+import { TILE, buildingSprite, unitSprite, propSprite, flagSprite, makeCanvas, PAL, hasSpecSprite } from './art.js';
 import {
   BUILDINGS, BUILD_ORDER, CLASSES, FLAGS, MONSTERS, LAIRS, RES_RATE, RESURRECT_COST,
   MISSIONS, MISSION_ORDER, CALLING_ORDER, STATS, STAT_ORDER, MAX_LEVEL,
@@ -89,7 +89,7 @@ function specBlock(u) {
   return `<div class="spec offer">
     <div class="head">CHOOSE A SPECIALISATION &mdash; this is permanent</div>
     ${list.map(sp => `<button class="specbtn" data-spec="${sp.id}" style="--sc:${sp.colour}">
-      <b>${sp.name}</b>
+      <span class="sprow"><span class="pic" data-unit="${hasSpecSprite(u.kind, sp.id) ? `${u.kind}/${sp.id}` : u.kind}"></span><b>${sp.name}</b></span>
       <span class="bon">${STAT_ORDER.filter(k => sp.bonus[k])
         .map(k => `+${sp.bonus[k]} ${STATS[k].short}`).join(' &middot; ')}</span>
       <span class="sdesc">${sp.desc}</span>
@@ -635,6 +635,8 @@ export class UI {
       ${u.isHero ? `<div class="hint">A hero can still be given a <b>calling</b> and will go and
         do it &mdash; being sworn to a guild does not stop anybody swinging a pick.</div>` : ''}`;
     el.querySelector('.pic').replaceWith(spriteEl(unitSprite(u.sprite, 0, 1), 16, 16, 36));
+    // the picker shows what each choice will look like on the map
+    el.querySelectorAll('.specbtn [data-unit]').forEach(s => s.replaceWith(unitIcon(s.dataset.unit)));
     this.wireSelActions(el, u);
     // keep the live numbers moving without touching the buttons
     this.selRefresh = () => {
@@ -1348,7 +1350,9 @@ export class UI {
       but a robe. A <b>Temple</b> hires a <b>Cleric</b>, who goes looking for the
       hurt anywhere in the realm rather than waiting for them &mdash; mending the wounded
       and <b>blessing</b> whoever is about to be. Both spend <b>mana</b>, which is what
-      intelligence has been buying all along. Neither has specialisations yet.</p>
+      intelligence has been buying all along. Neither has specialisations yet, though
+      their sprites are drawn and waiting: wizards will choose <b>Blood</b>, <b>Fire</b> or
+      <b>Dark</b> magic, clerics the <b>Light</b> or the <b>Paladin</b>'s plate.</p>
       <p><b>Loot.</b> Monsters carry things &mdash; rarely if they are weak, often if they
       are not, always from a razed camp &mdash; and whatever falls goes to one of the
       heroes who was there. Seven slots: weapon, chest, neck, two earrings, two rings.
@@ -1370,7 +1374,8 @@ export class UI {
       <b>Longbowman</b> (reach above all), <b>Mercenary</b> or <b>Assassin</b> &mdash; the
       last two walk unseen, open hard out of the dark, and break off rather than trade.
       Each is worth the same twenty attribute points, and each unlocks an ability paid
-      for with <b>Rage</b> or <b>Focus</b>.</p>
+      for with <b>Rage</b> or <b>Focus</b>. Each also changes how the soldier looks, so a
+      party reads at a glance from across the map.</p>
       <p><b>The camps fight back.</b> Strike a lair and it raises the alarm, mustering
       reinforcements far faster for a while &mdash; you have to out-kill it, not outlast
       it. Monsters also grow stronger as the days pass, so send enough, and remember a

@@ -217,7 +217,11 @@ warriors cannot quite handle: without a cleric the party was wiped having
 killed three of seven. With one, the same party cleared all seven and two
 walked away. Roughly fifty heals a fight and three soldiers blessed at once.
 
-Neither has specialisations yet -- those come later.
+Neither has specialisations yet -- those come later. Their sprites are already
+drawn, though (see below), so the choice can be seen before it can be made:
+wizards will take **Blood** (robust, single-target), **Fire** (area and burns)
+or **Dark** magic (area debuffs and lingering dots), clerics the **Light**
+(healing) or the **Paladin**'s plate (buffs, and harder to kill).
 
 ### Loot
 
@@ -346,6 +350,20 @@ Measured against an unspecialised level 5: warriors gain **×1.27 / ×1.32 /
 weakest on paper and is not — the number cannot see an opener landing at 2.4×
 on something that never got to swing back.
 
+Each specialisation also gets its own sprite, so a party reads at a glance
+from across the map -- and the picker shows each one before you commit.
+
+![every hero and every specialisation](docs/sprites.png)
+
+Left to right per row: the base class, then its specialisations, idle above
+and mid-step below. Warriors: Fury (twin blades, warpaint), Arms (full helm,
+greatsword), Protection (plate, tower shield, plume). Rangers: Longbowman
+(a bow taller than they are), Mercenary (bandana, blade, coin purse),
+Assassin (hood, mask, twin daggers). Wizards: Blood (crimson hood, a
+floating blood orb), Fire (burning hat, flame staff), Dark (wide brim, skull
+staff, wisps). Clerics: Light (halo, sun staff, prayer book), Paladin
+(crested helm, tabard, sun shield, mace).
+
 **Mercenaries and assassins fight out of the dark.** They are invisible to
 monsters while unseen, strike for a bonus when they open from it, and then
 break off rather than standing and trading — strike, leave, come again. In a
@@ -432,6 +450,7 @@ lot to ask before trying a specialisation out. So:
 | `?test=1` | three level-5 warriors and three level-5 rangers outside the City Centre, plus 1500 gold to build with |
 | `?heroes=warrior:2,cleric:1,wizard:1` | whatever you name, in whatever numbers |
 | `?test=1&level=3` | the same party at a different rank |
+| `?sprites=1` | a contact sheet of every hero and specialisation sprite, at size; tap to dismiss |
 
 They arrive at full health on walkable ground, ranked high enough that the
 specialisation picker is waiting on their sheet. Combine with `?seed=` to test
@@ -458,6 +477,7 @@ src/
   render.js         camera, depth-sorted drawing, pixel font, minimap
   ui.js             DOM panels and all pointer input
   art.js            every sprite, generated at runtime from code
+  sheet.js          the ?sprites=1 contact sheet of hero and specialisation art
   audio.js          WebAudio chiptune SFX and music
   data.js           missions, buildings, classes, and every balance number
   fx.js             particles and floating text

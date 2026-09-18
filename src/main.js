@@ -6,6 +6,7 @@ import { Renderer } from './render.js';
 import { UI } from './ui.js';
 import { Audio } from './audio.js';
 import * as ITEMS from './items.js';
+import { spriteSheet } from './sheet.js';
 
 const boot = document.getElementById('boot');
 const bar = document.getElementById('bootbar');
@@ -59,6 +60,8 @@ async function start() {
   testPartyFromUrl(game);
 
   const ui = new UI(game, renderer, audio, document.getElementById('app'));
+  // `?sprites=1`: every hero and every specialisation on one sheet, for eyeballing the art
+  if (new URLSearchParams(location.search).has('sprites')) spriteSheet(document.body);
   renderer.centerOn(game.palace.x, game.palace.y + 12);
   await step(100, 'long live the realm');
 
