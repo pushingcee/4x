@@ -615,6 +615,33 @@ export const MONSTERS = {
 };
 
 /**
+ * ===================================================================
+ * MODES -- chosen once, before the realm is raised.
+ * ===================================================================
+ *
+ * The far reaches and the boss waves were written for a party that takes a
+ * whole campaign to gather, so they are not the default game. Easy is the
+ * realm as it was, up to the ogres. Hard keeps that map and makes the raids
+ * mean it. Endgame is the wide map with everything past the ogres awake.
+ */
+export const MODES = {
+  easy: {
+    id: 'easy', name: 'Easy', colour: '#7fd8a0', mapSize: 96, far: false, raids: 'classic',
+    blurb: 'The realm as it was. Four kinds of camp, the ogre den at the far end, and raids you can meet in the field.'
+  },
+  hard: {
+    id: 'hard', name: 'Hard', colour: '#ffc94a', mapSize: 96, far: false, raids: 'waves',
+    blurb: 'The same map, but the raids mean it: bigger, mixed, and every third one led by a boss with an escort.'
+  },
+  endgame: {
+    id: 'endgame', name: 'Endgame', colour: '#ff5a5a', mapSize: 120, far: true, raids: 'waves',
+    blurb: 'A wider realm and five camps past the ogres, each worse than the last -- and their bosses come for you.'
+  }
+};
+export const MODE_ORDER = ['easy', 'hard', 'endgame'];
+export const DEFAULT_MODE = 'easy';
+
+/**
  * Bosses. Every third raid is led by one: a named champion of the camp it
  * came from, worth a fortune and carrying something. The multipliers sit on
  * top of the ordinary monster and on top of the day's threat, so a day-30

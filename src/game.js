@@ -1,7 +1,7 @@
 // ===================================================================
 // game.js — simulation core: economy, flags, spawning, victory.
 // ===================================================================
-import { World, toPx, toTile, MAP_W, MAP_H } from './world.js';
+import { World, toPx, toTile } from './world.js';
 import { TILE, hasSpecSprite } from './art.js';
 import { Building, Lair, Unit, Projectile } from './entities.js';
 import { peasantBrain, heroBrain, guardBrain, monsterBrain } from './brains.js';
@@ -13,7 +13,7 @@ import {
   XP_TABLE, MAX_LEVEL, DROPS, LAIR_DROPS, MARKET_SLOTS, MARKET_RESTOCK,
   MISSIONS, RAIDS_ENABLED, CALLING_ORDER, DISTRESS_WINDOW,
   THREAT_PER_DAY, THREAT_CAP, SEPARATION_CAP, SPECS, XP_SHARE_BONUS, XP_SHARE_BONUS_CAP,
-  SUPPORT_SHARE, CREDIT_WINDOW, DEBUFF, BOSS, RAID
+  SUPPORT_SHARE, CREDIT_WINDOW, DEBUFF, BOSS, RAID, MODES, DEFAULT_MODE
 } from './data.js';
 import { makeRng, clamp, dist } from './util.js';
 import { rollItem, scoreFor, canUse, describe, TIERS } from './items.js';
@@ -25,12 +25,13 @@ const MONSTER_CAP = 120;
 const WILDLIFE_CAP = 10;
 
 export class Game {
-  constructor(seed, audio) {
+  constructor(seed, audio, mode = DEFAULT_MODE) {
     this.seed = seed >>> 0;
     this.rng = makeRng(this.seed ^ 0x9e3779b9);
     this.audio = audio;
     this.fx = new Fx();
-    this.world = new World(this.seed);
+    this.mode = MODES[mode] || MODES[DEFAULT_MODE];
+    this.world = new World(this.seed, { size: this.mode.mapSize, far: this.mode.far });
 
     this.units = [];
     this.buildings = [];
@@ -171,7 +172,11 @@ export class Game {
     for (const u of this.units) if (!u.dead && u.faction === 'monster' && u.raiding) n++;
     return n;
   }
-  get raidCap() { return clamp(4 + Math.floor((this.day - this.peaceDays) / 3), 4, 14); }
+  get raidCap() {
+    return this.mode.raids === 'classic'
+      ? clamp(3 + Math.floor((this.day - this.peaceDays) / 4), 3, 9)
+      : clamp(4 + Math.floor((this.day - this.peaceDays) / 3), 4, 14);
+  }
 
   /**
    * A lair only raids once your realm is close enough to bother it.
@@ -1299,6 +1304,31 @@ export class Game {
   }
 
   /**
+   * The raid as it always was: one kind, from a camp you built toward, one
+   * to four of them, and the odd demon once the realm has grown fat. Easy
+   * mode lives on this.
+   */
+  launchClassicRaid() {
+    const live = this.lairs.filter(l => !l.dead && l.active && this.lairThreatensUs(l, 26));
+    if (!live.length || !this.monsterBudgetOk()) return;
+    this.raids++;
+    const lair = this.rng.pick(live);
+    const size = clamp(1 + Math.floor((this.day - PEACE_DAYS) / 4), 1, 4);
+    let kind = lair.def.spawn;
+    if (this.day > 16 && this.rng.chance(0.3)) kind = 'demon';
+    for (let i = 0; i < size; i++) {
+      if (!this.monsterBudgetOk()) break;
+      const t = this.world.nearestFree(lair.tx + this.rng.int(-2, 2), lair.ty + this.rng.int(-2, 2), 6);
+      const m = this.spawnUnit(kind, toPx(t.x), toPx(t.y), 'monster');
+      m.lair = lair;
+      m.raiding = true;
+      m.raidIn = 0;
+    }
+    this.notify(`A ${MONSTERS[kind].name} raid marches on the realm!`, 'bad');
+    this.audio.play('warn');
+  }
+
+  /**
    * A named champion of its kind: bigger, harder, richer, and it does not
    * give up and go home the way an ordinary raider does.
    */
@@ -1323,6 +1353,7 @@ export class Game {
    * one is led by a boss with an escort.
    */
   launchRaid() {
+    if (this.mode.raids === 'classic') return this.launchClassicRaid();
     const near = this.lairs.filter(l => !l.dead && l.active && this.lairThreatensUs(l, 26));
     const far = this.day >= RAID.farDay && this.rng.chance(RAID.farChance)
       ? this.lairs.filter(l => !l.dead && l.active && !near.includes(l)) : [];
@@ -1330,9 +1361,10 @@ export class Game {
     if (!pool.length || !this.monsterBudgetOk()) return;
     this.raids++;
     const boss = this.raids % BOSS.every === 0;
-    // a boss wave comes from the worst camp that has woken, never the rat nest
+    // a boss wave is an event: it comes from the worst camp that has woken
+    // anywhere on the map, not merely the nearest one that noticed you
     const lair = boss
-      ? pool.reduce((a, b) => (b.def.xp > a.def.xp ? b : a))
+      ? this.lairs.filter(l => !l.dead && l.active).reduce((a, b) => (b.def.xp > a.def.xp ? b : a))
       : this.rng.pick(pool);
 
     // the further into the game, the nastier the visitors

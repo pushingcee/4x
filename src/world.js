@@ -36,9 +36,11 @@ function valueNoise(rng, w, h, freq, octaves = 4) {
 }
 
 export class World {
-  constructor(seed) {
+  /** opts: { size } tiles a side, { far } whether the outer camps exist. */
+  constructor(seed, opts = {}) {
     this.seed = seed >>> 0;
-    this.w = MAP_W; this.h = MAP_H;
+    this.far = !!opts.far;
+    this.w = opts.size || MAP_W; this.h = opts.size || MAP_H;
     const n = this.w * this.h;
     this.tiles = new Uint8Array(n);
     this.vary = new Uint8Array(n);
@@ -272,13 +274,17 @@ export class World {
       { kind: 'rat', min: 17, max: 28, n: 3 },
       { kind: 'goblin', min: 23, max: 38, n: 3 },
       { kind: 'skeleton', min: 30, max: 48, n: 2 },
-      { kind: 'ogre', min: 38, max: 58, n: 1 },
-      { kind: 'spider', min: 44, max: 64, n: 1 },
-      { kind: 'troll', min: 46, max: 66, n: 1 },
-      { kind: 'wraith', min: 48, max: 68, n: 1 },
-      { kind: 'cultist', min: 50, max: 70, n: 1 },
-      { kind: 'drake', min: 52, max: 74, n: 1 }
+      { kind: 'ogre', min: 36, max: 56, n: 1 }
     ];
+    if (this.far) {
+      kinds.push(
+        { kind: 'spider', min: 44, max: 64, n: 1 },
+        { kind: 'troll', min: 46, max: 66, n: 1 },
+        { kind: 'wraith', min: 48, max: 68, n: 1 },
+        { kind: 'cultist', min: 50, max: 70, n: 1 },
+        { kind: 'drake', min: 52, max: 74, n: 1 }
+      );
+    }
     for (const k of kinds) {
       for (let i = 0; i < k.n; i++) {
         let placed = false;

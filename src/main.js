@@ -7,6 +7,7 @@ import { UI } from './ui.js';
 import { Audio } from './audio.js';
 import * as ITEMS from './items.js';
 import { spriteSheet } from './sheet.js';
+import { MODES, MODE_ORDER, DEFAULT_MODE } from './data.js';
 
 const boot = document.getElementById('boot');
 const bar = document.getElementById('bootbar');
@@ -44,12 +45,49 @@ function testPartyFromUrl(game) {
   game.res.stone += 500;
 }
 
+/**
+ * Which realm to raise. `?mode=easy|hard|endgame` skips the question;
+ * otherwise the boot screen asks, remembering the last answer as the
+ * highlighted default.
+ */
+function chooseMode() {
+  const p = new URLSearchParams(location.search);
+  const forced = p.get('mode');
+  if (forced && MODES[forced]) return Promise.resolve(forced);
+  let last = DEFAULT_MODE;
+  try { last = localStorage.getItem('realm.mode') || DEFAULT_MODE; } catch (_) { /* private mode */ }
+  if (!MODES[last]) last = DEFAULT_MODE;
+
+  const box = document.getElementById('modes');
+  const bar = document.querySelector('.boot-bar');
+  bar.hidden = true;
+  msg.textContent = 'how hard a realm?';
+  box.hidden = false;
+  return new Promise(res => {
+    for (const id of MODE_ORDER) {
+      const m = MODES[id];
+      const b = document.createElement('button');
+      b.className = 'mode' + (id === last ? ' last' : '');
+      b.style.setProperty('--mc', m.colour);
+      b.innerHTML = `<b>${m.name}</b><span>${m.blurb}</span>`;
+      b.addEventListener('click', () => {
+        try { localStorage.setItem('realm.mode', id); } catch (_) { /* private mode */ }
+        box.hidden = true;
+        bar.hidden = false;
+        res(id);
+      });
+      box.appendChild(b);
+    }
+  });
+}
+
 async function start() {
   const seed = seedFromUrl();
+  const mode = await chooseMode();
   await step(12, 'raising mountains...');
 
   const audio = new Audio();
-  const game = new Game(seed, audio);
+  const game = new Game(seed, audio, mode);
   await step(55, 'planting forests...');
 
   const canvas = document.getElementById('view');

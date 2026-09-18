@@ -499,9 +499,23 @@ more than twenty-six tiles from home keep more, up to three extra. Walking
 into one is a fight you chose rather than a coin flip on whether anybody
 happens to be home.
 
-### The far reaches
+### Three realms
 
-The map is 120 tiles a side now, and past the ogre den it keeps going. Five
+A level-5 party of six is a whole campaign's work, so the far camps and the
+boss waves are not the default game. The boot screen asks once:
+
+| Mode | Map | Camps | Raids |
+|---|---|---|---|
+| **Easy** | 96 tiles | rats, goblins, skeletons, one ogre den | one kind, one to four of them, from a camp you built toward |
+| **Hard** | 96 tiles | the same | grow to seven, mixed kinds, a **boss** every third |
+| **Endgame** | 120 tiles | the same plus the five far camps below | the same, and the far camps march too |
+
+`?mode=easy`, `?mode=hard` or `?mode=endgame` in the address skips the
+question, and the last answer is remembered as the highlighted default.
+
+### The far reaches (Endgame)
+
+The map is 120 tiles a side, and past the ogre den it keeps going. Five
 more camps sit on the outer rings, every one of them a bigger ask than the
 ogres, each with a monster that does something an ogre does not:
 
@@ -518,7 +532,7 @@ they keep the biggest standing guards on the map. A fire mage is the answer
 to a troll; a wraith wants raw numbers; a cultist or a drake wants to be
 rushed by something with a shield.
 
-### Raids that mean it
+### Raids that mean it (Hard and Endgame)
 
 Raids grow with the days -- two raiders just after the peace, up to seven by
 day twenty -- and from **day ten** a raid can bring a second kind of monster
@@ -577,6 +591,7 @@ lot to ask before trying a specialisation out. So:
 | `?heroes=warrior:2,cleric:1,wizard:1` | whatever you name, in whatever numbers |
 | `?test=1&level=3` | the same party at a different rank |
 | `?sprites=1` | a contact sheet of every hero and specialisation sprite, at size; tap to dismiss |
+| `?mode=endgame` | skip the mode question (`easy`, `hard` or `endgame`) |
 
 They arrive at full health on walkable ground, ranked high enough that the
 specialisation picker is waiting on their sheet. Combine with `?seed=` to test

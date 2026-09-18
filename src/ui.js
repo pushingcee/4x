@@ -1395,12 +1395,16 @@ export class UI {
       Each is worth the same twenty attribute points, and each unlocks an ability paid
       for with <b>Rage</b>, <b>Focus</b> or <b>Mana</b>. Each also changes how the hero
       looks, so a party reads at a glance from across the map.</p>
-      <p><b>The far reaches.</b> Past the ogres the map keeps going: a <b>Spider Hollow</b>
+      <p><b>Three realms.</b> <b>Easy</b> is the game as it was, up to the ogre den, with
+      raids you can meet in the field. <b>Hard</b> keeps that map and makes the raids mean
+      it. <b>Endgame</b> is the wide map with everything past the ogres. Chosen once, when
+      the realm is raised; <b>?mode=</b> in the address skips the question.</p>
+      <p><b>The far reaches</b> (Endgame). Past the ogres the map keeps going: a <b>Spider Hollow</b>
       (fast, and the bite slows you), a <b>Troll Warren</b> (they knit back together unless
       they are burning), a <b>Wraith Barrow</b> (steel half goes through them), a <b>Blood
       Shrine</b> (cultists throwing blood-fire at range) and a <b>Drake Roost</b> (fire over
       a whole line). Each is a bigger ask than the ogre den and pays like it.</p>
-      <p><b>Raids get worse.</b> They grow with the days, from day ten they can bring two
+      <p><b>Raids get worse</b> (Hard and Endgame). They grow with the days, from day ten they can bring two
       kinds of monster at once, and from day eighteen the far camps march too. Every
       <b>third</b> raid is led by a <b>boss</b>: a named champion of the worst camp that
       has woken, with an escort that stays as long as it does. It wears a crown, it does
@@ -1424,7 +1428,7 @@ export class UI {
       <p><b>Camera.</b> Drag to pan, pinch to zoom, or tap <b>Zoom</b> for Close / Mid / Far / Wide.
       Tap the corner map to open the full realm and jump anywhere. Select a unit and hit
       <b>Follow</b> to have the camera track it.</p>
-      <p>Seed <b>${g.seed}</b> &middot; day <b>${g.day}</b> &middot; lairs left <b>${g.lairs.filter(l => !l.dead).length}</b></p>`,
+      <p>Seed <b>${g.seed}</b> &middot; <b style="color:${g.mode.colour}">${g.mode.name}</b> &middot; day <b>${g.day}</b> &middot; lairs left <b>${g.lairs.filter(l => !l.dead).length}</b></p>`,
       [
         { label: this.audio.muted ? 'Sound: off' : 'Sound: on', fn: () => { this.audio.toggleMute(); this.hideModal(); this.showMenu(); } },
         { label: this.audio.musicOn ? 'Music: on' : 'Music: off', fn: () => { this.audio.toggleMusic(); this.hideModal(); this.showMenu(); } },
