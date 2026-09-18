@@ -322,8 +322,6 @@ canvas{image-rendering:pixelated;image-rendering:crisp-edges}
 }
 .specbtn:active{background:var(--sc,var(--gold));color:var(--ink)}
 .specbtn b{font-size:13px;color:var(--sc,var(--gold))}
-.specbtn .sprow{display:flex;align-items:center;gap:6px}
-.specbtn .sprow canvas{image-rendering:pixelated;flex:none}
 .specbtn:active b,.specbtn:active .sdesc,.specbtn:active .bon{color:var(--ink)}
 .specbtn .bon{font-size:11px;color:var(--good)}
 .specbtn .sdesc{font-size:10.5px;color:var(--txt-dim);line-height:1.4}

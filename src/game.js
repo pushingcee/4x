@@ -2,7 +2,7 @@
 // game.js — simulation core: economy, flags, spawning, victory.
 // ===================================================================
 import { World, toPx, toTile, MAP_W, MAP_H } from './world.js';
-import { TILE, hasSpecSprite } from './art.js';
+import { TILE } from './art.js';
 import { Building, Lair, Unit, Projectile } from './entities.js';
 import { peasantBrain, heroBrain, guardBrain, monsterBrain } from './brains.js';
 import { Fx } from './fx.js';
@@ -678,8 +678,6 @@ export class Game {
     if (!sp) return null;
     u.spec = sp.id;
     u.title = `${sp.name} ${CLASSES[u.kind].name}`;
-    // dressed for the job from now on; a spec with no art of its own keeps the class look
-    if (hasSpecSprite(u.kind, sp.id)) u.sprite = `${u.kind}/${sp.id}`;
     u.hp = u.maxHpNow;                  // the new constitution is theirs at once
     // Rage you have to work up; focus you simply have, until you spend it.
     const pw = u.chargeDef;

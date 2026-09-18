@@ -218,10 +218,10 @@ killed three of seven. With one, the same party cleared all seven and two
 walked away. Roughly fifty heals a fight and three soldiers blessed at once.
 
 Neither has specialisations yet -- those come later. Their sprites are already
-drawn, though (see below), so the choice can be seen before it can be made:
-wizards will take **Blood** (robust, single-target), **Fire** (area and burns)
-or **Dark** magic (area debuffs and lingering dots), clerics the **Light**
-(healing) or the **Paladin**'s plate (buffs, and harder to kill).
+drawn, though (see below): wizards will take **Blood** (robust, single-target),
+**Fire** (area and burns) or **Dark** magic (area debuffs and lingering dots),
+clerics the **Light** (healing) or the **Paladin**'s plate (buffs, and harder
+to kill).
 
 ### Loot
 
@@ -350,8 +350,10 @@ Measured against an unspecialised level 5: warriors gain **×1.27 / ×1.32 /
 weakest on paper and is not — the number cannot see an opener landing at 2.4×
 on something that never got to swing back.
 
-Each specialisation also gets its own sprite, so a party reads at a glance
-from across the map -- and the picker shows each one before you commit.
+Every specialisation has a sprite of its own drawn and waiting in `art.js`,
+under the key `class/spec` (`warrior/fury`, `wizard/blood`, ...). Nothing in
+the game uses them yet; `?sprites=1` shows them, and `unitSprite('warrior/fury')`
+returns one whenever the game is ready to.
 
 ![every hero and every specialisation](docs/sprites.png)
 
