@@ -131,9 +131,9 @@ async function start() {
       <p><b>6.</b> <b>Build</b> a Barracks and <b>hire</b> a warrior &mdash; heroes cost gold,
       not villagers &mdash; then raise an attack <b>Flag</b> on a lair and watch the greedy fool
       charge in. At level 5 they pick a <b>specialisation</b>, once, for good.</p>
-      <p><b>7.</b> Soldiers draw a <b>wage</b> every payday and buildings pay the <b>tax</b>
-      that covers it. The number beside your gold is what a payday leaves you; keep it out
-      of the red or your heroes start walking off the job.</p>
+      <p><b>7.</b> Buildings pay <b>tax</b> every payday and an army costs nothing to keep.
+      Spend the gold on a guild's panel to <b>drill</b> it, so recruits arrive ranked, or on
+      any building to <b>fortify</b> it.</p>
       <p><b>Send enough.</b> A struck camp sounds the alarm and pours out reinforcements,
       and the monsters toughen as the days pass. Rank is what wins these fights, and rank
       comes from fighting.</p>

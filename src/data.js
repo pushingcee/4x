@@ -548,7 +548,7 @@ export const HERO_CLASSES = ['warrior', 'ranger', 'wizard', 'cleric'];
  * multipliers -- they hand out attribute points instead, so a hero's numbers
  * come from exactly one place and the class system stays legible.
  */
-export const XP_TABLE = [0, 60, 180, 420, 850];
+export const XP_TABLE = [0, 50, 145, 320, 620];
 export const MAX_LEVEL = XP_TABLE.length;   // 5
 export const LEVEL_STATS = 5;               // +5 to every attribute per level
 
@@ -800,28 +800,27 @@ export const TAX_INTERVAL = 12;     // seconds between tax collections
 
 /**
  * ===================================================================
- * WAGES -- what an army costs to keep, as opposed to to raise.
+ * GOLD SINKS -- things worth spending the treasury on.
  * ===================================================================
  *
- * Hiring a hero used to be the only time they ever cost you anything, so
- * gold piled up with nothing to do: measured over thirty days, 81% of every
- * coin earned was still sitting in the treasury, and the only thing actually
- * limiting the realm was the population cap.
- *
- * Now a soldier draws a wage every time the taxes come in, and a veteran
- * draws more than a recruit -- rank is worth having AND worth paying for.
- * That makes the tax income mean something: buildings are the engine that
- * pays the army, which is the reason to keep building.
+ * An army does not draw a wage. Gold that piles up is spent on choices
+ * instead: drilling a guild so its recruits arrive ranked and it holds one
+ * more of them, and fortifying a building so it stands where it would have
+ * fallen. Both are one-way, and both are decisions rather than a bill.
  */
-export const WAGE_BASE = 4;         // per hero, per tax collection
-export const WAGE_PER_LEVEL = 3;    // added per level above the first
-
-/**
- * Nobody deserts over one bad collection. A hero goes unpaid, gets a warning,
- * and only walks out if the treasury is still empty the next time round --
- * so a temporary squeeze costs you a scare rather than your army.
- */
-export const WAGE_GRACE = 2;        // missed collections tolerated before leaving
+export const GUILD_TIERS = [
+  { name: 'Drilled', cost: 220, level: 2, slots: 1,
+    desc: 'Recruits arrive at level 2, and the guild holds one more.' },
+  { name: 'Veteran', cost: 520, level: 3, slots: 2,
+    desc: 'Recruits arrive at level 3, and the guild holds two more.' }
+];
+export const FORTIFY = {
+  hpMul: 1.5,         // max health, and repaired to full
+  towerDmgMul: 1.4,   // a fortified tower also hits harder
+  extraGuard: 1,      // a fortified guard house keeps one more
+  costPerHp: 0.25, costBase: 40,   // price: a quarter of the building's health in gold, plus this
+  desc: 'Half again the health, repaired to full. A tower shoots harder; a guard house keeps a fourth guard.'
+};
 export const RESURRECT_COST = 0.6;  // fraction of hire cost to raise a dead hero
 /**
  * Swinging at a building is not the same as swinging at a throat. Halving

@@ -9,7 +9,8 @@ import {
   STAT_ORDER, STAT_EFFECT, RUSH_SPEED, LAIR_ALARM_RATE, LAIR_ALARM_TIME,
   SPECS, SPEC_LEVEL, POWERS, ABILITIES, STEALTH_REVEAL, DEBUFF,
   GARRISON_NEAR, GARRISON_PER_RING, GARRISON_EXTRA_CAP,
-  BLESSING, MANA_REGEN, MANA_REST, MANA_REGEN_PER_INT, XP_PER_HEAL, XP_PER_BLESSING, CREDIT_WINDOW
+  BLESSING, MANA_REGEN, MANA_REST, MANA_REGEN_PER_INT, XP_PER_HEAL, XP_PER_BLESSING, CREDIT_WINDOW,
+  GUILD_TIERS, FORTIFY
 } from './data.js';
 import { clamp, dist, heroName, peasantName } from './util.js';
 import { SLOT_KEYS, slotOf, canUse, scoreFor } from './items.js';
@@ -106,10 +107,16 @@ export class Building extends Structure {
     this.builders = 0;
     this.spawnCool = 0;
     this.recruitQueue = [];
+    this.tier = 0;          // guild training, see GUILD_TIERS
+    this.fortified = false;
     this.occupy();
   }
 
   get name() { return this.def.name; }
+  /** How many heroes this guild holds, drilling included. */
+  get maxHeroes() { return (this.def.maxHeroes || 0) + (this.tier ? GUILD_TIERS[this.tier - 1].slots : 0); }
+  /** The training bought so far, if any. */
+  get tierDef() { return this.tier ? GUILD_TIERS[this.tier - 1] : null; }
 
   addProgress(amount) {
     if (this.complete) return;
@@ -134,7 +141,8 @@ export class Building extends Structure {
         const foe = this.game.nearestEnemy(this.x, this.y, this.def.attack.range, 'realm');
         if (foe) {
           this.cool = this.def.attack.rate;
-          this.game.spawnProjectile(this, foe, this.def.attack.dmg, 'bolt');
+          const dmg = this.def.attack.dmg * (this.fortified ? FORTIFY.towerDmgMul : 1);
+          this.game.spawnProjectile(this, foe, dmg, 'bolt');
         }
       }
     }
@@ -142,7 +150,8 @@ export class Building extends Structure {
     if (this.def.garrison) {
       this.spawnCool -= dt;
       const alive = this.game.units.filter(u => !u.dead && u.homeId === this.id).length;
-      if (alive < this.def.garrison && this.spawnCool <= 0) {
+      const want = this.def.garrison + (this.fortified ? FORTIFY.extraGuard : 0);
+      if (alive < want && this.spawnCool <= 0) {
         this.spawnCool = 14;
         const t = this.approach(null);
         const g = this.game.spawnUnit('guard', toPx(t.x), toPx(t.y), 'realm');

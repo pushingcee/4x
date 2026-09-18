@@ -78,8 +78,9 @@ their sheet:
 
 A freshly hired warrior is STR 16 / CON 15 with 200 health. **Rank is the only
 progression a unit has, and rank comes from fighting** — the table runs
-60 / 180 / 420 / 850 experience, so level 5 is a campaign's work rather than an
-afternoon's. What that buys, measured against the same hero on their first day:
+50 / 145 / 320 / 620 experience -- a quarter shorter than it was, because too
+many realms were won without anyone reaching the cap -- so level 5 is a
+campaign's work rather than an afternoon's. What that buys, measured against the same hero on their first day:
 
 | Hero at level 5 | Health | Damage |
 |---|---|---|
@@ -179,24 +180,24 @@ Taxes come in every 12 seconds, so a Marketplace pays for itself in about three 
 and then keeps paying. Pushing an outpost out to a far seam is now an *income* decision
 as well as a logistics one.
 
-**Soldiers draw a wage.** A hero costs **4 gold per payday, plus 3 per level above the
-first**, so a level-5 veteran draws 16 where a fresh hire draws 4. This is the part that
-makes the taxes matter: an army is a standing bill, and buildings are what pays it.
+**An army draws no wage.** It used to, and it made a level-5 veteran a bill you
+paid forever; that is gone. The treasury is spent on two things instead, both
+bought once on the building's own panel, both a decision rather than a cost of
+standing still:
 
-A worked example from a real day-30 realm: twelve buildings paying **44** a payday
-against six veteran heroes drawing **81** — a net of **−37**, which mining has to cover.
-Wanting a bigger army is the same thing as wanting more buildings.
+| Sink | Price | What you get |
+|---|---|---|
+| **Drill a guild: Drilled** | 220 | recruits arrive at **level 2**; the guild holds one more hero |
+| **Drill a guild: Veteran** | 520 | recruits arrive at **level 3**; the guild holds two more |
+| **Fortify a building** | a quarter of its health + 40 (a tower 150, a guard house 190, the City Centre 640) | **half again** the health, repaired to full; a tower hits 40% harder; a guard house keeps a fourth guard |
 
-**Going broke bleeds you slowly.** A hero who cannot be paid gets a warning, and walks
-out only if the treasury is still empty two paydays later. Veterans are paid first and
-the least experienced leaves first, and only **one per payday**, so a bad stretch costs
-you your newest hire and a scare rather than your whole barracks at once. Paying again
-clears the debt.
+Drilling is what closes the gap the far camps open: a Veteran barracks turns
+out level-3 warriors, two ranks up the ladder before their first fight.
 
-The treasury readout beside your gold shows the net, and turns red when the payroll
-outruns the taxes.
+The readout beside your gold shows what the buildings bring in each payday.
 
-What this did to the shape of the game, measured the same way:
+The economy was last measured with wages still in; the table below is that
+measurement and will read high on gold left unspent until it is redone:
 
 | | Mining | Tax | Market | Lairs | Gold left unspent |
 |---|---|---|---|---|---|

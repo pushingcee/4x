@@ -7,7 +7,8 @@ import {
   BUILDINGS, BUILD_ORDER, CLASSES, FLAGS, MONSTERS, LAIRS, RES_RATE, RESURRECT_COST,
   MISSIONS, MISSION_ORDER, CALLING_ORDER, STATS, STAT_ORDER, MAX_LEVEL,
   STANCES, STANCE_ORDER, SPECS, SPEC_LEVEL, ABILITIES,
-  MARKET_SLOTS
+  MARKET_SLOTS,
+  GUILD_TIERS, FORTIFY,
 } from './data.js';
 import { toTile, toPx } from './world.js';
 import {
@@ -684,15 +685,21 @@ export class UI {
       }
       if (def.guild) {
         const c = CLASSES[def.guild];
-        actions += `<button class="btn small primary" data-recruit="${def.guild}">Hire ${c.name} (${c.cost.gold}g) ${g.guildRoll(b, def.guild)}/${def.maxHeroes}</button>`;
+        actions += `<button class="btn small primary" data-recruit="${def.guild}">Hire ${c.name} (${c.cost.gold}g) ${g.guildRoll(b, def.guild)}/${b.maxHeroes}</button>`;
+        const next = GUILD_TIERS[b.tier];
+        if (next) actions += `<button class="btn small" data-act="train" title="${next.desc}">Drill: ${next.name} (${next.cost}g)</button>`;
       }
+      if (!b.fortified) actions += `<button class="btn small" data-act="fortify" title="${FORTIFY.desc}">Fortify (${g.fortifyCost(b)}g)</button>`;
     }
+    const status = b.complete
+      ? ['operational', b.tierDef && b.tierDef.name.toLowerCase(), b.fortified && 'fortified'].filter(Boolean).join(' &middot; ')
+      : `under construction ${Math.round(b.progress * 100)}%`;
     el.innerHTML = `
       <div class="sel-head">
         <span class="pic"></span>
         <div class="grow">
           <h3>${def.name}</h3>
-          <div class="meta" data-live="meta">${b.complete ? 'operational' : `under construction ${Math.round(b.progress * 100)}%`}</div>
+          <div class="meta" data-live="meta">${status}</div>
           <div class="hp"><i data-live="hp" class="${hpF > 0.5 ? '' : hpF > 0.25 ? 'mid' : 'low'}" style="width:${hpF * 100}%"></i></div>
         </div>
       </div>
@@ -700,7 +707,8 @@ export class UI {
         <span>HP <b>${Math.ceil(b.hp)}/${b.maxHp}</b></span>
         ${def.pop ? `<span>POP <b>+${def.pop}</b></span>` : ''}
         ${def.tax ? `<span>TAX <b>+${def.tax}</b></span>` : ''}
-        ${def.guild ? `<span>HEROES <b>${g.units.filter(u => !u.dead && u.homeId === b.id).length}/${def.maxHeroes}</b></span>` : ''}
+        ${def.guild ? `<span>HEROES <b>${g.units.filter(u => !u.dead && u.homeId === b.id).length}/${b.maxHeroes}</b></span>` : ''}
+        ${b.tierDef ? `<span>RECRUITS <b>level ${b.tierDef.level}</b></span>` : ''}
       </div>
       ${def.market ? marketBlock(b) : ''}
       <div class="hint">${def.desc}</div>
@@ -720,7 +728,11 @@ export class UI {
         bar.className = f > 0.5 ? '' : f > 0.25 ? 'mid' : 'low';
       }
       const meta = el.querySelector('[data-live="meta"]');
-      if (meta) meta.textContent = b.complete ? 'operational' : `under construction ${Math.round(b.progress * 100)}%`;
+      if (meta) {
+        meta.innerHTML = b.complete
+          ? ['operational', b.tierDef && b.tierDef.name.toLowerCase(), b.fortified && 'fortified'].filter(Boolean).join(' &middot; ')
+          : `under construction ${Math.round(b.progress * 100)}%`;
+      }
     };
   }
 
@@ -842,6 +854,12 @@ export class UI {
           case 'flaghere':
             this.startPlaceFlag('attack', FLAGS.attack.presets[1]);
             this.doPlace(e.tx, e.ty);
+            break;
+          case 'train':
+            if (g.trainGuild(e)) this.renderSelection(true);
+            break;
+          case 'fortify':
+            if (g.fortify(e)) this.renderSelection(true);
             break;
           case 'raise': {
             const add = FLAGS[e.type].presets[1];
@@ -1285,16 +1303,14 @@ export class UI {
     $('#r-stone').textContent = fmt(g.res.stone);
     $('#r-pop').textContent = `${g.pop}/${g.popCap}`;
     $('#r-day').textContent = g.day;
-    // Escrowed flag bounties, and what the realm nets each payday once the
-    // soldiers have been paid -- a negative one is the warning that matters.
+    // Escrowed flag bounties, and what the buildings bring in each payday.
     const esc = Math.round(g.reserved);
-    const net = g.netIncome();
     const d = $('#r-gold-d');
     const bits = [];
     if (esc > 0) bits.push(`(${esc})`);
-    bits.push(net >= 0 ? `+${net}` : `${net}`);
+    bits.push(`+${g.taxDue()}`);
     d.textContent = bits.join(' ');
-    d.className = net < 0 ? 'neg' : '';
+    d.className = '';
   }
 
   notify(msg, tone = '') {
@@ -1352,12 +1368,11 @@ export class UI {
       Marketplace 10, an Inn or Blacksmith 7, a hut or an outpost 3 or 4 &mdash; and a
       gold seam pays far less than it used to. Building is how you get rich; mining only
       gets you started.</p>
-      <p><b>Soldiers draw a wage.</b> 4 gold a payday, plus 3 for every level above the
-      first, so a level-5 veteran costs 16 where a raw hire costs 4. An army is a
-      standing bill and your buildings are what pays it &mdash; the figure beside your
-      gold is what a payday actually leaves you, and it turns red when the payroll is
-      winning. Let it run dry and a hero walks out: one per payday, the least experienced
-      first, after two warnings. Pay up and the debt clears.</p>
+      <p><b>What gold is for.</b> An army draws no wage. Spend the treasury instead on
+      <b>drilling</b> a guild &mdash; Drilled (220g) sends recruits out at level 2 and holds
+      one more hero, Veteran (520g) at level 3 and two more &mdash; and on <b>fortifying</b>
+      a building: half again the health, repaired to full, a harder-hitting tower, a fourth
+      guard. Both are bought once, on the building's own panel, and neither is a bill.</p>
       <p><b>What the attributes do.</b> Strength adds melee damage, agility attack speed,
       constitution health, and intelligence both mana and critical chance &mdash; every
       single point counts. Heroes gain <b>+5 to everything</b> per level, up to level 5,

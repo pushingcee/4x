@@ -9,7 +9,7 @@ import { Fx } from './fx.js';
 import {
   BUILDINGS, CLASSES, MONSTERS, LAIRS, FLAGS, RES_RATE, START,
   DAY_SECONDS, TAX_INTERVAL, RESURRECT_COST, HERO_CLASSES, PEACE_DAYS, STRUCTURE_DMG,
-  WAGE_BASE, WAGE_PER_LEVEL, WAGE_GRACE,
+  GUILD_TIERS, FORTIFY,
   XP_TABLE, MAX_LEVEL, DROPS, LAIR_DROPS, MARKET_SLOTS, MARKET_RESTOCK,
   MISSIONS, RAIDS_ENABLED, CALLING_ORDER, DISTRESS_WINDOW,
   THREAT_PER_DAY, THREAT_CAP, SEPARATION_CAP, SPECS, XP_SHARE_BONUS, XP_SHARE_BONUS_CAP,
@@ -478,25 +478,7 @@ export class Game {
     return total;
   }
 
-  /** What one hero draws. A veteran is worth more and costs more. */
-  wageFor(u) { return WAGE_BASE + (u.level - 1) * WAGE_PER_LEVEL; }
-
-  /** What the whole army draws each collection. */
-  wagesDue() {
-    let total = 0;
-    for (const u of this.units) if (!u.dead && u.isHero) total += this.wageFor(u);
-    return total;
-  }
-
-  /** Taxes in, wages out. This is the number the player actually lives on. */
-  netIncome() { return this.taxDue() - this.wagesDue(); }
-
-  /**
-   * Payday. Buildings pay in, soldiers draw out, and what is left over is
-   * yours. If the treasury cannot cover the payroll the shortfall is not
-   * forgiven -- it is remembered, and a soldier who goes unpaid too many
-   * times in a row walks off the job.
-   */
+  /** Payday. Buildings pay in; nobody draws out. An army is not a bill. */
   collectTax() {
     const tax = this.taxDue();
     if (tax > 0) {
@@ -504,38 +486,6 @@ export class Game {
       if (this.palace && !this.palace.dead) this.fx.coin(this.palace.x, this.palace.y - 26, tax);
     }
 
-    const heroes = this.units.filter(u => !u.dead && u.isHero);
-    if (!heroes.length) return;
-
-    // pay the longest-serving first, so a squeeze costs you your newest hire
-    heroes.sort((a, b) => b.level - a.level || a.id - b.id);
-    const quit = [];
-    for (const u of heroes) {
-      const wage = this.wageFor(u);
-      if (this.res.gold >= wage) {
-        this.res.gold -= wage;
-        u.unpaid = 0;
-        continue;
-      }
-      // Take what there is and remember the rest. Gold escrowed on a flag
-      // lives in `reserved`, not here, so a bounty you already committed is
-      // safe from the payroll -- you cannot welch on a promise to pay for it.
-      this.res.gold = 0;
-      u.unpaid = (u.unpaid || 0) + 1;
-      if (u.unpaid > WAGE_GRACE) quit.push(u);
-      else this.notify(`${u.name} has not been paid (${u.unpaid}/${WAGE_GRACE})`, 'bad');
-    }
-    // Only ever one walks out per payday, and it is the least invested of
-    // them -- going broke should bleed the army over several paydays, with
-    // a chance to fix it, rather than emptying the barracks in one go.
-    if (quit.length) {
-      quit.sort((a, b) => a.level - b.level || b.id - a.id);
-      const u = quit[0];
-      this.notify(`${u.name} the ${u.title} leaves your service unpaid`, 'bad');
-      this.fx.text(u.x, u.y - 20, 'WALKS OUT', '#ff5a5a', 24);
-      this.retireUnit(u);
-      this.recomputePop();
-    }
   }
 
   // -----------------------------------------------------------------
@@ -581,10 +531,42 @@ export class Game {
   }
 
   /** Take a unit off the board without the fanfare of a death. */
-  retireUnit(u) {
-    if (u.job && u.job.type === 'build' && u.job.site) u.job.site.builders--;
-    u.job = null;
-    u.dead = true;
+  /**
+   * Drill a guild. Its recruits arrive already ranked and it holds more of
+   * them: the way to field a stronger army is to pay for it up front, once,
+   * rather than to be billed for it forever.
+   */
+  trainGuild(b) {
+    if (!b || b.dead || !b.complete || !b.def.guild) return false;
+    const next = GUILD_TIERS[b.tier];
+    if (!next) { this.notify(`${b.name} is as drilled as it gets`, 'bad'); return false; }
+    if (this.res.gold < next.cost) { this.notify(`Need ${next.cost} gold to drill ${b.name}`, 'bad'); return false; }
+    this.res.gold -= next.cost;
+    b.tier++;
+    this.fx.ring(b.x, b.y - 8, '#ffc94a', 16);
+    this.fx.text(b.x, b.y - 24, next.name.toUpperCase(), '#ffc94a', 26);
+    this.notify(`${b.name} is ${next.name.toLowerCase()}: recruits arrive at level ${next.level}`, 'good');
+    this.audio.play('level');
+    return true;
+  }
+
+  /** What fortifying this building costs, in gold. */
+  fortifyCost(b) { return Math.round(b.def.hp * FORTIFY.costPerHp + FORTIFY.costBase); }
+
+  /** Stone on stone: half again the health, repaired to full, once. */
+  fortify(b) {
+    if (!b || b.dead || !b.complete || b.fortified) return false;
+    const price = this.fortifyCost(b);
+    if (this.res.gold < price) { this.notify(`Need ${price} gold to fortify ${b.name}`, 'bad'); return false; }
+    this.res.gold -= price;
+    b.fortified = true;
+    b.maxHp = Math.round(b.def.hp * FORTIFY.hpMul);
+    b.hp = b.maxHp;
+    this.fx.ring(b.x, b.y - 8, '#b6bccb', 16);
+    this.fx.text(b.x, b.y - 24, 'FORTIFIED', '#b6bccb', 26);
+    this.notify(`${b.name} fortified`, 'good');
+    this.audio.play('build');
+    return true;
   }
 
   /**
@@ -858,7 +840,7 @@ export class Game {
     if (this.pop + (cls.pop || 0) > this.popCap) { this.notify('Population cap reached — build huts', 'bad'); return null; }
     if (building.def.guild) {
       const alive = this.units.filter(u => !u.dead && u.homeId === building.id).length;
-      if (alive >= building.def.maxHeroes) { this.notify(`${building.name} is full`, 'bad'); return null; }
+      if (alive >= building.maxHeroes) { this.notify(`${building.name} is full`, 'bad'); return null; }
     }
     if (!this.canAfford(cls.cost)) { this.notify('Not enough gold', 'bad'); return null; }
     this.spend(cls.cost);
@@ -869,7 +851,15 @@ export class Game {
     u.homeX = building.x; u.homeY = building.y;
     if (u.isHero) {
       u.gold = 25;
-      this.notify(`${u.name} the ${u.title} joins the realm`, 'good');
+      // a drilled guild's recruits arrive already ranked
+      const tier = building.tierDef;
+      if (tier && tier.level > u.level) {
+        u.level = Math.min(MAX_LEVEL, tier.level);
+        u.xp = XP_TABLE[u.level - 1] || 0;
+        u.hp = u.maxHpNow;
+        u.mana = u.maxMana;
+      }
+      this.notify(`${u.name} the ${u.title} joins the realm${u.level > 1 ? ` at level ${u.level}` : ''}`, 'good');
     }
     this.audio.play('recruit');
     return u;
