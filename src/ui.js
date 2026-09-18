@@ -1285,10 +1285,16 @@ export class UI {
     $('#r-stone').textContent = fmt(g.res.stone);
     $('#r-pop').textContent = `${g.pop}/${g.popCap}`;
     $('#r-day').textContent = g.day;
+    // Escrowed flag bounties, and what the realm nets each payday once the
+    // soldiers have been paid -- a negative one is the warning that matters.
     const esc = Math.round(g.reserved);
+    const net = g.netIncome();
     const d = $('#r-gold-d');
-    d.textContent = esc > 0 ? `(${esc})` : '';
-    d.className = '';
+    const bits = [];
+    if (esc > 0) bits.push(`(${esc})`);
+    bits.push(net >= 0 ? `+${net}` : `${net}`);
+    d.textContent = bits.join(' ');
+    d.className = net < 0 ? 'neg' : '';
   }
 
   notify(msg, tone = '') {
@@ -1342,6 +1348,16 @@ export class UI {
       long way from home. A <b>Guard House</b> keeps three soldiers who never wander off; a
       <b>Watch Tower</b> shoots at anything hostile and lifts the fog around it. Both cost the
       stone you went out there to cut.</p>
+      <p><b>The treasury.</b> Buildings pay <b>tax</b> every twelve seconds &mdash; a
+      Marketplace 10, an Inn or Blacksmith 7, a hut or an outpost 3 or 4 &mdash; and a
+      gold seam pays far less than it used to. Building is how you get rich; mining only
+      gets you started.</p>
+      <p><b>Soldiers draw a wage.</b> 4 gold a payday, plus 3 for every level above the
+      first, so a level-5 veteran costs 16 where a raw hire costs 4. An army is a
+      standing bill and your buildings are what pays it &mdash; the figure beside your
+      gold is what a payday actually leaves you, and it turns red when the payroll is
+      winning. Let it run dry and a hero walks out: one per payday, the least experienced
+      first, after two warnings. Pay up and the debt clears.</p>
       <p><b>What the attributes do.</b> Strength adds melee damage, agility attack speed,
       constitution health, and intelligence both mana and critical chance &mdash; every
       single point counts. Heroes gain <b>+5 to everything</b> per level, up to level 5,

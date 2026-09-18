@@ -124,21 +124,25 @@ Both cost the stone you went out there to cut, which is the loop: the far seam p
 the outpost, the outpost pays for its cover, the cover lets you sit close enough to a
 lair to be worth raiding, and clearing that lair opens the ground past it.
 
-**The depot and the cover multiply.** Ten peasants put on the furthest gold seam of the
-seed-4242 map — 506px from home, no soldiers anywhere — over four minutes, averaged
-across forty runs:
+**The depot and the cover only work together.** Ten peasants put on the furthest gold seam of the
+seed-4242 map — 506px from home, no soldiers anywhere, and with building tax switched
+off so this measures the hauling alone — over four minutes:
 
 | | Gold in four minutes |
 |---|---|
-| Bare seam | 46 |
-| Guard House + Watch Tower, no depot | 89 |
-| Mining Camp, no cover | 38 |
-| **Mining Camp + cover** | **319** |
+| Bare seam | 0 |
+| Guard House + Watch Tower, no depot | 14 |
+| Mining Camp, no cover | 0 |
+| **Mining Camp + cover** | **48** |
 
-That is about **seven times** a bare far seam, and neither building gets close on its
-own: a depot with nobody guarding it is a depot your crew never lives long enough to
-reach, and cover with no depot just means they survive a walk that was never worth
-making.
+A bare far seam now returns *nothing at all*: at the lower carry rate the crew is wiped
+before a single round trip completes. There is no multiplier to quote because the
+baseline is zero — which is the point. Far ground is not a place you can simply send
+peasants to.
+
+Neither building gets close on its own: a depot with nobody guarding it is a depot your
+crew never lives long enough to reach, and cover with no depot just means they survive a
+walk that was never worth making.
 
 That run is deliberately the worst case — the furthest seam, unescorted, with the peace
 already over — and the crew is still wiped inside four minutes. Outposts buy you the
@@ -146,6 +150,62 @@ economy of the far ground; they do not buy you the right to be there. That part 
 soldiers are for.
 
 Losing an outpost is a setback, not a defeat. Losing the City Centre still is.
+
+## The treasury
+
+Gold used to come almost entirely out of the ground, and then sit there. Measured over
+thirty days: **74% of income was mining**, and **81% of every coin earned was never
+spent** — the only thing actually limiting the realm was the population cap, so there
+was no reason to build anything you did not immediately need.
+
+Three changes, and they work together:
+
+**Mining pays much less.** A gold seam yields `0.6`/second into a `12`-unit pack, down
+from `1.5` into `20`. A miner is still worth having; they are no longer the whole
+economy.
+
+**Buildings pay much more**, and the outposts now pay too:
+
+| Building | Tax |
+|---|---|
+| City Centre | 4 |
+| Peasant Hut | 3 |
+| Lumberyard / Mining Camp | 4 each |
+| Guard House | 2 |
+| Marketplace | 10 |
+| Inn / Blacksmith | 7 each |
+
+Taxes come in every 12 seconds, so a Marketplace pays for itself in about three minutes
+and then keeps paying. Pushing an outpost out to a far seam is now an *income* decision
+as well as a logistics one.
+
+**Soldiers draw a wage.** A hero costs **4 gold per payday, plus 3 per level above the
+first**, so a level-5 veteran draws 16 where a fresh hire draws 4. This is the part that
+makes the taxes matter: an army is a standing bill, and buildings are what pays it.
+
+A worked example from a real day-30 realm: twelve buildings paying **44** a payday
+against six veteran heroes drawing **81** — a net of **−37**, which mining has to cover.
+Wanting a bigger army is the same thing as wanting more buildings.
+
+**Going broke bleeds you slowly.** A hero who cannot be paid gets a warning, and walks
+out only if the treasury is still empty two paydays later. Veterans are paid first and
+the least experienced leaves first, and only **one per payday**, so a bad stretch costs
+you your newest hire and a scare rather than your whole barracks at once. Paying again
+clears the debt.
+
+The treasury readout beside your gold shows the net, and turns red when the payroll
+outruns the taxes.
+
+What this did to the shape of the game, measured the same way:
+
+| | Mining | Tax | Market | Lairs | Gold left unspent |
+|---|---|---|---|---|---|
+| Before | 73.8% | 15.2% | 3.6% | 7.4% | 81% |
+| After | 42.7% | 46.5% | 4.0% | 6.7% | 42% |
+
+And it moves as the realm grows — mining is 60% of income on day 5 and 43% by day 20,
+because early on you have almost nothing built. Mining bootstraps you; buildings sustain
+you.
 
 ## Hiring soldiers, and flags
 
@@ -362,10 +422,23 @@ Both wizards and clerics decide for themselves when to spend the mana: area
 spells wait for a crowd under them, Radiance for two people bleeding or one
 nearly gone, the Hymn for a fight and a line of people to bless.
 
-Measured against an unspecialised level 5: warriors gain **×1.27 / ×1.32 /
-×1.42** staying power, rangers **×1.46 / ×1.35 / ×1.19**. The assassin looks
-weakest on paper and is not — the number cannot see an opener landing at 2.4×
-on something that never got to swing back.
+Measured against an unspecialised level 5, on health and on sustained output
+(damage × attack speed, weighted for crit):
+
+| | Health | Output |
+|---|---|---|
+| Fury | ×1.00 | ×1.26 |
+| Arms | ×1.08 | ×1.21 |
+| Protection | ×1.31 | ×1.07 |
+| Longbowman | ×1.00 | ×1.45 |
+| Mercenary | ×1.11 | ×1.20 |
+| Assassin | ×1.00 | ×1.18 |
+
+The assassin looks weakest here and is not — the number cannot see an opener
+landing at 2.4× on something that never got to swing back, nor a third of the
+fight spent unseen. These ratios are smaller than they once were because the
+hero baseline went up when villagers stopped being grown into knights: the same
+twenty specialisation points are now a smaller slice of a bigger hero.
 
 Each specialisation also gets its own sprite, so a party reads at a glance
 from across the map -- and the picker shows each one before you commit.
