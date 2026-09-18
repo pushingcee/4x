@@ -548,7 +548,8 @@ damage of its kind, an escort of two more raiders, and a raid that lasts
 170 seconds instead of 75: the escort keeps coming as long as its lord is
 standing. It wears a crown and its name over its head, pays four times the
 gold and rank, and always drops a **legendary** item plus one more from the
-good end of the table.
+good end of the table. It also pulses gold on the minimap from the moment
+it sets out, fog or no fog, so you can watch it come.
 
 Raids are on. After a few days of peace, lairs close enough to your buildings send
 parties at whatever building is **nearest to them** — so expanding toward a nest is what

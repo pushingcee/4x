@@ -718,6 +718,18 @@ export class Renderer {
     ctx.fillStyle = '#120c1c';
     ctx.fillRect(x - 2, y - 2, size + 4, size + 4);
     ctx.drawImage(this.mini, x, y, size, size);
+    // A boss is announced, so it shows on the map wherever it is, fog or
+    // no fog: a pulsing crown-gold marker you can watch come closer.
+    const k = size / w.w;
+    const pulse = 0.5 + 0.5 * Math.sin(performance.now() / 160);
+    for (const u of g.units) {
+      if (u.dead || !u.boss) continue;
+      const bx = Math.round(x + u.tx * k), by = Math.round(y + u.ty * k);
+      const r = Math.round((3 + pulse * 2) * this.dpr);
+      ctx.fillStyle = '#120c1c'; ctx.fillRect(bx - r - 1, by - r - 1, r * 2 + 3, r * 2 + 3);
+      ctx.fillStyle = '#ffc94a'; ctx.fillRect(bx - r, by - r, r * 2 + 1, r * 2 + 1);
+      ctx.fillStyle = '#e05050'; ctx.fillRect(bx - 1, by - 1, 3, 3);
+    }
     ctx.strokeStyle = '#7a5fa8';
     ctx.lineWidth = Math.max(1, this.dpr);
     ctx.strokeRect(x - 1, y - 1, size + 2, size + 2);
