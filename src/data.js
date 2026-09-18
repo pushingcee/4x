@@ -296,7 +296,7 @@ export const BUILDINGS = {
   palace: {
     id: 'palace', name: 'City Centre', fw: 3, fh: 3, hp: 2400,
     cost: { gold: 0, wood: 0, stone: 0 }, build: 0, unique: true,
-    pop: 14, depot: true, tax: 2, sight: 12,
+    pop: 14, depot: true, tax: 4, sight: 12,
     attack: { dmg: 11, range: 86, rate: 1.7 },
     recruit: ['peasant'],
     desc: 'Heart of the realm. Hires peasants, stores every resource, pays the taxes.'
@@ -304,37 +304,37 @@ export const BUILDINGS = {
   hut: {
     id: 'hut', name: 'Peasant Hut', fw: 2, fh: 2, hp: 260,
     cost: { gold: 35, wood: 25, stone: 0 }, build: 7,
-    pop: 4, tax: 1,
+    pop: 4, tax: 3,
     desc: 'Shelter for four more souls. Raises your population cap and pays a little tax.'
   },
   lumberyard: {
     id: 'lumberyard', name: 'Lumberyard', fw: 2, fh: 2, hp: 320,
     cost: { gold: 70, wood: 20, stone: 10 }, build: 9,
-    depot: true, boost: { wood: 0.6 }, radius: 11,
+    depot: true, boost: { wood: 0.6 }, radius: 11, tax: 4,
     desc: 'Drop-off for timber. Woodcutters within eleven tiles fell 60% faster.'
   },
   mining_camp: {
     id: 'mining_camp', name: 'Mining Camp', fw: 2, fh: 2, hp: 340,
     cost: { gold: 70, wood: 40, stone: 0 }, build: 9,
-    depot: true, boost: { gold: 0.5, stone: 0.5 }, radius: 11,
+    depot: true, boost: { gold: 0.5, stone: 0.5 }, radius: 11, tax: 4,
     desc: 'Drop-off for ore and stone. Miners and quarriers within eleven tiles work 50% faster.'
   },
   marketplace: {
     id: 'marketplace', name: 'Marketplace', fw: 2, fh: 2, hp: 380,
     cost: { gold: 130, wood: 70, stone: 20 }, build: 12,
-    tax: 4, shop: 'market', market: true,
+    tax: 10, shop: 'market', market: true,
     desc: 'Five shelves of arms and trinkets. Heroes sell you what they cannot use and buy what beats what they are wearing -- and you tax both ends of every deal.'
   },
   blacksmith: {
     id: 'blacksmith', name: 'Blacksmith', fw: 2, fh: 2, hp: 420,
     cost: { gold: 140, wood: 50, stone: 60 }, build: 13, needs: ['marketplace'],
-    tax: 3, shop: 'weapon',
+    tax: 7, shop: 'weapon',
     desc: 'Heroes buy sharper steel, permanently raising their damage. You take a cut.'
   },
   inn: {
     id: 'inn', name: 'Inn', fw: 2, fh: 2, hp: 360,
     cost: { gold: 120, wood: 80, stone: 0 }, build: 11, needs: ['palace'],
-    tax: 3, shop: 'rest',
+    tax: 7, shop: 'rest',
     desc: 'Heroes drink, boast, and heal fast. Idle heroes drift here between jobs.'
   },
   barracks: {
@@ -370,7 +370,7 @@ export const BUILDINGS = {
   guardhouse: {
     id: 'guardhouse', name: 'Guard House', fw: 2, fh: 2, hp: 600,
     cost: { gold: 110, wood: 60, stone: 40 }, build: 12, needs: ['palace'],
-    garrison: 3, garrisonRange: 150,
+    garrison: 3, garrisonRange: 150, tax: 2,
     desc: 'Three guards patrol nearby and never wander off. Unlike heroes, they obey.'
   },
   tower: {
@@ -595,7 +595,7 @@ export const FLAGS = {
  * it, which is exactly the decision the outposts exist to offer.
  */
 export const RES_RATE = {
-  goldmine: { res: 'gold', rate: 1.5, carry: 20 },
+  goldmine: { res: 'gold', rate: 0.6, carry: 12 },
   quarry: { res: 'stone', rate: 1.4, carry: 20 },
   tree: { res: 'wood', rate: 1.8, carry: 20 },
   pine: { res: 'wood', rate: 1.8, carry: 20 }
@@ -604,6 +604,31 @@ export const RES_RATE = {
 export const START = { gold: 420, wood: 260, stone: 140 };
 export const DAY_SECONDS = 60;      // one in-game day
 export const TAX_INTERVAL = 12;     // seconds between tax collections
+
+/**
+ * ===================================================================
+ * WAGES -- what an army costs to keep, as opposed to to raise.
+ * ===================================================================
+ *
+ * Hiring a hero used to be the only time they ever cost you anything, so
+ * gold piled up with nothing to do: measured over thirty days, 81% of every
+ * coin earned was still sitting in the treasury, and the only thing actually
+ * limiting the realm was the population cap.
+ *
+ * Now a soldier draws a wage every time the taxes come in, and a veteran
+ * draws more than a recruit -- rank is worth having AND worth paying for.
+ * That makes the tax income mean something: buildings are the engine that
+ * pays the army, which is the reason to keep building.
+ */
+export const WAGE_BASE = 4;         // per hero, per tax collection
+export const WAGE_PER_LEVEL = 3;    // added per level above the first
+
+/**
+ * Nobody deserts over one bad collection. A hero goes unpaid, gets a warning,
+ * and only walks out if the treasury is still empty the next time round --
+ * so a temporary squeeze costs you a scare rather than your army.
+ */
+export const WAGE_GRACE = 2;        // missed collections tolerated before leaving
 export const RESURRECT_COST = 0.6;  // fraction of hire cost to raise a dead hero
 /**
  * Swinging at a building is not the same as swinging at a throat. Halving
