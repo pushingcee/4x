@@ -11,6 +11,13 @@ import { toPx, toTile } from './world.js';
 import { clamp } from './util.js';
 import { BUILDINGS, FLAGS, MISSIONS } from './data.js';
 
+/** Bolt colours by kind: body, then the hot centre. */
+const SPELL_BOLT = {
+  fire: ['#ffb040', '#fff0b0'],
+  blood: ['#c8203a', '#ff6a7a'],
+  dark: ['#7a3fbf', '#e0c0ff']
+};
+
 // ---- 3x5 pixel font ------------------------------------------------
 const G = {
   A: [2, 5, 7, 5, 5], B: [6, 5, 6, 5, 6], C: [3, 4, 4, 4, 3], D: [6, 5, 5, 5, 6],
@@ -266,6 +273,7 @@ export class Renderer {
 
     // --- flag ground circles (under everything) --------------------
     for (const f of g.flags) this.drawFlagArea(ctx, f);
+    for (const z of g.zones) this.drawZone(ctx, z);
 
     // --- draw ------------------------------------------------------
     const t = performance.now() / 1000;
@@ -282,11 +290,13 @@ export class Renderer {
 
     // --- projectiles ----------------------------------------------
     for (const p of g.projectiles) {
-      if (p.kind === 'fire') {
-        ctx.fillStyle = '#ffb040';
+      const spell = SPELL_BOLT[p.kind];
+      if (spell) {
+        ctx.fillStyle = spell[0];
         ctx.fillRect(p.x - 2, p.y - 2, 4, 4);
-        ctx.fillStyle = '#fff0b0';
+        ctx.fillStyle = spell[1];
         ctx.fillRect(p.x - 1, p.y - 1, 2, 2);
+        if (p.ability) { ctx.fillStyle = spell[0]; ctx.fillRect(p.x - 4, p.y - 4, 8, 8); ctx.fillStyle = spell[1]; ctx.fillRect(p.x - 2, p.y - 2, 4, 4); }
       } else if (p.kind === 'bolt') {
         ctx.fillStyle = '#d0e4ff';
         ctx.fillRect(p.x - 2, p.y - 1, 5, 2);
@@ -447,14 +457,49 @@ export class Renderer {
       ctx.fillRect(x + 7, y - 12, 2, 2);
       ctx.fillRect(x + 6, y - 11, 4, 1);
     }
+    // what a wizard left on them: a flicker of flame, or the pall of a curse
+    if (u.burn > 0) {
+      const f = (performance.now() / 90) | 0;
+      ctx.fillStyle = f % 2 ? '#ff8a2a' : '#ffe066';
+      ctx.fillRect(x + 4 + (f % 3), y + 2, 2, 2);
+      ctx.fillRect(x + 9 - (f % 2), y + 5, 2, 2);
+    }
+    if (u.weakened > 0 || u.slowed > 0) {
+      ctx.fillStyle = '#b57cff';
+      ctx.fillRect(x + 3, y + 12, 2, 1);
+      ctx.fillRect(x + 11, y + 13, 2, 1);
+    }
     ctx.globalAlpha = 1;
+  }
+
+  /** Cursed ground: a dim ring that seethes, fading as it wears off. */
+  drawZone(ctx, z) {
+    const fade = Math.min(1, z.t / 1.5);
+    const t = performance.now() / 1000;
+    ctx.save();
+    ctx.globalAlpha = 0.45 * fade;
+    ctx.fillStyle = '#2a1040';
+    ctx.beginPath(); ctx.arc(z.x, z.y, z.r, 0, Math.PI * 2); ctx.fill();
+    ctx.globalAlpha = 0.85 * fade;
+    ctx.strokeStyle = z.colour;
+    ctx.lineWidth = 1;
+    ctx.setLineDash([3, 3]);
+    ctx.lineDashOffset = -t * 12;
+    ctx.beginPath(); ctx.arc(z.x, z.y, z.r - 1, 0, Math.PI * 2); ctx.stroke();
+    // wisps
+    for (let i = 0; i < 6; i++) {
+      const a = t * 0.8 + i * 1.05, rr = z.r * (0.35 + ((t * 0.5 + i * 0.37) % 0.6));
+      ctx.fillRect(Math.round(z.x + Math.cos(a) * rr), Math.round(z.y + Math.sin(a) * rr * 0.7), 1, 1);
+    }
+    ctx.restore();
   }
 
   drawUnitBar(ctx, u) {
     const hurt = u.hp < u.maxHpNow - 0.5;
     const pw = u.chargeDef;
     // A soldier with an ability nearly ready is worth seeing even at full health
-    const showCharge = pw && (u.abilityReady || u.charge > u.maxCharge * 0.5);
+    // (a caster's is their mana bar, drawn below)
+    const showCharge = pw && !pw.mana && (u.abilityReady || u.charge > u.maxCharge * 0.5);
     const showMana = u.isCaster && u.maxMana > 0;
     if (!hurt && !u.selected && !showCharge && !showMana) return;
     // clear the mission badge when there is one

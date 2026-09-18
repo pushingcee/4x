@@ -2,7 +2,7 @@
 // game.js — simulation core: economy, flags, spawning, victory.
 // ===================================================================
 import { World, toPx, toTile, MAP_W, MAP_H } from './world.js';
-import { TILE } from './art.js';
+import { TILE, hasSpecSprite } from './art.js';
 import { Building, Lair, Unit, Projectile } from './entities.js';
 import { peasantBrain, heroBrain, guardBrain, monsterBrain } from './brains.js';
 import { Fx } from './fx.js';
@@ -12,7 +12,7 @@ import {
   XP_TABLE, MAX_LEVEL, DROPS, LAIR_DROPS, MARKET_SLOTS, MARKET_RESTOCK,
   MISSIONS, RAIDS_ENABLED, CALLING_ORDER, DISTRESS_WINDOW,
   THREAT_PER_DAY, THREAT_CAP, SEPARATION_CAP, SPECS, XP_SHARE_BONUS, XP_SHARE_BONUS_CAP,
-  SUPPORT_SHARE, CREDIT_WINDOW
+  SUPPORT_SHARE, CREDIT_WINDOW, DEBUFF
 } from './data.js';
 import { makeRng, clamp, dist } from './util.js';
 import { rollItem, scoreFor, canUse, describe, TIERS } from './items.js';
@@ -35,6 +35,7 @@ export class Game {
     this.buildings = [];
     this.lairs = [];
     this.projectiles = [];
+    this.zones = [];           // cursed ground, see addZone
     this.flags = [];
     this.graves = [];        // fallen heroes awaiting resurrection
     this.notices = [];
@@ -126,7 +127,40 @@ export class Game {
   }
 
   spawnProjectile(from, to, dmg, kind, crit = false) {
-    this.projectiles.push(new Projectile(this, from, to, dmg, kind, crit));
+    const p = new Projectile(this, from, to, dmg, kind, crit);
+    this.projectiles.push(p);
+    return p;
+  }
+
+  /**
+   * Cursed ground. Anything of the other faction standing on it takes `dps`
+   * a second, credited to whoever laid it, and is slowed and weakened for as
+   * long as it stays -- the point is to make a patch of the map cost
+   * something to stand on, so a pack that will not leave it pays.
+   */
+  addZone(z) {
+    this.zones.push({ ...z, tick: 0, born: this.time });
+    this.fx.ring(z.x, z.y, z.colour, Math.round(z.r * 0.6));
+  }
+  tickZones(dt) {
+    for (const z of this.zones) {
+      z.t -= dt;
+      z.tick -= dt;
+      const victims = this.enemiesNear(z.x, z.y, z.r, z.owner.faction);
+      for (const v of victims) {
+        if (v.kindClass !== 'unit') continue;
+        v.slowed = Math.max(v.slowed, DEBUFF.tick + 0.1);
+        v.weakened = Math.max(v.weakened, DEBUFF.tick + 0.1);
+      }
+      if (z.tick <= 0) {
+        z.tick += DEBUFF.tick;
+        for (const v of victims) {
+          if (v.kindClass !== 'unit') continue;
+          this.applyDamage(v, z.dps * DEBUFF.tick, z.owner, false, true);
+        }
+      }
+    }
+    if (this.zones.some(z => z.t <= 0)) this.zones = this.zones.filter(z => z.t > 0);
   }
 
   /** How many monsters are currently marching on the realm. */
@@ -291,10 +325,12 @@ export class Game {
   // -----------------------------------------------------------------
   // damage & death
   // -----------------------------------------------------------------
-  applyDamage(target, amount, src, crit = false) {
+  /** `quiet`: a tick of a burn or a curse -- no number floats up for it. */
+  applyDamage(target, amount, src, crit = false, quiet = false) {
     if (!target || target.dead) return;
     if (target.kindClass === 'unit') {
       target.damageTaken(amount, src);
+      if (quiet) return;
       if (target.faction === 'realm' && !target.target && src && src.kindClass === 'unit') {
         target.engage(src);   // fight back
       }
@@ -677,11 +713,14 @@ export class Game {
     const sp = list.find(x => x.id === specId);
     if (!sp) return null;
     u.spec = sp.id;
-    u.title = `${sp.name} ${CLASSES[u.kind].name}`;
+    u.title = sp.title || `${sp.name} ${CLASSES[u.kind].name}`;
+    // dressed for the job from now on; a spec with no art of its own keeps the class look
+    if (hasSpecSprite(u.kind, sp.id)) u.sprite = `${u.kind}/${sp.id}`;
     u.hp = u.maxHpNow;                  // the new constitution is theirs at once
     // Rage you have to work up; focus you simply have, until you spend it.
+    // A caster's mana is already theirs and stays whatever it was.
     const pw = u.chargeDef;
-    u.charge = pw && pw.startFull ? pw.max : 0;
+    if (pw && !pw.mana) u.charge = pw.startFull ? pw.max : 0;
     if (sp.stealth) u.conceal(Infinity);
     this.fx.ring(u.x, u.y - 6, sp.colour, 18);
     this.fx.text(u.x, u.y - 22, sp.name.toUpperCase(), sp.colour, 28);
@@ -1067,6 +1106,7 @@ export class Game {
     for (const l of this.lairs) if (!l.dead) l.update(dt);
     for (const u of this.units) if (!u.dead) u.update(dt);
     for (const p of this.projectiles) if (!p.dead) p.update(dt);
+    if (this.zones.length) this.tickZones(dt);
     this.separate(dt);
     this.fx.update(dt);
 

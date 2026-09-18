@@ -217,11 +217,7 @@ warriors cannot quite handle: without a cleric the party was wiped having
 killed three of seven. With one, the same party cleared all seven and two
 walked away. Roughly fifty heals a fight and three soldiers blessed at once.
 
-Neither has specialisations yet -- those come later. Their sprites are already
-drawn, though (see below): wizards will take **Blood** (robust, single-target),
-**Fire** (area and burns) or **Dark** magic (area debuffs and lingering dots),
-clerics the **Light** (healing) or the **Paladin**'s plate (buffs, and harder
-to kill).
+Both specialise at the cap like everyone else -- see below.
 
 ### Loot
 
@@ -331,7 +327,8 @@ At **level 5** a soldier chooses a specialisation. It is the one permanent
 decision a unit makes, and each is worth exactly **twenty attribute points** —
 the choice is about shape, never about power. Each also unlocks an ability
 paid for out of a class resource: warriors work themselves into a **Rage**,
-rangers hold a **Focus**.
+rangers hold a **Focus**, and casters spend the same **Mana** as everything
+else they do.
 
 | Warrior | Points | Ability |
 |---|---|---|
@@ -345,15 +342,33 @@ rangers hold a **Focus**.
 | **Mercenary** | +6 STR, +10 AGI, +4 CON | **Ambush** — a brutal opener, far worse if it lands before they are seen |
 | **Assassin** | +14 AGI, +6 INT | **Vanish** — steps out of sight, closes unseen, opens with a five-fold strike |
 
+| Wizard | Points | Always | Ability |
+|---|---|---|---|
+| **Blood Magic** | +8 CON, +12 INT | no splash; +15% damage; every bolt returns a fifth of its damage as health | **Exsanguinate** — one bolt for 2.6× damage, all of it poured back into the caster |
+| **Fire Magic** | +4 AGI, +2 CON, +14 INT | splash 40% wider; everything hit burns for three seconds | **Firestorm** — full damage to everything around where it lands, and five seconds of burning |
+| **Dark Magic** | +6 AGI, +4 CON, +10 INT | everything hit is weakened (−20% damage) for six seconds | **Blight** — curses the ground for seven seconds: damage a tick, slowed, weakened |
+
+| Cleric | Points | Always | Ability |
+|---|---|---|---|
+| **Follower of the Light** | +6 CON, +14 INT | every touch heals 40% more and reaches 30% further | **Radiance** — mends every ally nearby at once, half again as strong as a touch |
+| **Paladin** | +4 STR, +12 CON, +4 INT | takes a fifth less harm; blessings last half again as long; stands closer to the fight | **Battle Hymn** — blesses everyone in earshot at once, and takes half damage for six seconds |
+
+The wizard's abilities ride the next bolt and go off wherever it lands, so a
+firestorm or a blight is aimed the way every fireball is. A **burn** ticks
+every half second and is credited to whoever lit it; a **blight** is a patch
+of cursed ground -- anything standing on it is slowed and weakened for as long
+as it stays, which is the point: a pack that will not leave it pays for that.
+Both wizards and clerics decide for themselves when to spend the mana: area
+spells wait for a crowd under them, Radiance for two people bleeding or one
+nearly gone, the Hymn for a fight and a line of people to bless.
+
 Measured against an unspecialised level 5: warriors gain **×1.27 / ×1.32 /
 ×1.42** staying power, rangers **×1.46 / ×1.35 / ×1.19**. The assassin looks
 weakest on paper and is not — the number cannot see an opener landing at 2.4×
 on something that never got to swing back.
 
-Every specialisation has a sprite of its own drawn and waiting in `art.js`,
-under the key `class/spec` (`warrior/fury`, `wizard/blood`, ...). Nothing in
-the game uses them yet; `?sprites=1` shows them, and `unitSprite('warrior/fury')`
-returns one whenever the game is ready to.
+Each specialisation also gets its own sprite, so a party reads at a glance
+from across the map -- and the picker shows each one before you commit.
 
 ![every hero and every specialisation](docs/sprites.png)
 

@@ -7,9 +7,9 @@ import { toPx, toTile } from './world.js';
 import {
   BUILDINGS, CLASSES, MONSTERS, LAIRS, XP_TABLE, MAX_LEVEL, LEVEL_STATS,
   STAT_ORDER, STAT_EFFECT, RUSH_SPEED, LAIR_ALARM_RATE, LAIR_ALARM_TIME,
-  SPECS, SPEC_LEVEL, POWERS, ABILITIES, STEALTH_REVEAL,
+  SPECS, SPEC_LEVEL, POWERS, ABILITIES, STEALTH_REVEAL, DEBUFF,
   GARRISON_NEAR, GARRISON_PER_RING, GARRISON_EXTRA_CAP,
-  BLESSING, MANA_REGEN, MANA_REST, MANA_REGEN_PER_INT, XP_PER_HEAL, CREDIT_WINDOW
+  BLESSING, MANA_REGEN, MANA_REST, MANA_REGEN_PER_INT, XP_PER_HEAL, XP_PER_BLESSING, CREDIT_WINDOW
 } from './data.js';
 import { clamp, dist, heroName, peasantName } from './util.js';
 import { SLOT_KEYS, slotOf, canUse, scoreFor } from './items.js';
@@ -284,8 +284,15 @@ export class Unit {
     // A class is a layer on top of whoever you already were, never a rewrite.
     this.classBonus = { str: 0, agi: 0, con: 0, int: 0, ...(def.knight || {}) };
     this.spec = null;          // chosen once at the rank cap, then permanent
-    this.charge = 0;           // rage or focus, whichever this class runs on
+    this._charge = 0;          // rage or focus; casters run on mana instead
     this.abilityCd = 0;
+    this.strikeAb = null;      // an ability riding the next bolt
+    this.burn = 0;             // seconds left on fire, and what it costs per second
+    this.burnDps = 0;
+    this.burnSrc = null;
+    this.burnTick = 0;
+    this.weakened = 0;         // seconds of hitting softer
+    this.slowed = 0;           // seconds of moving slower
     this.frenzy = 0;           // Rampage
     this.guarded = 0;          // Shield Wall
     this.hidden = 0;           // seconds of being unseen
@@ -368,7 +375,10 @@ export class Unit {
     const ab = ABILITIES[sp.ability];
     return ab ? POWERS[ab.power] : null;
   }
-  get maxCharge() { const p = this.chargeDef; return p ? p.max : 0; }
+  get maxCharge() { const p = this.chargeDef; return p ? (p.mana ? this.maxMana : p.max) : 0; }
+  /** Rage or focus for soldiers; for a caster it is simply their mana. */
+  get charge() { const p = this.chargeDef; return p && p.mana ? this.mana : this._charge; }
+  set charge(v) { const p = this.chargeDef; if (p && p.mana) this.mana = v; else this._charge = v; }
   get ability() {
     const sp = this.specDef;
     return sp ? ABILITIES[sp.ability] || null : null;
@@ -458,8 +468,14 @@ export class Unit {
     const strBonus = Math.max(0.25, 1 + (this.stats.str - 5) * STAT_EFFECT.dmgPerPoint);
     const sp = this.specDef;
     const blessing = this.blessed > 0 ? BLESSING.dmgMul : 1;
+    const weak = this.weakened > 0 ? DEBUFF.weakMul : 1;
     const steel = this.gearMod('dmg');
-    return (this.dmg + this.bonusDmg + steel) * strBonus * ((sp && sp.dmgMul) || 1) * blessing;
+    return (this.dmg + this.bonusDmg + steel) * strBonus * ((sp && sp.dmgMul) || 1) * blessing * weak;
+  }
+  /** How wide a bolt lands. Only wizards splash, and not every wizard. */
+  get splashRadius() {
+    const sp = this.specDef;
+    return (this.def.splash || 0) * (sp && sp.splashMul != null ? sp.splashMul : 1);
   }
 
   /** What a staff or a pendant adds to a spell, as a multiplier. */
@@ -534,7 +550,8 @@ export class Unit {
     const d = Math.hypot(dx, dy);
     // adrenaline in flight; and a soldier answering a worker's scream runs
     const haste = this.fleeing > 0 ? 1.3 : this.rushing > 0 ? RUSH_SPEED : 1;
-    const step = this.speed * haste * dt;
+    const slow = this.slowed > 0 ? DEBUFF.slowMul : 1;
+    const step = this.speed * haste * slow * dt;
     this.moving = true;
     if (d <= step) {
       this.x = gx; this.y = gy;
@@ -616,13 +633,55 @@ export class Unit {
     const steal = this.gearMod('lifesteal');
     if (steal > 0) this.heal(dmg * steal / 100);
     if (this.def.ranged) {
-      this.game.spawnProjectile(this, t, dmg, this.kind === 'wizard' ? 'fire' : 'arrow', crit);
+      const bolt = this.kind === 'wizard' ? (sp && sp.bolt) || 'fire' : 'arrow';
+      const p = this.game.spawnProjectile(this, t, dmg, bolt, crit);
+      // an armed ability rides this bolt and goes off where it lands
+      p.ability = this.strikeAb; this.strikeAb = null;
       this.game.audio.play(this.kind === 'wizard' ? 'cast' : 'bow');
     } else {
       this.game.applyDamage(t, dmg, this, crit);
       this.game.audio.play('hit');
       this.game.fx.burst(t.x, t.y - 4, crit ? '#ffc94a' : '#ffd0a0', crit ? 7 : 3, crit ? 44 : 26, 0.26);
     }
+  }
+
+  /**
+   * What a wizard's bolt leaves behind on whoever it touched, on top of the
+   * damage: a burn, a curse, or a drink for the caster. `primary` is the one
+   * it was aimed at; splash victims get the mark but do not feed the leech.
+   */
+  spellLanded(v, dmg, primary) {
+    const sp = this.specDef;
+    if (!sp) return;
+    if (v.kindClass === 'unit') {
+      if (sp.burn) v.ignite(dmg * sp.burn.frac, sp.burn.lasts, this);
+      if (sp.weaken) v.weakened = Math.max(v.weakened, sp.weaken.lasts);
+    }
+    if (sp.leech && primary) this.heal(dmg * sp.leech);
+  }
+  /** Set alight: `dps` a second for `lasts` seconds, credited to `src`. */
+  ignite(dps, lasts, src) {
+    if (this.dead) return;
+    if (this.burn <= 0) this.burnTick = DEBUFF.tick;
+    // a fresh, hotter fire replaces a dying one; a weaker one only extends it
+    this.burnDps = Math.max(this.burnDps * (this.burn > 0 ? 1 : 0), dps);
+    this.burn = Math.max(this.burn, lasts);
+    this.burnSrc = src;
+  }
+  /** The slow bleed of a burn or a blight. Ticks every half second, credited. */
+  tickAfflictions(dt) {
+    if (this.burn > 0) {
+      this.burn -= dt;
+      this.burnTick -= dt;
+      if (this.burnTick <= 0) {
+        this.burnTick += DEBUFF.tick;
+        this.game.applyDamage(this, this.burnDps * DEBUFF.tick, this.burnSrc, false, true);
+        this.game.fx.puff(this.x, this.y - 8, '#ff8a2a', 1);
+      }
+      if (this.burn <= 0) { this.burnDps = 0; this.burnSrc = null; }
+    }
+    if (this.weakened > 0) this.weakened -= dt;
+    if (this.slowed > 0) this.slowed -= dt;
   }
 
   /**
@@ -780,6 +839,45 @@ export class Unit {
       case 'ambush':
         this.strikeMul = this.hidden > 0 ? ab.hiddenMult : ab.mult;
         break;
+      case 'exsanguinate':
+      case 'firestorm':
+      case 'blight':
+        // rides the next bolt; the projectile does the rest where it lands
+        this.strikeMul = ab.mult || 1;
+        this.strikeAb = ab.id;
+        break;
+      case 'radiance': {
+        // everybody nearby at once, paid like any other mending
+        const h = this.def.heal;
+        const amount = h.amount * (1 + (this.level - 1) * 0.2) * this.spellPower
+          * (sp.healMul || 1) * ab.mult;
+        let given = 0;
+        for (const a of g.units) {
+          if (a.dead || a.faction !== 'realm') continue;
+          if (dist(a.x, a.y, this.x, this.y) > ab.radius) continue;
+          const got = a.heal(amount);
+          if (got > 0) { given += got; g.fx.ring(a.x, a.y - 6, sp.colour, 9); }
+        }
+        if (given > 0) { this.gainXp(given * XP_PER_HEAL); this.lastSupport = g.time; }
+        g.fx.burst(this.x, this.y - 8, '#fff6c8', 14, 70, 0.5);
+        g.audio.play('heal');
+        break;
+      }
+      case 'hymn': {
+        // a blessing on everyone in earshot, and a shield for the singer
+        this.guarded = ab.lasts;
+        let n = 0;
+        for (const a of g.units) {
+          if (a.dead || a.faction !== 'realm' || a === this) continue;
+          if (dist(a.x, a.y, this.x, this.y) > ab.radius) continue;
+          a.blessed = Math.max(a.blessed, BLESSING.lasts * (sp.blessMul || 1));
+          g.fx.ring(a.x, a.y - 6, BLESSING.colour, 11);
+          n++;
+        }
+        if (n) { this.gainXp(XP_PER_BLESSING * n); this.lastSupport = g.time; }
+        g.audio.play('heal');
+        break;
+      }
       default:
         this.strikeMul = ab.mult || 1;
     }
@@ -797,8 +895,10 @@ export class Unit {
     // killing would earn nothing at all for it.
     if (src && src.kindClass === 'unit' && src.faction === 'monster'
       && this.faction === 'realm' && src.creditHit) src.creditHit(this);
-    if (this.guarded > 0) n *= 0.5;         // Shield Wall
+    if (this.guarded > 0) n *= 0.5;         // Shield Wall, or a paladin's hymn
     if (this.blessed > 0) n *= BLESSING.soak;
+    const sp = this.specDef;
+    if (sp && sp.soak) n *= sp.soak;        // plate over the robe
     const pw = this.chargeDef;
     if (pw && pw.onHurt) this.gainCharge(pw.onHurt);
     if (this.hidden > 0) this.reveal();     // being hit gives you away
@@ -821,6 +921,8 @@ export class Unit {
     if (this.fleeing > 0) this.fleeing -= dt;
     if (this.rushing > 0) this.rushing -= dt;
     this.tickSpec(dt);
+    this.tickAfflictions(dt);
+    if (this.dead) return;                  // a burn can be the end of you
     if (this.blessed > 0) this.blessed -= dt;
     // Mana pays for mending and blessing, so it has to refill -- faster when
     // they are standing about than when they are working a fight.
@@ -861,6 +963,15 @@ export class Unit {
 }
 
 // -------------------------------------------------------------------
+/** What each kind of bolt looks like when it lands. */
+const BOLT_LOOK = {
+  arrow: { spark: '#ffe0a0' },
+  bolt: { spark: '#d0e4ff' },
+  fire: { burst: '#ff9040', ring: '#ffd070' },
+  blood: { burst: '#c8203a', ring: '#ff6a7a' },
+  dark: { burst: '#7a3fbf', ring: '#b57cff' }
+};
+
 export class Projectile {
   constructor(game, from, to, dmg, kind, crit = false) {
     this.game = game;
@@ -871,9 +982,11 @@ export class Projectile {
     this.dmg = dmg;
     this.kind = kind;
     this.owner = from;
-    this.speed = kind === 'fire' ? 130 : 210;
+    this.speed = kind === 'arrow' ? 210 : 130;
     this.dead = false;
     this.t = 0;
+    this.splash = from.splashRadius || 0;   // how wide it lands
+    this.ability = null;                    // an ability riding along
   }
   update(dt) {
     this.t += dt;
@@ -891,19 +1004,41 @@ export class Projectile {
   }
   hit() {
     this.dead = true;
-    const g = this.game;
-    if (this.kind === 'fire') {
-      g.fx.burst(this.x, this.y, '#ff9040', 12, 60, 0.45);
-      g.fx.ring(this.x, this.y, '#ffd070', 10);
-      g.audio.play('boom');
-      const splash = CLASSES.wizard.splash;
-      const foes = g.enemiesNear(this.x, this.y, splash, this.owner.faction);
-      for (const f of foes) g.applyDamage(f, this.dmg * (f === this.target ? 1 : 0.6), this.owner, this.crit);
-    } else {
+    const g = this.game, o = this.owner;
+    const ab = this.ability ? ABILITIES[this.ability] : null;
+    const look = BOLT_LOOK[this.kind] || BOLT_LOOK.arrow;
+    if (!look.burst) {
+      // an arrow, or a tower's bolt: one target, no magic
       if (this.target && !this.target.dead) {
-        g.applyDamage(this.target, this.dmg, this.owner, this.crit);
-        g.fx.burst(this.x, this.y, '#ffe0a0', 4, 30, 0.25);
+        g.applyDamage(this.target, this.dmg, o, this.crit);
+        g.fx.burst(this.x, this.y, look.spark, 4, 30, 0.25);
       }
+      return;
+    }
+    // a spell. An ability widens it (Firestorm, Blight) or narrows it to the
+    // one it was aimed at (Exsanguinate); otherwise the wizard's own splash.
+    const radius = ab && ab.radius ? ab.radius : this.splash;
+    g.fx.burst(this.x, this.y, look.burst, ab ? 18 : 12, ab ? 80 : 60, 0.45);
+    g.fx.ring(this.x, this.y, look.ring, ab && ab.radius ? 14 : 10);
+    g.audio.play('boom');
+    const victims = radius > 0
+      ? g.enemiesNear(this.x, this.y, radius, o.faction)
+      : (this.target && !this.target.dead ? [this.target] : []);
+    let dealt = 0;
+    for (const f of victims) {
+      const primary = f === this.target;
+      // an ability's blast is full strength to everyone under it
+      const share = primary || (ab && ab.radius) ? 1 : 0.6;
+      const dmg = this.dmg * share;
+      g.applyDamage(f, dmg, o, this.crit);
+      if (primary) dealt = dmg;
+      if (o.spellLanded) o.spellLanded(f, dmg, primary);
+      if (ab && ab.id === 'firestorm' && f.kindClass === 'unit') f.ignite(dmg * ab.burnFrac, ab.burn, o);
+    }
+    if (ab && ab.id === 'exsanguinate' && dealt > 0) o.heal(dealt);
+    if (ab && ab.id === 'blight') {
+      g.addZone({ x: this.x, y: this.y, r: ab.radius, t: ab.lasts, owner: o,
+        dps: this.dmg * ab.dpsFrac, colour: o.specDef.colour });
     }
   }
 }
