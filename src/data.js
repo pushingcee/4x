@@ -203,7 +203,23 @@ export const POWERS = {
     id: 'focus', name: 'Focus', colour: '#7fd8a0', max: 100,
     onHit: 0, onHurt: 0, regen: 11, idleRegen: 20, decay: 0, startFull: true,
     desc: 'Gathers steadily, faster between shots, and full before a fight starts.'
+  },
+  /**
+   * Casters have no temper to work up: their abilities come out of the same
+   * mana pool as everything else they do, so intelligence pays for the
+   * tricks as well as the bolts and the bandages.
+   */
+  mana: {
+    id: 'mana', name: 'Mana', colour: '#6fb6ff', mana: true,
+    desc: 'The pool intelligence buys. Refills on its own, faster standing still.'
   }
+};
+
+/** What a curse or a burn does to whoever is carrying it. */
+export const DEBUFF = {
+  weakMul: 0.8,     // damage dealt while weakened
+  slowMul: 0.65,    // speed while slowed
+  tick: 0.5         // seconds between burn and blight ticks
 };
 
 export const ABILITIES = {
@@ -231,6 +247,32 @@ export const ABILITIES = {
   vanish: {
     id: 'vanish', name: 'Vanish', power: 'focus', cost: 65, cd: 15, lasts: 5,
     mult: 5, desc: 'Steps out of sight, closes unseen, and opens with a five-fold strike in the back.'
+  },
+  // ---- wizards: every one of these rides the next bolt and lands where it lands
+  exsanguinate: {
+    id: 'exsanguinate', name: 'Exsanguinate', power: 'mana', cost: 30, cd: 8, lasts: 0,
+    mult: 2.6, desc: 'One bolt that tears the blood out of a single foe for 2.6x damage, and pours all of it back into the caster.'
+  },
+  firestorm: {
+    id: 'firestorm', name: 'Firestorm', power: 'mana', cost: 45, cd: 12, lasts: 0,
+    mult: 1.4, radius: 52, burn: 5, burnFrac: 0.2,
+    desc: 'The bolt bursts into a storm: full damage to everything around where it lands, and all of it left burning for five seconds.'
+  },
+  blight: {
+    id: 'blight', name: 'Blight', power: 'mana', cost: 45, cd: 14, lasts: 7,
+    mult: 1, radius: 48, dpsFrac: 0.15,
+    desc: 'Curses the ground where the bolt lands for seven seconds: everything standing on it rots, slows, and hits softer.'
+  },
+  // ---- clerics: instant, on everyone nearby
+  radiance: {
+    id: 'radiance', name: 'Radiance', power: 'mana', cost: 40, cd: 12, lasts: 0,
+    mult: 1.5, radius: 96,
+    desc: 'A burst of light that mends every ally nearby at once, half again as strong as a touch.'
+  },
+  hymn: {
+    id: 'hymn', name: 'Battle Hymn', power: 'mana', cost: 45, cd: 16, lasts: 6,
+    radius: 110,
+    desc: 'Blesses everyone within earshot at once, and the paladin takes half damage for six seconds.'
   }
 };
 
@@ -271,6 +313,51 @@ export const SPECS = {
       bonus: { str: 0, agi: 14, con: 0, int: 6 }, ability: 'vanish',
       stealth: true, stealthIn: 2.5, openerMul: 2.4,
       desc: 'Walks unseen, kills once, and is gone before the answer comes.'
+    }
+  ],
+  /**
+   * Wizards. `bolt` picks the projectile art; `splashMul` scales the fireball's
+   * splash (0 makes it a single-target bolt); `burn` and `weaken` are what every
+   * ordinary bolt leaves behind; `leech` is the share of a bolt's damage that
+   * comes back as health.
+   */
+  wizard: [
+    {
+      id: 'blood', name: 'Blood Magic', title: 'Blood Mage', colour: '#c8203a',
+      bonus: { str: 0, agi: 0, con: 8, int: 12 }, ability: 'exsanguinate',
+      bolt: 'blood', splashMul: 0, dmgMul: 1.15, leech: 0.2,
+      desc: 'Every bolt is aimed at one throat and drinks from it. No splash, no mercy, and hard to kill.'
+    },
+    {
+      id: 'fire', name: 'Fire Magic', title: 'Fire Mage', colour: '#ff8a2a',
+      bonus: { str: 0, agi: 4, con: 2, int: 14 }, ability: 'firestorm',
+      bolt: 'fire', splashMul: 1.4, burn: { lasts: 3, frac: 0.2 },
+      desc: 'Wider fire, and everything it touches keeps burning after it lands.'
+    },
+    {
+      id: 'dark', name: 'Dark Magic', title: 'Dark Mage', colour: '#7a3fbf',
+      bonus: { str: 0, agi: 6, con: 4, int: 10 }, ability: 'blight',
+      bolt: 'dark', splashMul: 1, weaken: { lasts: 6 },
+      desc: 'Bolts that leave their mark: whatever they touch hits softer for a while, and the ground itself can be cursed.'
+    }
+  ],
+  /**
+   * Clerics. `healMul` scales every touch, `mendMul` its reach, `blessMul` how
+   * long a blessing lasts, `soak` what share of harm gets through to them, and
+   * `keep` how close they let a monster come before backing off.
+   */
+  cleric: [
+    {
+      id: 'light', name: 'Follower of the Light', title: 'Follower of the Light', colour: '#ffe9a0',
+      bonus: { str: 0, agi: 0, con: 6, int: 14 }, ability: 'radiance',
+      healMul: 1.4, mendMul: 1.3,
+      desc: 'Mending above all: a stronger touch, a longer reach, and a burst of light for when the whole line is bleeding.'
+    },
+    {
+      id: 'paladin', name: 'Paladin', title: 'Paladin', colour: '#e0c060',
+      bonus: { str: 4, agi: 0, con: 12, int: 4 }, ability: 'hymn',
+      soak: 0.8, blessMul: 1.5, keep: 0.6,
+      desc: 'Plate over the robe. Blessings that last half again as long, a fifth less harm taken, and a hymn that blesses everyone at once.'
     }
   ]
 };

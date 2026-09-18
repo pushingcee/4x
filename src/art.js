@@ -43,6 +43,21 @@ export const PAL = {
   metal: '#b9c2d0', metalD: '#79808f', gold: '#ffc94a', goldD: '#b8801c',
   pants: '#3f4a5e', pantsD: '#2a3244', boot: '#4a3220',
 
+  // specialisations: each one owns a colour the base classes do not use
+  spec: {
+    fury: '#ff7a3a', furyD: '#8a2626',
+    arms: '#ffc94a', armsD: '#7a2e2e',
+    prot: '#3a5aa6', protL: '#6fb6ff',
+    bow: '#7fd8a0', bowD: '#2f6a3f', bowM: '#3f8a4f',
+    merc: '#c9a227', mercD: '#7a5a32',
+    sin: '#9b6fff', sinD: '#2c1f3a', sinM: '#3d2a55', sinP: '#221a2e',
+    blood: '#c8203a', bloodD: '#7a1024', bloodP: '#5a0c1a', bloodK: '#2a0810', bloodL: '#ff6a7a',
+    fire: '#ff8a2a', fireD: '#b4341e', fireY: '#ffe066', fireT: '#ffb020', fireP: '#8a2214', fireK: '#4a1a10',
+    dark: '#7a3fbf', darkD: '#241a36', darkM: '#5a2f8f', darkL: '#b57cff', darkW: '#3a2a4a', darkS: '#cfc3d6',
+    light: '#ffe9a0', lightW: '#fff6c8', lightR: '#f4f0e4', lightH: '#e8d6a0', lightB: '#7a2626',
+    pal: '#e0c060', palW: '#e6e2d2'
+  },
+
   // monsters
   gob: '#6a9a3a', gobD: '#48701f',
   bone: '#e4e0cf', boneD: '#a8a292',
@@ -209,6 +224,196 @@ const OVERLAY = {
   slime() {}
 };
 
+
+// ---------------------------------------------------------------
+// specialisations -- the same little folk, dressed for the job they
+// chose at the cap. Keyed `class/spec`; each replaces the class overlay
+// and recolours the body, so every one reads at a glance on the map.
+// ---------------------------------------------------------------
+const SPEC_BODY = {
+  // warriors
+  'warrior/fury': { hair: PAL.hairR, cloth: PAL.spec.furyD, trim: PAL.spec.fury, pants: PAL.pantsD },
+  'warrior/arms': { hair: PAL.hairB, cloth: PAL.spec.armsD, trim: PAL.gold, pants: PAL.pantsD },
+  'warrior/protection': { hair: PAL.hairB, cloth: PAL.metal, trim: PAL.metalD, pants: PAL.pantsD },
+  // rangers
+  'ranger/longbow': { hair: PAL.hairB, cloth: PAL.spec.bowM, trim: PAL.spec.bow, pants: PAL.pants },
+  'ranger/mercenary': { hair: PAL.hairB, cloth: PAL.spec.mercD, trim: PAL.spec.merc, pants: PAL.pantsD },
+  'ranger/assassin': { hair: PAL.hairK, cloth: PAL.spec.sinD, trim: PAL.spec.sin, pants: PAL.spec.sinP, boot: PAL.outline },
+  // wizards
+  'wizard/blood': { skin: PAL.skinPale, hair: PAL.hairK, cloth: PAL.spec.bloodD, trim: PAL.spec.blood, pants: PAL.spec.bloodP, boot: PAL.spec.bloodK },
+  'wizard/fire': { skin: PAL.skin, hair: PAL.hairR, cloth: PAL.spec.fireD, trim: PAL.spec.fireT, pants: PAL.spec.fireP, boot: PAL.spec.fireK },
+  'wizard/dark': { skin: PAL.spec.darkS, hair: PAL.hairK, cloth: PAL.spec.darkD, trim: PAL.spec.dark, pants: PAL.black, boot: PAL.black },
+  // clerics
+  'cleric/light': { skin: PAL.skin, hair: PAL.spec.lightH, cloth: PAL.spec.lightR, trim: PAL.gold, pants: PAL.spec.palW, boot: PAL.boot },
+  'cleric/paladin': { skin: PAL.skin, hair: PAL.hairB, cloth: PAL.metal, trim: PAL.gold, pants: PAL.metalD, boot: PAL.boot }
+};
+
+/** A sword held on the right (x = 12..14) or the left (x = 1..3). */
+function blade(ctx, side, top, len, grip = PAL.wood) {
+  const bx = side > 0 ? 12 : 3, ex = side > 0 ? 13 : 2;
+  px(ctx, ex, top, 1, len, PAL.outline);         // dark edge
+  px(ctx, bx, top, 1, len, PAL.metal);
+  px(ctx, bx - 1, top + len, 3, 1, PAL.goldD);   // crossguard
+  px(ctx, bx, top + len + 1, 1, 2, grip);
+}
+/** A full helm over the hair rows, with cheek guards. */
+function helm(ctx, top = PAL.metalD, main = PAL.metal, cheeks = 3) {
+  px(ctx, 4, 1, 8, 1, top);
+  px(ctx, 4, 2, 8, 1, main);
+  px(ctx, 4, 3, 1, cheeks, main); px(ctx, 11, 3, 1, cheeks, main);
+}
+/** A hood that swallows the hair rows and frames the face. */
+function hood(ctx, col) {
+  px(ctx, 6, 0, 4, 1, col);
+  px(ctx, 4, 1, 8, 3, col);
+  px(ctx, 3, 3, 1, 4, col); px(ctx, 12, 3, 1, 4, col);
+}
+/** A staff on the right with a 3x3 head at the top. */
+function staff(ctx, shaft, head, y = 3) {
+  px(ctx, 13, y, 1, 15 - y, shaft);
+  if (head) px(ctx, 12, y - 2, 3, 3, head);
+}
+/** A gold cross on the chest. */
+function cross(ctx, col = PAL.gold) {
+  px(ctx, 7, 8, 2, 3, col);
+  px(ctx, 6, 9, 4, 1, col);
+}
+
+const SPEC_OVERLAY = {
+  // ---- warriors -------------------------------------------------
+  'warrior/fury'(ctx) {                            // wild hair, warpaint, twin blades
+    px(ctx, 5, 1, 1, 1, PAL.hairR); px(ctx, 7, 0, 1, 2, PAL.hairR);
+    px(ctx, 9, 0, 1, 2, PAL.hairR); px(ctx, 10, 1, 1, 1, PAL.hairR);
+    px(ctx, 6, 5, 1, 1, PAL.spec.fury); px(ctx, 9, 5, 1, 1, PAL.spec.fury);
+    px(ctx, 4, 8, 1, 1, PAL.metalD); px(ctx, 11, 8, 1, 1, PAL.metalD);   // studs
+    blade(ctx, 1, 3, 8); blade(ctx, -1, 3, 8);
+  },
+  'warrior/arms'(ctx) {                            // full helm, pauldrons, greatsword
+    helm(ctx, PAL.metalD, PAL.metal);
+    px(ctx, 7, 0, 2, 1, PAL.gold);                 // crest
+    px(ctx, 4, 8, 2, 1, PAL.metal); px(ctx, 10, 8, 2, 1, PAL.metal);
+    px(ctx, 12, 0, 1, 1, PAL.metal);               // tip
+    px(ctx, 12, 1, 1, 10, PAL.metal); px(ctx, 13, 1, 1, 10, PAL.metalD);
+    px(ctx, 11, 11, 4, 1, PAL.gold);               // wide crossguard
+    px(ctx, 12, 12, 1, 3, PAL.woodD);
+    px(ctx, 12, 15, 1, 1, PAL.gold);               // pommel
+  },
+  'warrior/protection'(ctx) {                      // plumed helm, tower shield, short sword
+    helm(ctx, PAL.metalD, PAL.metal, 4);
+    px(ctx, 6, 0, 4, 1, PAL.spec.protL);           // plume
+    px(ctx, 7, 8, 2, 3, PAL.spec.prot);            // tabard stripe
+    px(ctx, 0, 6, 4, 9, PAL.spec.prot);            // shield
+    px(ctx, 0, 6, 4, 1, PAL.metal); px(ctx, 0, 14, 4, 1, PAL.metalD);
+    px(ctx, 0, 6, 1, 9, PAL.metalD);
+    px(ctx, 1, 9, 2, 2, PAL.metal);                // boss
+    blade(ctx, 1, 6, 5);
+  },
+
+  // ---- rangers --------------------------------------------------
+  'ranger/longbow'(ctx) {                          // deep hood, feather, a bow taller than they are
+    px(ctx, 4, 1, 8, 2, PAL.spec.bowD);
+    px(ctx, 3, 3, 1, 3, PAL.spec.bowD); px(ctx, 12, 3, 1, 3, PAL.spec.bowD);
+    px(ctx, 11, 0, 2, 1, PAL.bone); px(ctx, 12, 1, 1, 1, PAL.bone);   // feather
+    px(ctx, 1, 2, 1, 13, PAL.wood);                // limb
+    px(ctx, 2, 1, 1, 1, PAL.wood); px(ctx, 2, 15, 1, 1, PAL.wood);
+    px(ctx, 2, 8, 1, 2, PAL.woodD);                // grip
+    px(ctx, 0, 2, 1, 13, PAL.stoneL);              // string
+    px(ctx, 12, 6, 2, 5, PAL.woodD);               // quiver
+    px(ctx, 12, 5, 2, 1, PAL.metal); px(ctx, 12, 4, 2, 1, PAL.spec.bow);
+  },
+  'ranger/mercenary'(ctx) {                        // bandana, scar, sword, short bow, purse
+    px(ctx, 5, 2, 6, 1, PAL.roofR);
+    px(ctx, 11, 2, 2, 1, PAL.roofR); px(ctx, 12, 3, 1, 1, PAL.roofRD);
+    px(ctx, 10, 4, 1, 3, PAL.skinD);               // scar
+    blade(ctx, 1, 4, 7);
+    px(ctx, 1, 5, 1, 8, PAL.wood);                 // bow slung on the off side
+    px(ctx, 2, 4, 1, 1, PAL.wood); px(ctx, 2, 13, 1, 1, PAL.wood);
+    px(ctx, 0, 5, 1, 8, PAL.stoneL);
+    px(ctx, 9, 11, 2, 1, PAL.gold);                // coin purse
+  },
+  'ranger/assassin'(ctx) {                         // hood, mask, glowing eyes, twin daggers
+    hood(ctx, PAL.spec.sinD);
+    px(ctx, 5, 5, 6, 2, PAL.spec.sinM);            // mask
+    px(ctx, 6, 4, 1, 1, PAL.spec.darkL); px(ctx, 9, 4, 1, 1, PAL.spec.darkL);
+    px(ctx, 13, 7, 1, 5, PAL.metal); px(ctx, 12, 11, 3, 1, PAL.metalD); px(ctx, 13, 12, 1, 2, PAL.spec.sinM);
+    px(ctx, 2, 7, 1, 5, PAL.metal); px(ctx, 1, 11, 3, 1, PAL.metalD); px(ctx, 2, 12, 1, 2, PAL.spec.sinM);
+  },
+
+  // ---- wizards --------------------------------------------------
+  'wizard/blood'(ctx, frame) {                     // crimson hood, red eyes, knife, a floating blood orb
+    hood(ctx, PAL.spec.bloodD);
+    px(ctx, 6, 4, 1, 1, PAL.spec.blood); px(ctx, 9, 4, 1, 1, PAL.spec.blood);
+    px(ctx, 7, 9, 2, 1, PAL.spec.blood);           // rune
+    px(ctx, 2, 7, 1, 4, PAL.metal); px(ctx, 2, 10, 1, 1, PAL.spec.blood);
+    px(ctx, 1, 11, 3, 1, PAL.goldD); px(ctx, 2, 12, 1, 2, PAL.woodD);
+    px(ctx, 12, 6, 3, 3, PAL.spec.blood);          // orb
+    px(ctx, 13, 7, 1, 1, PAL.spec.bloodL);
+    px(ctx, 13, 9, 1, 1, PAL.spec.bloodD); px(ctx, 14, 10, 1, 1, PAL.spec.bloodD);   // drip
+    px(ctx, 12, 4 + frame, 1, 1, PAL.spec.blood); px(ctx, 15, 5 - frame, 1, 1, PAL.spec.bloodL);
+  },
+  'wizard/fire'(ctx, frame) {                      // burning hat tip, flame staff, ember emblem
+    px(ctx, 7, 0, 2, 1, PAL.spec.fireY);
+    px(ctx, 6, 1, 4, 1, PAL.spec.fireD);
+    px(ctx, 3, 2, 10, 1, PAL.spec.fireT);
+    px(ctx, 8, 8, 1, 1, PAL.spec.fireT); px(ctx, 7, 9, 1, 1, PAL.spec.fireT); px(ctx, 8, 9, 1, 1, PAL.spec.fireY);
+    staff(ctx, PAL.woodD, PAL.spec.fire);
+    px(ctx, 13, 1, 1, 2, PAL.spec.fireY);
+    px(ctx, 12 + frame * 2, 0, 1, 1, PAL.spec.fire);
+  },
+  'wizard/dark'(ctx, frame) {                      // wide-brimmed hat, violet eyes, skull staff, wisps
+    px(ctx, 6, 0, 4, 1, PAL.spec.darkD);
+    px(ctx, 5, 1, 6, 1, PAL.spec.darkM);
+    px(ctx, 2, 2, 12, 1, PAL.spec.darkD);
+    px(ctx, 6, 4, 1, 1, PAL.spec.darkL); px(ctx, 9, 4, 1, 1, PAL.spec.darkL);
+    px(ctx, 7, 9, 2, 1, PAL.spec.dark);
+    staff(ctx, PAL.spec.darkW, PAL.bone);
+    px(ctx, 12, 2, 1, 1, PAL.outline); px(ctx, 14, 2, 1, 1, PAL.outline);
+    px(ctx, 13, 0, 1, 1, PAL.spec.darkL);
+    px(ctx, 1, 7 + frame, 1, 1, PAL.spec.dark); px(ctx, 2, 5 - frame, 1, 1, PAL.spec.dark);
+    px(ctx, 0, 10 - frame, 1, 1, PAL.spec.darkM);
+  },
+
+  // ---- clerics --------------------------------------------------
+  'cleric/light'(ctx, frame) {                     // halo, circlet, sun staff, prayer book
+    px(ctx, 5, 0, 6, 1, PAL.gold); px(ctx, 7, 0, 2, 1, PAL.spec.lightW);
+    px(ctx, 4, 2, 8, 1, PAL.gold);
+    cross(ctx);
+    staff(ctx, PAL.goldD, PAL.spec.light);
+    px(ctx, 13, 2, 1, 1, PAL.spec.lightW);
+    if (frame) { px(ctx, 13, 0, 1, 1, PAL.gold); px(ctx, 11, 2, 1, 1, PAL.gold); px(ctx, 15, 2, 1, 1, PAL.gold); }
+    else { px(ctx, 11, 0, 1, 1, PAL.gold); px(ctx, 15, 0, 1, 1, PAL.gold); px(ctx, 15, 4, 1, 1, PAL.gold); }
+    px(ctx, 1, 9, 3, 3, PAL.spec.lightB);          // book
+    px(ctx, 2, 10, 1, 1, PAL.gold);
+  },
+  'cleric/paladin'(ctx) {                          // crested helm, tabard, sun shield, mace
+    helm(ctx, PAL.goldD, PAL.metal);
+    px(ctx, 7, 0, 2, 1, PAL.gold);
+    px(ctx, 6, 8, 4, 3, PAL.spec.palW);
+    cross(ctx);
+    px(ctx, 0, 7, 4, 7, PAL.spec.palW);            // shield
+    px(ctx, 0, 7, 4, 1, PAL.gold); px(ctx, 0, 13, 4, 1, PAL.goldD);
+    px(ctx, 0, 7, 1, 7, PAL.goldD);
+    px(ctx, 1, 9, 2, 2, PAL.gold);
+    px(ctx, 13, 9, 1, 6, PAL.wood);                // mace
+    px(ctx, 12, 6, 3, 3, PAL.metal);
+    px(ctx, 13, 5, 1, 1, PAL.metal); px(ctx, 11, 7, 1, 1, PAL.metal); px(ctx, 15, 7, 1, 1, PAL.metal);
+    px(ctx, 13, 7, 1, 1, PAL.gold);
+  }
+};
+
+/**
+ * Every sprite key the specialisations own, by class. The sprite for a
+ * specialisation is `${class}/${spec}`; anything not listed here falls back
+ * to the plain class sprite, so a new specialisation never draws nothing.
+ */
+export const SPEC_SPRITES = {
+  warrior: ['fury', 'arms', 'protection'],
+  ranger: ['longbow', 'mercenary', 'assassin'],
+  wizard: ['blood', 'fire', 'dark'],
+  cleric: ['light', 'paladin']
+};
+export const hasSpecSprite = (kind, spec) => !!SPEC_OVERLAY[`${kind}/${spec}`];
+
 /** Class → body colours. */
 const BODY = {
   peasant: { skin: PAL.skin, hair: PAL.hairB, cloth: PAL.cloth.peasant, trim: PAL.cloth.peasantT, pants: PAL.pants, boot: PAL.boot },
@@ -265,7 +470,8 @@ const spriteCache = new Map();
 
 /**
  * 16x16 unit sprite. dir: 1 = facing right, -1 = facing left.
- * frame: 0 idle, 1 step.
+ * frame: 0 idle, 1 step. `kind` is a class, a monster, or `class/spec` for
+ * a soldier who has chosen a specialisation.
  */
 export function unitSprite(kind, frame = 0, dir = 1) {
   const key = `u:${kind}:${frame}:${dir}`;
@@ -281,10 +487,16 @@ export function unitSprite(kind, frame = 0, dir = 1) {
   } else if (kind === 'slime') {
     paint(ctx, SLIME, { '.': null, o: PAL.outline, s: PAL.slime, l: PAL.white, e: PAL.outline },
       0, frame === 1 ? -1 : 0);
+  } else if (SPEC_OVERLAY[kind]) {
+    // `class/spec`: the class body under the specialisation's colours and kit
+    const cls = kind.slice(0, kind.indexOf('/'));
+    humanoid(ctx, { ...(BODY[cls] || BODY.peasant), ...SPEC_BODY[kind] }, frame);
+    SPEC_OVERLAY[kind](ctx, frame);
   } else {
-    const body = BODY[kind] || BODY.peasant;
+    const cls = kind.includes('/') ? kind.slice(0, kind.indexOf('/')) : kind;
+    const body = BODY[cls] || BODY.peasant;
     humanoid(ctx, body, frame);
-    const ov = OVERLAY[kind];
+    const ov = OVERLAY[cls];
     if (ov) ov(ctx, frame);
   }
 

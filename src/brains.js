@@ -94,6 +94,44 @@ function useAbilityWisely(u, g) {
       const prey = t || g.nearestEnemy(u.x, u.y, u.reach * 1.6, 'realm');
       return prey ? u.useAbility(prey) : false;
     }
+    // ---- wizards: the bolt has to have somewhere to land
+    case 'exsanguinate':
+      // the drink is worth most when there is something to refill, or the
+      // target is big enough to be worth the mana either way
+      return t && (u.hp < u.maxHpNow * 0.85 || t.def.big || t.kindClass !== 'unit' || full)
+        ? u.useAbility(t) : false;
+    case 'firestorm':
+    case 'blight': {
+      // area spells want a crowd under them; a lone rat is not worth a storm
+      if (!t) return false;
+      const packed = g.enemiesNear(t.x, t.y, ab.radius, 'realm')
+        .filter(m => m.kindClass === 'unit').length;
+      return (packed >= 2 || full) ? u.useAbility(t) : false;
+    }
+    // ---- clerics: everyone nearby, when enough of them need it
+    case 'radiance': {
+      let hurt = 0, worst = 1;
+      for (const a of g.units) {
+        if (a.dead || a.faction !== 'realm') continue;
+        if (dist(a.x, a.y, u.x, u.y) > ab.radius) continue;
+        const f = a.hp / a.maxHpNow;
+        if (f < MEND_AT) hurt++;
+        if (f < worst) worst = f;
+      }
+      return (hurt >= 2 || worst < 0.4) ? u.useAbility(null) : false;
+    }
+    case 'hymn': {
+      // sing when there is a fight on and a line of people to bless
+      let want = 0;
+      for (const a of g.units) {
+        if (a.dead || a.faction !== 'realm' || a === u || a.blessed > 0) continue;
+        if (dist(a.x, a.y, u.x, u.y) > ab.radius) continue;
+        const busy = (a.target && !a.target.dead) || g.time - (a.lastHit || -99) < 4;
+        if (busy || a.isHero) want++;
+      }
+      const fight = !!g.nearestEnemy(u.x, u.y, ab.radius + 60, 'realm');
+      return (want >= 2 && fight) ? u.useAbility(null) : false;
+    }
     default:
       return t ? u.useAbility(t) : false;
   }
@@ -457,7 +495,9 @@ export function heroBrain(u, since) {
   // of them died in every single test. They are not fighters. They back off,
   // mending and blessing as they go, and only swing when genuinely cornered.
   if (def.heal) {
-    const close = g.nearestEnemy(u.x, u.y, CLERIC_KEEP, 'realm');
+    // a paladin in plate lets them come a good deal closer than a robe does
+    const keep = CLERIC_KEEP * ((u.specDef && u.specDef.keep) || 1);
+    const close = g.nearestEnemy(u.x, u.y, keep, 'realm');
     if (close) {
       const cornered = u.distTo(close) <= u.reach + 6
         && g.time - (u.lastHit || -99) < 2
@@ -466,7 +506,7 @@ export function heroBrain(u, since) {
         u.target = null;
         u.state = 'mend';
         tryHeal(u, g, since) || tryBless(u, g, since);
-        backAwayFrom(u, g, close, CLERIC_KEEP + 30);
+        backAwayFrom(u, g, close, keep + 30);
         return;
       }
       u.engage(close);      // nowhere left to go: swing the mace
@@ -580,15 +620,16 @@ export function heroBrain(u, since) {
 }
 
 function tryHeal(u, g, since) {
-  const h = u.def.heal;
+  const h = u.def.heal, sp = u.specDef;
   u.healCool = (u.healCool || 0) - since;
   if (u.healCool > 0) return false;
+  const range = h.range * ((sp && sp.mendMul) || 1);
   let best = null, worst = 1;
   for (const a of g.units) {
     if (a.dead || a.faction !== 'realm' || a === u) continue;
     const f = a.hp / a.maxHpNow;
     if (f >= MEND_AT) continue;
-    if (dist(a.x, a.y, u.x, u.y) > h.range) continue;
+    if (dist(a.x, a.y, u.x, u.y) > range) continue;
     if (f < worst) { worst = f; best = a; }
   }
   // nobody else is hurt? a cleric bleeding out is still somebody who is hurt
@@ -597,7 +638,7 @@ function tryHeal(u, g, since) {
   if (u.mana < HEAL_COST) return false;
   u.mana -= HEAL_COST;
   u.healCool = h.rate;
-  const given = best.heal(h.amount * (1 + (u.level - 1) * 0.2) * u.spellPower);
+  const given = best.heal(h.amount * (1 + (u.level - 1) * 0.2) * u.spellPower * ((sp && sp.healMul) || 1));
   // Rank for mending, paid on health actually restored -- so there is nothing
   // to farm by bandaging the healthy. Keeping people alive is the job.
   if (given > 0) {
@@ -635,7 +676,7 @@ function tryBless(u, g, since) {
   if (!best) return false;
   u.mana -= BLESSING.cost;
   u.blessCool = BLESSING.rate;
-  best.blessed = BLESSING.lasts;
+  best.blessed = BLESSING.lasts * ((u.specDef && u.specDef.blessMul) || 1);
   u.gainXp(XP_PER_BLESSING);
   u.lastSupport = g.time;
   g.fx.ring(best.x, best.y - 6, BLESSING.colour, 11);

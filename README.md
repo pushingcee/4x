@@ -277,7 +277,7 @@ warriors cannot quite handle: without a cleric the party was wiped having
 killed three of seven. With one, the same party cleared all seven and two
 walked away. Roughly fifty heals a fight and three soldiers blessed at once.
 
-Neither has specialisations yet -- those come later.
+Both specialise at the cap like everyone else -- see below.
 
 ### Loot
 
@@ -387,7 +387,8 @@ At **level 5** a soldier chooses a specialisation. It is the one permanent
 decision a unit makes, and each is worth exactly **twenty attribute points** —
 the choice is about shape, never about power. Each also unlocks an ability
 paid for out of a class resource: warriors work themselves into a **Rage**,
-rangers hold a **Focus**.
+rangers hold a **Focus**, and casters spend the same **Mana** as everything
+else they do.
 
 | Warrior | Points | Ability |
 |---|---|---|
@@ -400,6 +401,26 @@ rangers hold a **Focus**.
 | **Longbowman** | +8 STR, +12 AGI | **Aimed Shot** — triple damage, and a third more reach than anything can answer |
 | **Mercenary** | +6 STR, +10 AGI, +4 CON | **Ambush** — a brutal opener, far worse if it lands before they are seen |
 | **Assassin** | +14 AGI, +6 INT | **Vanish** — steps out of sight, closes unseen, opens with a five-fold strike |
+
+| Wizard | Points | Always | Ability |
+|---|---|---|---|
+| **Blood Magic** | +8 CON, +12 INT | no splash; +15% damage; every bolt returns a fifth of its damage as health | **Exsanguinate** — one bolt for 2.6× damage, all of it poured back into the caster |
+| **Fire Magic** | +4 AGI, +2 CON, +14 INT | splash 40% wider; everything hit burns for three seconds | **Firestorm** — full damage to everything around where it lands, and five seconds of burning |
+| **Dark Magic** | +6 AGI, +4 CON, +10 INT | everything hit is weakened (−20% damage) for six seconds | **Blight** — curses the ground for seven seconds: damage a tick, slowed, weakened |
+
+| Cleric | Points | Always | Ability |
+|---|---|---|---|
+| **Follower of the Light** | +6 CON, +14 INT | every touch heals 40% more and reaches 30% further | **Radiance** — mends every ally nearby at once, half again as strong as a touch |
+| **Paladin** | +4 STR, +12 CON, +4 INT | takes a fifth less harm; blessings last half again as long; stands closer to the fight | **Battle Hymn** — blesses everyone in earshot at once, and takes half damage for six seconds |
+
+The wizard's abilities ride the next bolt and go off wherever it lands, so a
+firestorm or a blight is aimed the way every fireball is. A **burn** ticks
+every half second and is credited to whoever lit it; a **blight** is a patch
+of cursed ground -- anything standing on it is slowed and weakened for as long
+as it stays, which is the point: a pack that will not leave it pays for that.
+Both wizards and clerics decide for themselves when to spend the mana: area
+spells wait for a crowd under them, Radiance for two people bleeding or one
+nearly gone, the Hymn for a fight and a line of people to bless.
 
 Measured against an unspecialised level 5, on health and on sustained output
 (damage × attack speed, weighted for crit):
@@ -418,6 +439,20 @@ landing at 2.4× on something that never got to swing back, nor a third of the
 fight spent unseen. These ratios are smaller than they once were because the
 hero baseline went up when villagers stopped being grown into knights: the same
 twenty specialisation points are now a smaller slice of a bigger hero.
+
+Each specialisation also gets its own sprite, so a party reads at a glance
+from across the map -- and the picker shows each one before you commit.
+
+![every hero and every specialisation](docs/sprites.png)
+
+Left to right per row: the base class, then its specialisations, idle above
+and mid-step below. Warriors: Fury (twin blades, warpaint), Arms (full helm,
+greatsword), Protection (plate, tower shield, plume). Rangers: Longbowman
+(a bow taller than they are), Mercenary (bandana, blade, coin purse),
+Assassin (hood, mask, twin daggers). Wizards: Blood (crimson hood, a
+floating blood orb), Fire (burning hat, flame staff), Dark (wide brim, skull
+staff, wisps). Clerics: Light (halo, sun staff, prayer book), Paladin
+(crested helm, tabard, sun shield, mace).
 
 **Mercenaries and assassins fight out of the dark.** They are invisible to
 monsters while unseen, strike for a bonus when they open from it, and then
@@ -505,6 +540,7 @@ lot to ask before trying a specialisation out. So:
 | `?test=1` | three level-5 warriors and three level-5 rangers outside the City Centre, plus 1500 gold to build with |
 | `?heroes=warrior:2,cleric:1,wizard:1` | whatever you name, in whatever numbers |
 | `?test=1&level=3` | the same party at a different rank |
+| `?sprites=1` | a contact sheet of every hero and specialisation sprite, at size; tap to dismiss |
 
 They arrive at full health on walkable ground, ranked high enough that the
 specialisation picker is waiting on their sheet. Combine with `?seed=` to test
@@ -531,6 +567,7 @@ src/
   render.js         camera, depth-sorted drawing, pixel font, minimap
   ui.js             DOM panels and all pointer input
   art.js            every sprite, generated at runtime from code
+  sheet.js          the ?sprites=1 contact sheet of hero and specialisation art
   audio.js          WebAudio chiptune SFX and music
   data.js           missions, buildings, classes, and every balance number
   fx.js             particles and floating text
