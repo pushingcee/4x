@@ -10,7 +10,7 @@ import { toPx, toTile } from './world.js';
 import { canUse, scoreFor } from './items.js';
 import { TILE } from './art.js';
 import {
-  RES_RATE, CLASSES, BUILDINGS, MISSIONS, STANCES,
+  RES_RATE, CLASSES, BUILDINGS, MISSIONS, STANCES, MONSTERS,
   BLESSING, HEAL_COST, MEND_RANGE, MEND_AT, CLERIC_KEEP, CLERIC_TETHER,
   XP_PER_HEAL, XP_PER_BLESSING
 } from './data.js';
@@ -515,7 +515,17 @@ export function heroBrain(u, since) {
 
   if (u.target && !u.target.dead) {
     const d = u.distTo(u.target);
-    if (d < 260) {
+    // Stand and fight what reaches you; do not follow it home. A monster
+    // that would have to be chased back inside its camp's reach is left to
+    // come again, unless the camp is one this hero could take anyway.
+    if (d > u.reach * 1.5 && u.target.kindClass === 'unit') {
+      const camp = campBehind(g, u.target);
+      if (camp) {
+        const { threat, mine } = dangerAt(g, camp.x, camp.y, g.lairReach(camp) * TILE, u);
+        if (mine < threat * (1.15 - def.courage)) u.target = null;
+      }
+    }
+    if (u.target && d < 260) {
       // clerics prefer patching people up mid-fight, and buffing whoever is
       // swinging, over swinging themselves -- a cleric's mace is a last resort
       if (def.heal && (tryHeal(u, g, since) || tryBless(u, g, since))) return;
@@ -586,6 +596,14 @@ export function heroBrain(u, since) {
       const d = dist(u.x, u.y, f.x, f.y);
       if (d > f.radius * TILE * 0.7) {
         if (!u.path && !u.needPath) u.goTo(toTile(f.x), toTile(f.y), 1);
+        // The road matters as much as the destination -- and the bounty buys
+        // only half as much nerve for it: the purse is for the fight at the
+        // flag, not for walking through somebody else's camp to reach it.
+        const nerve = 1 + Math.min(2, (f.bounty / 350) * (0.5 + def.greed)) * 0.5;
+        if (routeTooRisky(u, g, `flag:${f.id}`, { x: f.x, y: f.y, r: (f.radius + 2) * TILE }, nerve)) {
+          u.flagId = null;
+          return heroIdle(u, g);
+        }
       } else {
         u.path = null;
         g.heroAtFlag(u, f, since);
@@ -597,7 +615,10 @@ export function heroBrain(u, since) {
       const l = best.lair;
       u.state = 'quest';
       if (u.distTo(l) <= u.reach) { u.engage(l); u.fight(since); }
-      else walkTo(u, g, l);
+      else {
+        walkTo(u, g, l);
+        if (routeTooRisky(u, g, `lair:${l.id}`, { lair: l }, 1)) return heroIdle(u, g);
+      }
       return;
     }
 
@@ -612,12 +633,56 @@ export function heroBrain(u, since) {
     case 'explore': {
       u.state = 'explore';
       if (!u.path && !u.needPath) u.goTo(best.tx, best.ty, 2);
+      // curiosity is not worth walking through a camp for
+      if (routeTooRisky(u, g, 'explore', {}, 0.7)) { u.exploreGoal = null; return heroIdle(u, g); }
       if (u.arrived) { u.arrived = false; u.exploreGoal = null; }
       return;
     }
   }
   heroIdle(u, g);
 }
+
+/** The living camp this monster is standing within reach of, if any. */
+function campBehind(g, m) {
+  const l = m.lair;
+  if (!l || l.dead || !g.world.seen(l.tx, l.ty)) return null;
+  return dist(m.x, m.y, l.x, l.y) <= g.lairReach(l) * TILE ? l : null;
+}
+
+/**
+ * Self-preservation on the road. The pathfinder already skirts every camp
+ * it can; this is for the camp it cannot get round. Once a path exists it is
+ * walked once, on paper, and every camp it crosses -- other than the one it
+ * is going to -- is weighed the way the destination was. Lose that sum and
+ * the hero says so, drops the errand for a while, and picks another. Gold
+ * still buys nerve: `nerve` is the same bounty multiplier the flag used.
+ */
+function routeTooRisky(u, g, key, goal, nerve) {
+  const path = u.path;
+  if (!path || u.routeChecked === path) return false;
+  u.routeChecked = path;
+  const def = u.def;
+  for (const l of g.lairs) {
+    if (l.dead || !g.world.seen(l.tx, l.ty)) continue;
+    if (goal.lair === l) continue;
+    if (goal.x !== undefined && dist(l.x, l.y, goal.x, goal.y) <= goal.r) continue;   // the target itself
+    const reach = g.lairReach(l);
+    let crossed = false;
+    for (let i = 3; i < path.length; i++) {
+      if (Math.hypot(path[i].x - (l.tx + 1), path[i].y - (l.ty + 1)) <= reach) { crossed = true; break; }
+    }
+    if (!crossed) continue;
+    const { threat, mine } = dangerAt(g, l.x, l.y, reach * TILE, u);
+    if (mine * nerve >= threat * (1.15 - def.courage)) continue;   // they can take it
+    u.shy = u.shy || {};
+    u.shy[key] = g.time + 60;
+    u.stop();
+    g.fx.text(u.x, u.y - 20, 'NOT PAST THAT', '#ff9d9d', 22);
+    return true;
+  }
+  return false;
+}
+const isShy = (u, g, key) => !!(u.shy && u.shy[key] > g.time);
 
 function tryHeal(u, g, since) {
   const h = u.def.heal, sp = u.specDef;
@@ -774,7 +839,11 @@ function chooseGoal(u, g) {
     const sightPx = def.sight * TILE + 40;
     if (d > sightPx) continue;
     if (!g.world.visible(toTile(m.x), toTile(m.y)) && d > u.reach * 1.5) continue;
-    const { threat, mine } = dangerAt(g, m.x, m.y, 90, u);
+    let { threat, mine } = dangerAt(g, m.x, m.y, 90, u);
+    // A prowler at the edge of its camp is the camp. Chasing the one you can
+    // see into the reach of the ones you cannot is how parties get eaten.
+    const camp = campBehind(g, m);
+    if (camp) threat = Math.max(threat, dangerAt(g, camp.x, camp.y, g.lairReach(camp) * TILE, u).threat);
     const odds = mine / Math.max(1, threat);
     if (odds < 1 - def.courage) continue;
     let value = (m.def.gold * 1.4 + m.def.xp * 1.2) * (0.6 + greed);
@@ -788,6 +857,7 @@ function chooseGoal(u, g) {
   // (b) reward flags — the whole point of the game
   for (const f of g.flags) {
     if (f.type === 'fear' || f.done) continue;
+    if (isShy(u, g, `flag:${f.id}`)) continue;     // the road there was too much, for now
     const d = dist(u.x, u.y, f.x, f.y);
     const { threat, mine } = dangerAt(g, f.x, f.y, f.radius * TILE + 30, u);
     const odds = mine / Math.max(1, threat);
@@ -808,9 +878,11 @@ function chooseGoal(u, g) {
   for (const l of g.lairs) {
     if (l.dead) continue;
     if (!g.world.seen(l.tx, l.ty)) continue;
+    if (isShy(u, g, `lair:${l.id}`)) continue;
     if (dist(l.x, l.y, homeX, homeY) > def.wander * 1.6 * TILE) continue;
     const d = dist(u.x, u.y, l.x, l.y);
-    const { threat, mine } = dangerAt(g, l.x, l.y, 120, u);
+    // the whole garrison, however far it has wandered from the door
+    const { threat, mine } = dangerAt(g, l.x, l.y, g.lairReach(l) * TILE, u);
     if (mine < threat * (1.15 - def.courage)) continue;
     const value = l.def.reward * 0.5 * (0.5 + greed) * (0.6 + u.level * 0.25) * (holding ? 0.3 : 1);
     opts.push({ kind: 'lair', lair: l, score: value / (1 + (d / TILE) * 0.14) * fearPenalty(g, l.x, l.y) });
@@ -838,16 +910,22 @@ function chooseGoal(u, g) {
   const wanderlust = { ranger: 1.7, warrior: 0.8, cleric: 0.5, wizard: 0.45 }[def.id] || 0.6;
   const t = u.exploreGoal && !g.world.seen(u.exploreGoal.tx, u.exploreGoal.ty)
     ? u.exploreGoal : (u.exploreGoal = g.frontierTile(u.homeX, u.homeY, def.wander));
-  if (t) {
+  if (t && !isShy(u, g, 'explore')) {
     const gx = toPx(t.tx), gy = toPx(t.ty);
     const d = dist(u.x, u.y, gx, gy);
-    // curiosity stops at the edge of a known lair's territory
+    // Curiosity stops at the edge of a known camp's reach. A frontier tile
+    // inside it is not a discount, it is off the list -- unless the camp is
+    // one this hero could take, in which case it is a fight, not a stroll.
     let lairShy = 1;
     for (const l of g.lairs) {
       if (l.dead || !g.world.seen(l.tx, l.ty)) continue;
-      if (dist(l.x, l.y, gx, gy) < 9 * TILE) { lairShy = 0.15; break; }
+      if (dist(l.x, l.y, gx, gy) >= (g.lairReach(l) + 3) * TILE) continue;
+      const { threat, mine } = dangerAt(g, l.x, l.y, g.lairReach(l) * TILE, u);
+      lairShy = mine >= threat * (1.15 - def.courage) ? 0.3 : 0;
+      break;
     }
-    opts.push({
+    if (!lairShy) u.exploreGoal = null;         // draw another next time
+    if (lairShy) opts.push({
       kind: 'explore', tx: t.tx, ty: t.ty,
       score: 30 * wanderlust * lairShy * (holding ? 0.1 : 1)
         / (1 + (d / TILE) * 0.09) * fearPenalty(g, gx, gy)

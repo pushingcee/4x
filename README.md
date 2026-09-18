@@ -572,6 +572,35 @@ them. Since heroes no longer inherit a villager's training, rank is the only thi
 closes that gap, and rank comes from the smaller fights first. Gold buys courage, too: a
 fat enough bounty will talk soldiers into a fight they would otherwise refuse.
 
+### Self-preservation on the road
+
+A flag behind a camp used to be a massacre: heroes walked the straight line
+to it, straight through the camp, and aggroed the lot. Two things fix that.
+
+**The danger map.** Every camp the realm has seen paints the ground around
+it, out to the reach of its garrison -- as far as they prowl from the door
+plus as far as they see from there: a rat nest twelve tiles, an ogre den
+nineteen, a drake roost twenty-four -- and everyone of the realm pays extra to walk
+it: five times the cost at the camp itself, easing to double at the edge of
+its reach and to nothing three tiles beyond. The pathfinder goes round
+wherever there is a way round, and where the walk has to end inside the
+reach it comes in by the rim rather than the middle. Monsters do not pay it;
+they walk straight.
+
+**The route check.** Where there is no way round, the hero walks the route
+on paper once a path exists and weighs every camp it crosses, other than the
+one it is going to, exactly the way it weighed the destination. Lose that
+sum and they say *not past that*, drop the errand for a minute, and pick
+another.
+
+**The prowler is the camp.** A monster standing within its camp's reach is
+weighed as the whole camp, not as the one thing you can see, and a hero
+will not chase a monster back inside that reach unless the camp is one
+they could take anyway. They stand and fight what comes to them instead. The bounty buys nerve for the road too, but only half as
+much as it buys for the flag itself: a fat purse still talks a party
+through a camp it could nearly take, and no longer sends a recruit through
+one that will eat them.
+
 ## Running it locally
 
 No build step, no dependencies. Any static server will do:

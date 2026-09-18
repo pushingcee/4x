@@ -1435,6 +1435,11 @@ export class UI {
       have rather than what your workforce can be ground into. They arrive good at the job
       and get better by fighting. A hero can still be given a <b>calling</b> if you want them
       hauling stone between wars.</p>
+      <p><b>Self-preservation.</b> Everyone of the realm gives a known camp a wide berth on
+      the road, out to the reach of its garrison, wherever there is a way round. Where there
+      is not, a hero walks the route on paper first and weighs every camp it crosses the way
+      they weigh the destination: lose that sum and they say <b>not past that</b>, drop the
+      errand for a while and pick another. A fat enough bounty still talks them through.</p>
       <p><b>Stances.</b> A soldier set to <b>Defend</b> walks a beat around your buildings and
       workers and sprints to anyone under attack; one set to <b>Roam</b> wanders off to scout and
       hunt lairs. Either way they take no orders &mdash; raise a <b>flag</b> and pay enough.</p>

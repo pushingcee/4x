@@ -529,7 +529,9 @@ export class Unit {
     if (this.game.pathBudget <= 0) return;      // try again next frame
     this.game.pathBudget--;
     const { tx, ty, near } = this.needPath;
-    const p = this.game.world.findPath(this.tx, this.ty, tx, ty, near);
+    // the realm's people give known camps a berth; monsters walk straight
+    const wary = this.faction === 'realm';
+    const p = this.game.world.findPath(this.tx, this.ty, tx, ty, near, wary ? 8000 : 4500, wary);
     this.needPath = null;
     if (p && p.length) { this.path = p; this.pathIdx = 0; this.stuck = 0; }
     else if (p && !p.length) { this.path = null; this.arrived = true; }
@@ -538,7 +540,7 @@ export class Unit {
       this.path = null;
       const f = this.game.world.nearestFree(tx, ty, 6);
       if (f && (f.x !== tx || f.y !== ty)) {
-        const p2 = this.game.world.findPath(this.tx, this.ty, f.x, f.y, Math.max(1, near));
+        const p2 = this.game.world.findPath(this.tx, this.ty, f.x, f.y, Math.max(1, near), wary ? 8000 : 4500, wary);
         if (p2 && p2.length) { this.path = p2; this.pathIdx = 0; }
       }
       if (!this.path) this.pathFailed = true;

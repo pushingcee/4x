@@ -47,6 +47,7 @@ export class World {
     this.blocked = new Uint8Array(n);   // static terrain blockage
     this.occupied = new Int16Array(n).fill(-1); // building id per tile
     this.fog = new Uint8Array(n);       // 0 unseen, 1 remembered, 2 visible
+    this.danger = new Float32Array(n);  // how much a realm unit dislikes walking here
     this.props = [];                    // decorative + harvestable scenery
     this.propAt = new Int16Array(n).fill(-1);
 
@@ -354,7 +355,34 @@ export class World {
    * @returns array of tile coords [{x,y}...] excluding the start tile, or null.
    * `near` allows stopping adjacent to a blocked goal (mines, buildings, enemies).
    */
-  findPath(sx, sy, gx, gy, near = 0, maxNodes = 4500) {
+  /**
+   * The danger map: the ground around every camp the realm knows about,
+   * out to the camp's aggro reach. A wary walker pays extra to cross it, so
+   * the pathfinder goes round a camp wherever there is a way round -- which
+   * is the whole of a hero's sense of self-preservation on the road.
+   * `zones` are {tx, ty, r} in tiles.
+   */
+  setDanger(zones) {
+    this.danger.fill(0);
+    const w = this.w, h = this.h, d = this.danger;
+    for (const z of zones) {
+      const R = z.r + 3;
+      const x0 = Math.max(0, Math.floor(z.tx - R)), x1 = Math.min(w - 1, Math.ceil(z.tx + R));
+      const y0 = Math.max(0, Math.floor(z.ty - R)), y1 = Math.min(h - 1, Math.ceil(z.ty + R));
+      for (let y = y0; y <= y1; y++) {
+        for (let x = x0; x <= x1; x++) {
+          const dd = Math.hypot(x - z.tx, y - z.ty);
+          // steepest at the camp, easing to the edge, so that even a walk that
+          // has to end inside the reach comes in by the rim and not the middle
+          if (dd <= z.r) d[y * w + x] += 1 + 3 * (1 - dd / z.r);
+          else if (dd <= R) d[y * w + x] += 1 - (dd - z.r) / 3;
+        }
+      }
+    }
+  }
+
+  /** `wary`: pay the danger map's price, and search further to get round it. */
+  findPath(sx, sy, gx, gy, near = 0, maxNodes = 4500, wary = false) {
     sx |= 0; sy |= 0; gx |= 0; gy |= 0;
     if (!this.inside(sx, sy) || !this.inside(gx, gy)) return null;
     if (sx === gx && sy === gy) return [];
@@ -394,7 +422,8 @@ export class World {
         if (!this.passable(nx, ny) && !(near > 0 && isGoalCell)) continue;
         // no corner-cutting through blocked diagonals
         if (dx && dy && (!this.passable(cx + dx, cy) || !this.passable(cx, cy + dy))) continue;
-        const step = (dx && dy ? Math.SQRT2 : 1) * this.cost(nx, ny);
+        let step = (dx && dy ? Math.SQRT2 : 1) * this.cost(nx, ny);
+        if (wary) step *= 1 + this.danger[ni];
         const ng = g[cur] + step;
         if (stamp[ni] === gen && ng >= g[ni]) continue;
         stamp[ni] = gen; g[ni] = ng; from[ni] = cur;

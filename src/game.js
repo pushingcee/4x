@@ -52,6 +52,7 @@ export class Game {
     this.fogIn = 0;
     this.waveIn = DAY_SECONDS * (PEACE_DAYS + 1.5);
     this.raids = 0;            // raids launched so far; every third is led by a boss
+    this.dangerIn = 0;         // seconds until the danger map is redrawn
     this.wildIn = 25;
     this.pathBudget = 0;
     this.speed = 1;
@@ -103,6 +104,22 @@ export class Game {
   // -----------------------------------------------------------------
   // spawning
   // -----------------------------------------------------------------
+  /**
+   * How far a camp's garrison will come out to meet you, in tiles: as far
+   * as they prowl from the door, plus as far as they can see from there.
+   */
+  lairReach(l) { return MONSTERS[l.def.spawn].aggro / TILE + 5; }
+
+  /** Every camp the realm has seen, as ground to be walked around. */
+  rebuildDanger() {
+    const zones = [];
+    for (const l of this.lairs) {
+      if (l.dead || !this.world.seen(l.tx, l.ty)) continue;
+      zones.push({ tx: l.tx + 1, ty: l.ty + 1, r: this.lairReach(l) });
+    }
+    this.world.setDanger(zones);
+  }
+
   /** How much harder the world has grown, in attribute points. */
   get threat() {
     return Math.min(THREAT_CAP, Math.floor((this.day - 1) * THREAT_PER_DAY));
@@ -433,6 +450,7 @@ export class Game {
       this.world.propAt[this.world.idx(p.tx, p.ty)] = -1;
       this.world.props[i] = { ...p, kind: 'rock', lairId: null };
     }
+    this.rebuildDanger();        // the road past it is safe now
     if (this.lairs.every(x => x.dead)) this.endGame('win');
   }
 
@@ -1165,6 +1183,10 @@ export class Game {
         this.world.reveal(toTile(b.x), toTile(b.y), b.def.sight || (b.complete ? (b.defId === 'palace' ? 12 : 8) : 5));
       }
     }
+
+    // the ground the realm has learned to avoid, redrawn now and then
+    this.dangerIn -= dt;
+    if (this.dangerIn <= 0) { this.dangerIn = 1.5; this.rebuildDanger(); }
 
     for (const b of this.buildings) if (!b.dead) b.update(dt);
     for (const l of this.lairs) if (!l.dead) l.update(dt);
