@@ -271,6 +271,21 @@ export class Game {
     return best;
   }
 
+  /**
+   * The camp a point sits on, if it sits on one. An attack flag planted on a
+   * lair is a flag against THAT lair, and the heroes need to know which one
+   * so they can agree with each other about what they are massing for.
+   */
+  campNear(x, y, range = 3 * TILE) {
+    let best = null, bestD = range;
+    for (const l of this.lairs) {
+      if (l.dead) continue;
+      const d = Math.max(0, dist(l.x, l.y, x, y) - l.radius);
+      if (d <= bestD) { bestD = d; best = l; }
+    }
+    return best;
+  }
+
   /** Is anything of the realm within `range` of this point? */
   someoneNear(x, y, range) {
     for (const u of this.units) {

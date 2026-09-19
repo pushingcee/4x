@@ -827,3 +827,44 @@ export const RESURRECT_COST = 0.6;  // fraction of hire cost to raise a dead her
  * structure damage gives sieges -- in both directions -- time to matter.
  */
 export const STRUCTURE_DMG = 0.5;
+
+/**
+ * WARBAND — courage is a group property.
+ *
+ * Self-preservation used to be a sum over everything breathing within a
+ * radius, which made two camps pitched near each other permanently
+ * unattackable: neither could be taken without taking both, and nobody was
+ * ever brave enough for both. Two things fix that, and both are things
+ * soldiers actually do.
+ *
+ * First, only the people who would genuinely be in the fight count. A camp's
+ * own garrison always would. The camp next door only joins if the brawl
+ * reaches it, and then it arrives in ones and twos rather than as one wall,
+ * which is what `spill` is for.
+ *
+ * Second, heroes hype each other. Every comrade who has declared for the same
+ * camp makes the rest braver, and a high-level hero at the front of the crowd
+ * is worth several ordinary ones, because people follow somebody who looks
+ * like they have done this before. A hero who wants a camp but has not got
+ * the numbers musters outside it and waits instead of wandering off -- which
+ * is what lets the numbers ever arrive.
+ */
+export const WARBAND = {
+  join: 0.26,        // nerve each comrade who has declared for the camp adds
+  cap: 2.4,          // ...but a mob is only so much braver than a pair
+  leader: 0.16,      // extra nerve per level a comrade has over this hero
+  leaderCap: 0.8,
+  spill: 0.55,       // weight of a NEIGHBOURING camp's garrison in the sum
+  fade: 3,           // tiles over which a fight stops carrying to bystanders
+  wall: 0.3,         // weight of the camp's own hp: a wall you break under fire
+  reach: 34,         // tiles: how far off a comrade still counts as coming
+  rallyAt: 0.45,     // muster rather than leave when this close to brave enough
+  declared: 1.12,    // nerve for having already said you are in
+  resolve: 1.3,      // ...and more for having already set off
+  stand: 11,         // tiles from the camp a warband forms up (aggro permitting)
+  patience: 38,      // seconds a hero waits for the others before giving up
+  shun: 55,          // ...and how long they then leave that camp alone
+  goldCap: 3,        // how much nerve a full-price bounty is worth
+  price: 1.1,        // gold per point of threat that buys a hero outright
+  floor: 120         // ...with a floor, so a rat nest is not bought for pennies
+};

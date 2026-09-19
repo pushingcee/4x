@@ -10,9 +10,9 @@ import { toPx, toTile } from './world.js';
 import { canUse, scoreFor } from './items.js';
 import { TILE } from './art.js';
 import {
-  RES_RATE, CLASSES, BUILDINGS, MISSIONS, STANCES, MONSTERS,
+  RES_RATE, CLASSES, BUILDINGS, MISSIONS, STANCES, MONSTERS, STAT_EFFECT,
   BLESSING, HEAL_COST, MEND_RANGE, MEND_AT, CLERIC_KEEP, CLERIC_TETHER,
-  XP_PER_HEAL, XP_PER_BLESSING
+  XP_PER_HEAL, XP_PER_BLESSING, WARBAND
 } from './data.js';
 import { dist, clamp } from './util.js';
 
@@ -373,6 +373,195 @@ function dangerAt(g, x, y, radius, hero) {
   return { threat, mine };
 }
 
+/**
+ * Would this monster actually be in the fight? A camp's own garrison always
+ * would. Anything else joins only once the brawl reaches it, and a
+ * NEIGHBOURING camp's guard counts for less even then: they come out in ones
+ * and twos as they notice, not as one wall. Summing every breathing thing
+ * inside a flat radius is what made two camps pitched close together into a
+ * single problem nobody was ever brave enough to solve.
+ */
+function joinsIn(m, x, y, camp) {
+  if (camp && m.lair === camp) return 1;
+  const theirs = m.lair && !m.lair.dead && m.lair !== camp ? WARBAND.spill : 1;
+  const pull = (m.def.aggro || 140) * 0.8;
+  const d = dist(m.x, m.y, x, y);
+  if (d <= pull) return theirs;
+  const fade = WARBAND.fade * TILE;
+  return d >= pull + fade ? 0 : theirs * (1 - (d - pull) / fade);
+}
+
+/**
+ * A camp as a key: what two heroes compare to agree they mean the same one,
+ * and the same string the road-shyness above is filed under, so declaring
+ * for a camp and being wary of the way there are talking about one place.
+ */
+const campKey = (o) => o ? `lair:${o.id}` : null;
+
+/**
+ * Everyone who has declared for the same camp. Distance is not a
+ * disqualifier: a warrior still three screens out is part of the warband,
+ * they are simply not swinging yet. That is the whole point -- heroes commit
+ * to a camp BEFORE they can take it, and the commitment is what lets the
+ * numbers gather.
+ */
+function warband(g, hero, key, x, y) {
+  const band = { count: 0, force: 0, top: hero.level, seen: new Set() };
+  if (!key) return band;
+  for (const a of g.units) {
+    if (a.dead || a === hero || a.faction !== 'realm') continue;
+    if (a.warTarget !== key) continue;
+    const d = dist(a.x, a.y, x, y);
+    if (d > WARBAND.reach * TILE) continue;
+    band.count++;
+    band.force += strength(a) * (d < 5 * TILE ? 1 : 0.7);
+    band.seen.add(a);
+    if (a.level > band.top) band.top = a.level;
+  }
+  return band;
+}
+
+/**
+ * Hype. Soldiers massing for an assault talk each other into it: every
+ * comrade makes the rest braver, and a hero of higher level at the front of
+ * the crowd is worth several ordinary ones. You follow the person who looks
+ * like they have done this before.
+ */
+function hype(band, hero) {
+  const crowd = Math.min(WARBAND.cap, 1 + band.count * WARBAND.join);
+  const lead = 1 + Math.min(WARBAND.leaderCap,
+    Math.max(0, band.top - hero.level) * WARBAND.leader);
+  return crowd * lead;
+}
+
+/**
+ * The sum a hero does before walking into a camp: everything that would
+ * swing at them, everything that would swing for them, and how brave the
+ * crowd at their shoulder makes them feel about the difference.
+ *
+ * `brave` is the one number the callers gate on. One is even odds for a hero
+ * of ordinary nerve; anything less and they want company, or gold.
+ */
+function siegeOdds(g, hero, x, y, camp, radius, key, bounty = 0) {
+  let threat = 0;
+  for (const m of g.units) {
+    if (m.dead || m.faction !== 'monster') continue;
+    const w = joinsIn(m, x, y, camp);
+    if (w > 0) threat += strength(m) * w;
+  }
+  // The camp itself never swings back, but it is a wall you have to stand in
+  // front of and break while the garrison musters -- which is exactly why a
+  // stronger camp wants more bodies whatever happens to be outside it at the
+  // moment somebody looks.
+  if (camp && !camp.dead) threat += strength(camp) * WARBAND.wall;
+
+  const band = warband(g, hero, key, x, y);
+  let mine = strength(hero) * (1 + (hero.level - 1) * 0.12) + band.force;
+  for (const a of g.units) {
+    if (a.dead || a.faction !== 'realm' || a === hero) continue;
+    if (band.seen.has(a)) continue;                  // already in the warband
+    if (!a.isHero && a.kind !== 'guard') continue;
+    const withTrouble = dist(a.x, a.y, x, y) <= radius * 1.4;
+    const withMe = dist(a.x, a.y, hero.x, hero.y) <= 170;
+    if (!withTrouble && !withMe) continue;
+    mine += strength(a) * (withTrouble ? 0.8 : 0.55);
+  }
+
+  // Gold is the lever that overrules the arithmetic, and it is priced against
+  // what is being asked: enough to buy a hero into a rat nest is pocket
+  // change, enough to buy one into an ogre den on their own is a fortune.
+  // At full price they stop doing sums altogether and go, which is how you
+  // send somebody on a death mission and what the number on the flag means.
+  const paid = bounty * (0.45 + hero.def.greed);
+  const price = Math.max(WARBAND.floor, threat * WARBAND.price);
+  const bought = Math.min(1, paid / price);
+  // Resolve. A decision already made is worth something on its own: without
+  // this a hero sitting exactly on the line flips between massing and
+  // charging every third of a second and spends the whole battle walking
+  // back and forth. Having already set off counts for more than having
+  // merely declared.
+  const resolve = hero.warCharge === key ? WARBAND.resolve
+    : hero.warTarget === key ? WARBAND.declared : 1;
+  const nerve = hype(band, hero) * (1 + bought * WARBAND.goldCap) * resolve;
+  const odds = mine / Math.max(1, threat);
+  return { threat, mine, odds, band, nerve, bought, brave: odds * nerve };
+}
+
+/**
+ * Where a warband forms up: short of the camp, on the side it came from, and
+ * outside whatever lives there can smell. Everyone from the same home works
+ * it out the same way, so they pile up on the same patch of grass instead of
+ * loitering singly in a ring around the thing none of them dare touch.
+ */
+function musterPoint(g, camp, u) {
+  const dx = u.homeX - camp.x, dy = u.homeY - camp.y;
+  const len = Math.hypot(dx, dy) || 1;
+  const wake = MONSTERS[camp.def.spawn];
+  const want = Math.max(WARBAND.stand * TILE, (wake ? wake.aggro : 160) + 3 * TILE);
+  return g.world.nearestFree(
+    toTile(camp.x + (dx / len) * want), toTile(camp.y + (dy / len) * want), 8);
+}
+
+/** Is there anybody left who could come? No point massing alone. */
+function anyoneToWaitFor(g, u) {
+  for (const a of g.units) {
+    if (a.dead || a === u || a.faction !== 'realm' || !a.isHero) continue;
+    if (a.def.heal || a.stance === 'defend') continue;
+    return true;
+  }
+  return false;
+}
+
+/**
+ * What one fresh warrior is worth, for when the player has no heroes at all
+ * and the panel still owes them a number. Built the same way a real one is,
+ * so it does not quietly disagree with the article on the ground.
+ */
+function notionalWarrior() {
+  const c = CLASSES.warrior;
+  const stat = (k) => (c.stats[k] || 5) + ((c.knight && c.knight[k]) || 0);
+  return strength({
+    kindClass: 'unit',
+    power: c.dmg * (1 + (stat('str') - 5) * STAT_EFFECT.dmgPerPoint),
+    hp: c.hp + (stat('con') - 5) * STAT_EFFECT.hpPerPoint
+  });
+}
+
+/**
+ * What the player is told when they tap a camp, worked out with the same
+ * arithmetic the heroes use -- a number that disagrees with what they
+ * actually do would be worse than no number at all.
+ */
+export function campAssessment(g, camp) {
+  const heroes = g.units.filter(u => !u.dead && u.isHero && !u.def.heal);
+  let threat = 0;
+  for (const m of g.units) {
+    if (m.dead || m.faction !== 'monster') continue;
+    const w = joinsIn(m, camp.x, camp.y, camp);
+    if (w > 0) threat += strength(m) * w;
+  }
+  if (!camp.dead) threat += strength(camp) * WARBAND.wall;
+  const typical = heroes.length
+    ? heroes.reduce((s, h) => s + strength(h) * (1 + (h.level - 1) * 0.12), 0) / heroes.length
+    : notionalWarrior();
+  // The bar the heroes themselves would apply, not a guess at one: a panel
+  // that promises three swords will do where the heroes want five is worse
+  // than a panel that says nothing.
+  const bar = 1.15 - (heroes.length
+    ? heroes.reduce((s, h) => s + h.def.courage, 0) / heroes.length
+    : CLASSES.warrior.courage);
+  const key = campKey(camp);
+  let need = 1;
+  // n heroes see n-1 comrades apiece, and hype each other accordingly
+  while (need < 12 && need * typical
+    * Math.min(WARBAND.cap, 1 + (need - 1) * WARBAND.join) < threat * bar) need++;
+  return {
+    threat, need,
+    here: heroes.filter(h => h.warTarget === key).length,
+    price: Math.ceil(Math.max(WARBAND.floor, threat * WARBAND.price))
+  };
+}
+
 function fearPenalty(g, x, y) {
   let p = 1;
   for (const f of g.flags) {
@@ -442,6 +631,9 @@ export function heroBrain(u, since) {
     if (local.threat > local.mine * 0.55 || hpFrac < def.courage) {
       u.target = null;
       u.flagId = null;
+      u.warTarget = null;        // a hero running is nobody's reason to charge
+      u.rallyKey = null;
+      u.warCharge = null;
       u.state = 'flee';
       u.fleeing = 1.2;
       const refuge = g.healBuilding(u.x, u.y);
@@ -520,10 +712,7 @@ export function heroBrain(u, since) {
     // come again, unless the camp is one this hero could take anyway.
     if (d > u.reach * 1.5 && u.target.kindClass === 'unit') {
       const camp = campBehind(g, u.target);
-      if (camp) {
-        const { threat, mine } = dangerAt(g, camp.x, camp.y, g.lairReach(camp) * TILE, u);
-        if (mine < threat * (1.15 - def.courage)) u.target = null;
-      }
+      if (camp && !couldTake(g, u, camp)) u.target = null;
     }
     if (u.target && d < 260) {
       // clerics prefer patching people up mid-fight, and buffing whoever is
@@ -576,6 +765,11 @@ export function heroBrain(u, since) {
   // --- 3. score the world -------------------------------------------
   const best = chooseGoal(u, g);
   u.goalKind = best ? best.kind : 'idle';
+  // Declaring for a camp is a public act: it is what the next hero to look at
+  // the same camp counts, so it has to be recorded whether we are walking in
+  // or still standing outside working up to it.
+  u.warTarget = best && best.key ? best.key : null;
+  if (!u.warTarget) { u.rallyKey = null; u.warCharge = null; u.warName = null; }
 
   if (!best) { return heroIdle(u, g); }
 
@@ -611,13 +805,72 @@ export function heroBrain(u, since) {
       return;
     }
 
-    case 'lair': {
-      const l = best.lair;
+    case 'camp': {
+      const camp = best.camp, f = best.flag;
+      u.warName = camp ? camp.name : 'the camp';
+
+      if (!best.ready) {
+        // Stacking up. Stand short of the camp with whoever else has declared
+        // for it and let the crowd do its work -- but not forever: a hero who
+        // waits with nobody arriving gives up on that camp for a while and
+        // goes and finds something useful to do. Only the waiting counts
+        // against their patience; the walk out there does not.
+        u.warCharge = null;
+        if (u.rallyKey !== best.key) { u.rallyKey = best.key; u.rallyFor = WARBAND.patience; }
+        u.state = 'rally';
+        const spot = musterPoint(g, camp, u);
+        const far = spot ? dist(toPx(spot.x), toPx(spot.y), u.x, u.y) : 0;
+        if (spot && far > 3 * TILE) {
+          if (!u.path && !u.needPath) u.goTo(spot.x, spot.y, 2);
+          // Forming up outside a camp is not a reason to walk through another
+          // one on the way -- and nobody is massing yet, so the nerve for the
+          // road is whatever this hero has on their own.
+          if (routeTooRisky(u, g, best.key, { lair: camp }, roadNerve(best.nerve))) return heroIdle(u, g);
+          // No path to the mustering ground and none coming: standing about
+          // failing to get there is waiting like any other, and it has to
+          // count against their patience or they stand there for good.
+          if (!u.path && !u.needPath) u.rallyFor -= since;
+          else return;
+        } else {
+          u.rallyFor -= since;
+        }
+        if (u.rallyFor <= 0) {
+          u.shunKey = best.key;
+          u.shunUntil = g.time + WARBAND.shun;
+          u.rallyKey = null; u.warTarget = null; u.warName = null;
+          return heroIdle(u, g);
+        }
+        idleAround(u, g, toPx(spot ? spot.x : u.tx), toPx(spot ? spot.y : u.ty), 2);
+        u.state = 'rally';        // idleAround calls it loitering; it is not
+        return;
+      }
+
+      // In we go, and once we have set off we stay set off.
+      u.warCharge = best.key;
+      u.rallyKey = null;
       u.state = 'quest';
-      if (u.distTo(l) <= u.reach) { u.engage(l); u.fight(since); }
+      if (f) {
+        u.flagId = f.id;
+        const d = dist(u.x, u.y, f.x, f.y);
+        if (d > f.radius * TILE * 0.7) {
+          if (!u.path && !u.needPath) u.goTo(toTile(f.x), toTile(f.y), 1);
+          // The road is weighed with the same nerve the camp was: a warband
+          // that is brave enough for the camp is brave enough for the way in.
+          if (routeTooRisky(u, g, best.key, camp ? { lair: camp }
+            : { x: f.x, y: f.y, r: (f.radius + 2) * TILE }, roadNerve(best.nerve))) {
+            u.flagId = null;
+            return heroIdle(u, g);
+          }
+        } else {
+          u.path = null;
+          g.heroAtFlag(u, f, since);
+        }
+        return;
+      }
+      if (u.distTo(camp) <= u.reach) { u.engage(camp); u.fight(since); }
       else {
-        walkTo(u, g, l);
-        if (routeTooRisky(u, g, `lair:${l.id}`, { lair: l }, 1)) return heroIdle(u, g);
+        walkTo(u, g, camp);
+        if (routeTooRisky(u, g, best.key, { lair: camp }, roadNerve(best.nerve))) return heroIdle(u, g);
       }
       return;
     }
@@ -640,6 +893,18 @@ export function heroBrain(u, since) {
     }
   }
   heroIdle(u, g);
+}
+
+/**
+ * Could this hero, as things stand, take that camp? Three instincts ask it --
+ * whether to chase a prowler home, whether the road past it is walkable,
+ * whether curiosity may go that way -- and they all deserve the same answer,
+ * worked out the same way the assault itself would be.
+ */
+function couldTake(g, u, camp) {
+  const { brave } = siegeOdds(g, u, camp.x, camp.y, camp,
+    g.lairReach(camp) * TILE, campKey(camp));
+  return brave >= 1.15 - u.def.courage;
 }
 
 /** The living camp this monster is standing within reach of, if any. */
@@ -672,8 +937,13 @@ function routeTooRisky(u, g, key, goal, nerve) {
       if (Math.hypot(path[i].x - (l.tx + 1), path[i].y - (l.ty + 1)) <= reach) { crossed = true; break; }
     }
     if (!crossed) continue;
-    const { threat, mine } = dangerAt(g, l.x, l.y, reach * TILE, u);
-    if (mine * nerve >= threat * (1.15 - def.courage)) continue;   // they can take it
+    // Weighed the way the destination was: this camp's own garrison however
+    // far it has strayed, its neighbours only as far as they would actually
+    // join. Summing everything inside the reach counted the camp we are
+    // walking TO all over again, and two camps pitched close together came
+    // out as one wall with no way past it in either direction.
+    const { brave } = siegeOdds(g, u, l.x, l.y, l, reach * TILE, campKey(l));
+    if (brave * nerve >= 1.15 - def.courage) continue;             // they can take it
     u.shy = u.shy || {};
     u.shy[key] = g.time + 60;
     u.stop();
@@ -683,6 +953,12 @@ function routeTooRisky(u, g, key, goal, nerve) {
   return false;
 }
 const isShy = (u, g, key) => !!(u.shy && u.shy[key] > g.time);
+/**
+ * Gold and company buy only half as much nerve for the road as for the camp
+ * itself. The purse is for the fight you are being paid for, and the crowd
+ * at your shoulder is going to that camp, not this one.
+ */
+const roadNerve = (nerve) => 1 + (nerve - 1) * 0.5;
 
 function tryHeal(u, g, since) {
   const h = u.def.heal, sp = u.specDef;
@@ -843,7 +1119,8 @@ function chooseGoal(u, g) {
     // A prowler at the edge of its camp is the camp. Chasing the one you can
     // see into the reach of the ones you cannot is how parties get eaten.
     const camp = campBehind(g, m);
-    if (camp) threat = Math.max(threat, dangerAt(g, camp.x, camp.y, g.lairReach(camp) * TILE, u).threat);
+    if (camp) threat = Math.max(threat, siegeOdds(g, u, camp.x, camp.y, camp,
+      g.lairReach(camp) * TILE, campKey(camp)).threat);
     const odds = mine / Math.max(1, threat);
     if (odds < 1 - def.courage) continue;
     let value = (m.def.gold * 1.4 + m.def.xp * 1.2) * (0.6 + greed);
@@ -854,23 +1131,57 @@ function chooseGoal(u, g) {
     opts.push({ kind: 'fight', target: m, score: value / (1 + (d / TILE) * 0.16) * fearPenalty(g, m.x, m.y) });
   }
 
+  // A hero who walked away from a camp for want of company does not turn
+  // straight round and start waiting on it again.
+  const shunned = (key) => u.shunKey === key && g.time < u.shunUntil;
+  const mayWait = anyoneToWaitFor(g, u);
+
+  /**
+   * One camp, one option, two phases. Going in and forming up used to be two
+   * entries competing on score, and a hero sitting between them flipped
+   * every think-tick and walked back and forth until something ate them.
+   * They are the same intention: what changes is whether there are enough of
+   * us yet.
+   */
+  const considerCamp = (camp, key, value, d, bar, brave, nerve, flag) => {
+    if (isShy(u, g, key)) return;                    // the road there was too much
+    const ready = brave >= bar;
+    if (!ready) {
+      if (!camp || holding || !mayWait || shunned(key)) return;
+      if (brave < bar * WARBAND.rallyAt) return;     // hopeless, not merely hard
+    }
+    opts.push({
+      kind: 'camp', camp, key, flag, ready, nerve,
+      score: value * (ready ? 1 : 0.55) / (1 + (d / TILE) * (flag ? 0.1 : 0.14))
+        * fearPenalty(g, camp ? camp.x : flag.x, camp ? camp.y : flag.y)
+    });
+  };
+
   // (b) reward flags — the whole point of the game
   for (const f of g.flags) {
     if (f.type === 'fear' || f.done) continue;
     if (isShy(u, g, `flag:${f.id}`)) continue;     // the road there was too much, for now
     const d = dist(u.x, u.y, f.x, f.y);
-    const { threat, mine } = dangerAt(g, f.x, f.y, f.radius * TILE + 30, u);
-    const odds = mine / Math.max(1, threat);
-    // Gold buys courage. Without this the odds gate was absolute and a hero
-    // would refuse a camp no matter how much was piled on it, which makes the
-    // one lever the player has over them useless exactly when it matters.
-    const nerve = 1 + Math.min(2, (f.bounty / 350) * (0.5 + greed));
-    if (f.type === 'attack' && odds * nerve < 0.85 - def.courage) continue;
+    const camp = f.type === 'attack' ? g.campNear(f.x, f.y, f.radius * TILE + 40) : null;
+    const key = camp ? campKey(camp) : `flag:${f.id}`;
     let value = f.bounty * (0.45 + greed * 1.25);
     if (f.type === 'explore') value *= def.id === 'ranger' ? 1.7 : 0.85;
     if (f.type === 'defend') value *= 1.0 + (f.claimed === u.id ? 0.7 : 0);
     if (f.claimed && f.claimed !== u.id && f.type !== 'attack') value *= 0.35;
-    opts.push({ kind: 'flag', flag: f, score: value / (1 + (d / TILE) * 0.1) * fearPenalty(g, f.x, f.y) });
+    if (f.type === 'attack') {
+      const { brave, bought, nerve } = siegeOdds(
+        g, u, f.x, f.y, camp, f.radius * TILE + 30, key, f.bounty);
+      // A full-price bounty is a death mission, knowingly paid for: they stop
+      // doing sums and go. Short of that the odds still have to be faced,
+      // with whatever nerve the gold and the crowd can muster between them.
+      considerCamp(camp, key, value, d, 0.85 - def.courage,
+        bought >= 1 ? Infinity : brave, nerve, f);
+      continue;
+    }
+    opts.push({
+      kind: 'flag', flag: f,
+      score: value / (1 + (d / TILE) * 0.1) * fearPenalty(g, f.x, f.y)
+    });
   }
 
   // (c) monster lairs they know about, within their patch of the realm
@@ -881,11 +1192,12 @@ function chooseGoal(u, g) {
     if (isShy(u, g, `lair:${l.id}`)) continue;
     if (dist(l.x, l.y, homeX, homeY) > def.wander * 1.6 * TILE) continue;
     const d = dist(u.x, u.y, l.x, l.y);
-    // the whole garrison, however far it has wandered from the door
-    const { threat, mine } = dangerAt(g, l.x, l.y, g.lairReach(l) * TILE, u);
-    if (mine < threat * (1.15 - def.courage)) continue;
+    const key = campKey(l);
+    // The camp's own garrison counts however far it has wandered from the
+    // door; the reach only decides who ELSE gets swept in.
+    const { brave, nerve } = siegeOdds(g, u, l.x, l.y, l, g.lairReach(l) * TILE, key);
     const value = l.def.reward * 0.5 * (0.5 + greed) * (0.6 + u.level * 0.25) * (holding ? 0.3 : 1);
-    opts.push({ kind: 'lair', lair: l, score: value / (1 + (d / TILE) * 0.14) * fearPenalty(g, l.x, l.y) });
+    considerCamp(l, key, value, d, 1.15 - def.courage, brave, nerve, null);
   }
 
   // (d) spend the loot — heroes are terrible savers, and your taxes love it
@@ -920,8 +1232,7 @@ function chooseGoal(u, g) {
     for (const l of g.lairs) {
       if (l.dead || !g.world.seen(l.tx, l.ty)) continue;
       if (dist(l.x, l.y, gx, gy) >= (g.lairReach(l) + 3) * TILE) continue;
-      const { threat, mine } = dangerAt(g, l.x, l.y, g.lairReach(l) * TILE, u);
-      lairShy = mine >= threat * (1.15 - def.courage) ? 0.3 : 0;
+      lairShy = couldTake(g, u, l) ? 0.3 : 0;
       break;
     }
     if (!lairShy) u.exploreGoal = null;         // draw another next time

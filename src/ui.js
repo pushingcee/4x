@@ -11,6 +11,7 @@ import {
   GUILD_TIERS, FORTIFY,
 } from './data.js';
 import { toTile, toPx } from './world.js';
+import { campAssessment } from './brains.js';
 import {
   SLOT_KEYS, SLOTS, slotOf, describe, tierColour, TIERS, canUse, scoreFor
 } from './items.js';
@@ -585,6 +586,7 @@ export class UI {
     if (u.state === 'heal') return 'tending the hurt';
     if (u.state === 'bless') return 'blessing the faithful';
     if (u.state === 'stalk') return 'melting away';
+    if (u.state === 'rally') return u.warName ? `massing on ${u.warName}` : 'massing for an assault';
     if (u.job && u.job.type === 'build') return 'building';
     if (u.job && u.job.type === 'harvest' && u.job.node) {
       const k = u.job.node.kind;
@@ -738,18 +740,29 @@ export class UI {
 
   renderLairPanel(el, l) {
     const m = MONSTERS[l.def.spawn];
+    // What your heroes make of it. They mass before they attack, so the two
+    // numbers that matter are how many this needs and how many have declared.
+    const a = campAssessment(this.game, l);
+    const need = (x) => `${x.need >= 12 ? '12+' : x.need} ${x.need === 1 ? 'sword' : 'swords'}`;
+    const who = (x) => (x.here
+      ? `<b>${x.here}</b> ${x.here === 1 ? 'hero has' : 'heroes have'} declared for it`
+      : 'nobody has declared for it yet');
+    const massing = who(a);
     el.innerHTML = `
       <div class="sel-head">
         <span class="pic"></span>
         <div class="grow">
           <h3>${l.name}</h3>
-          <div class="meta">spawns ${m.name} &middot; ${l.spawned.filter(x => !x.dead).length}/${l.def.max} out</div>
-          <div class="hp"><i class="low" style="width:${(l.hp / l.maxHp) * 100}%"></i></div>
+          <div class="meta" data-live="meta">spawns ${m.name} &middot; ${l.spawned.filter(x => !x.dead).length}/${l.def.max} out</div>
+          <div class="hp"><i class="low" data-live="hp" style="width:${(l.hp / l.maxHp) * 100}%"></i></div>
         </div>
       </div>
-      <div class="statline"><span>HP <b>${Math.ceil(l.hp)}/${l.maxHp}</b></span>
-      <span>BOUNTY <b>${l.def.reward}g</b></span></div>
-      <div class="hint">${m.desc} Destroy every lair to win. Raise an <b>attack flag</b> here and your heroes will come.</div>
+      <div class="statline"><span>HP <b data-live="hpnum">${Math.ceil(l.hp)}/${l.maxHp}</b></span>
+      <span>BOUNTY <b>${l.def.reward}g</b></span>
+      <span>NEEDS <b data-live="need">${need(a)}</b></span></div>
+      <div class="hint">${m.desc} Destroy every lair to win. Your heroes gather before they go in &mdash;
+      right now <span data-live="massing">${massing}</span>. A bounty of about <b data-live="price">${a.price}g</b>
+      on an attack flag here buys one in on their own, whatever the odds.</div>
       <div class="acts">
         <button class="btn small primary" data-act="flaghere">Attack flag here</button>
         <button class="btn small" data-act="center">Centre</button>
@@ -757,6 +770,21 @@ export class UI {
       </div>`;
     el.querySelector('.pic').replaceWith(spriteEl(propSprite(l.def.prop), 32, 32, 34));
     this.wireSelActions(el, l);
+    // The numbers that matter here move on their own -- defenders muster,
+    // heroes declare -- so keep them live rather than frozen at tap time.
+    this.selRefresh = () => {
+      if (l.dead) { this.renderSelection(true); return; }
+      const now = campAssessment(this.game, l);
+      const f = clamp(l.hp / l.maxHp, 0, 1);
+      const set = (k, v) => { const e = el.querySelector(`[data-live="${k}"]`); if (e) e.innerHTML = v; };
+      const bar = el.querySelector('[data-live="hp"]');
+      if (bar) bar.style.width = f * 100 + '%';
+      set('meta', `spawns ${m.name} &middot; ${l.spawned.filter(x => !x.dead).length}/${l.def.max} out`);
+      set('hpnum', `${Math.ceil(l.hp)}/${l.maxHp}`);
+      set('need', need(now));
+      set('massing', who(now));
+      set('price', `${now.price}g`);
+    };
   }
 
   renderNodePanel(el, n) {
@@ -1030,7 +1058,7 @@ export class UI {
     if (!list.length) return 'nobody under arms';
     const verb = { fight: 'fighting', quest: 'on a flag', explore: 'scouting', flee: 'retreating',
       rest: 'recovering', shop: 'shopping', idle: 'patrolling', walk: 'marching',
-      guard: 'on watch', rescue: 'to the rescue' };
+      guard: 'on watch', rescue: 'to the rescue', rally: 'massing for an assault' };
     const busy = {};
     for (const w of list) { const v = verb[w.state] || w.state; busy[v] = (busy[v] || 0) + 1; }
     return Object.entries(busy).map(([k, n]) => `${n} ${k}`).join(', ');

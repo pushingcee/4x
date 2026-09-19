@@ -483,6 +483,40 @@ Beyond the stance, the only way to steer them is to put money on the map:
 Gold on a flag sits in escrow (shown in brackets beside your treasury) and is refunded
 in full if you withdraw it.
 
+### Massing on a camp
+
+Nobody storms a camp alone because they feel like it. Before a soldier walks into one
+they do a sum: everything that would fight *for* them against everything that would
+fight *against* them, and the camp itself counts as well — it is a wall you stand in
+front of and break while the garrison musters, which is why a stronger camp wants more
+bodies even when nothing is standing outside it.
+
+Only the defenders who would actually join count. A camp's own garrison always would.
+The camp pitched nine tiles away counts for rather less, because its guards come out in
+ones and twos as they notice rather than all at once. Summing everything breathing
+inside a fixed radius is what used to make two camps built close together into a single
+problem nobody was ever brave enough to touch.
+
+The other half is **nerve**, and nerve is a group property:
+
+- Every soldier who has **declared for the same camp** makes the rest braver. Two is a
+  great deal more than one and a half; a mob is only so much braver than a pair.
+- A **higher-level hero** declaring for it is worth several ordinary ones. People follow
+  somebody who looks like they have done this before.
+- A soldier who wants a camp but has not got the numbers **goes and stands short of it**
+  and waits, in sight of the others, rather than shrugging and wandering off. That is
+  what lets the numbers ever arrive. They will wait about forty seconds, and then give
+  up on that camp for a while and go and do something useful.
+
+So a Rat Nest on its own is one warrior's afternoon. The same nest with a goblin camp
+next door wants two. An Ogre Den wants four or five. Tapping any
+camp tells you which — along with how many of your soldiers have declared for it so far.
+
+And you can always overrule the arithmetic with money. An attack flag's bounty is priced
+against what you are asking: enough gold and a soldier stops doing sums and simply goes,
+alone, into something that will kill them. The camp's panel names that price. That is
+what a death mission costs, and it is your decision to make, not theirs.
+
 Peasants are not completely helpless. They will run from a monster they merely see, but
 something already biting them gets hit back — and they break off and flee once badly
 hurt. A lone peasant can see off a rat; anything larger needs a warrior.
@@ -600,6 +634,15 @@ they could take anyway. They stand and fight what comes to them instead. The bou
 much as it buys for the flag itself: a fat purse still talks a party
 through a camp it could nearly take, and no longer sends a recruit through
 one that will eat them.
+
+Every one of those sums is the **same** sum, the one in *Massing on a camp* above,
+which matters most where camps sit close together. A camp in the way is weighed for
+its own garrison and its neighbours only as far as they would actually join —
+otherwise the camp you are walking *to* got counted all over again as part of the
+camp you are walking *past*, two camps pitched nine tiles apart came out as one wall,
+and there was no way in from any direction. The crowd at your shoulder counts on the
+road as well, at the same half weight as the purse: a warband walks past what none of
+them would pass alone.
 
 ## Running it locally
 
