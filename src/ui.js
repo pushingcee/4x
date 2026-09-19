@@ -625,7 +625,7 @@ export class UI {
         ${u.upgrades ? `<span>WEAPON <b>+${u.upgrades}</b></span>` : ''}` : ''}
         ${u.carry > 0 ? `<span>CARRYING <b>${Math.floor(u.carry)} ${u.carryRes}</b></span>` : ''}
       </div>
-      ${isMine && (u.kind === 'peasant' || u.isHero) ? missionPicker(u.mission) : ''}
+      ${isMine && u.kind === 'peasant' ? missionPicker(u.mission) : ''}
       ${u.isHero ? `${specBlock(u)}${gearBlock(u)}${stancePicker(u.stance)}` : ''}
       <div class="acts">
         <button class="btn small ${following ? 'danger' : 'primary'}" data-act="follow">${following ? 'Stop following' : 'Follow'}</button>
@@ -635,8 +635,7 @@ export class UI {
       ${u.isHero ? `<div class="hint">${STANCES[u.stance].desc} They still take no orders &mdash;
         raise a <b>flag</b> and pay enough to tempt them.</div>` : ''}
       ${u.kind === 'peasant' ? `<div class="hint">${MISSIONS[u.mission].desc}</div>` : ''}
-      ${u.isHero ? `<div class="hint">A hero can still be given a <b>calling</b> and will go and
-        do it &mdash; being sworn to a guild does not stop anybody swinging a pick.</div>` : ''}`;
+`;
     el.querySelector('.pic').replaceWith(spriteEl(unitSprite(u.sprite, 0, 1), 16, 16, 36));
     // the picker shows what each choice will look like on the map
     el.querySelectorAll('.specbtn [data-unit]').forEach(s => s.replaceWith(unitIcon(s.dataset.unit)));
@@ -922,10 +921,9 @@ export class UI {
     });
     el.querySelectorAll('[data-mission]').forEach(btn => {
       btn.addEventListener('click', () => {
-        // veterans take callings as readily as villagers do
-        const folk = g.selection.filter(x => x.kindClass === 'unit'
-          && (x.kind === 'peasant' || x.isHero));
-        const targets = folk.length ? folk : (e && (e.kind === 'peasant' || e.isHero) ? [e] : []);
+        // callings are villagers' work; soldiers are for fighting
+        const folk = g.selection.filter(x => x.kindClass === 'unit' && x.kind === 'peasant');
+        const targets = folk.length ? folk : (e && e.kind === 'peasant' ? [e] : []);
         if (!targets.length) return;
         g.assignMission(targets, btn.dataset.mission);
         this.renderSelection(true);
@@ -1132,7 +1130,7 @@ export class UI {
           </div>
           <span class="cnt">${crew.length}</span>
           <span class="pm">
-            <button disabled title="A hero is hired for good -- but tap one to give them a calling again">&minus;</button>
+            <button disabled title="A hero is hired for good">&minus;</button>
             <button data-arm="${id}">+</button>
           </span>
         </div>`;
@@ -1469,8 +1467,12 @@ export class UI {
       A hero costs gold and nothing else &mdash; no villager puts down a pick for it &mdash;
       and each guild holds only two or three, so soldiers are what your buildings let you
       have rather than what your workforce can be ground into. They arrive good at the job
-      and get better by fighting. A hero can still be given a <b>calling</b> if you want them
-      hauling stone between wars.</p>
+      and get better by fighting. Callings are villagers' work &mdash; a soldier you have
+      paid a guild for is for fighting, not for hauling stone.</p>
+      <p><b>Trouble on the road.</b> A soldier on an errand deals with anything within three
+      tiles, or anything that has just hit them, before walking on &mdash; but answers it
+      where it stands rather than chasing: drag them nine tiles from where the scuffle
+      started and they break off and get back to it.</p>
       <p><b>Self-preservation.</b> Everyone of the realm gives a known camp a wide berth on
       the road, out to the reach of its garrison, wherever there is a way round. Where there
       is not, a hero walks the route on paper first and weighs every camp it crosses the way

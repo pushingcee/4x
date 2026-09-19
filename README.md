@@ -223,9 +223,10 @@ how many villagers you have ground through the fields.
 | Wizard | 5 | 6 | 7 | 19 | 80 |
 | Cleric | 6 | 6 | 11 | 16 | 138 |
 
-A hero can still be given a working **calling** — tell a warrior to mine and they will
-go and mine. Being sworn to a guild is what somebody *is*; a calling is only what they
-are doing this afternoon.
+Soldiers do not take **callings**. They used to, and it read as flexibility and played
+as a second, worse peasant: the guilds cap how many soldiers exist, so every one of them
+standing at a seam was a soldier you had paid for and were not using. Callings are
+villagers' work; soldiers are for fighting.
 
 ### Wizards and Clerics
 
@@ -400,8 +401,21 @@ else they do.
 | Ranger | Points | Ability |
 |---|---|---|
 | **Longbowman** | +8 STR, +12 AGI | **Aimed Shot** — triple damage, and a third more reach than anything can answer |
-| **Mercenary** | +6 STR, +10 AGI, +4 CON | **Ambush** — a brutal opener, far worse if it lands before they are seen |
-| **Assassin** | +14 AGI, +6 INT | **Vanish** — steps out of sight, closes unseen, opens with a five-fold strike |
+| **Mercenary** | +8 STR, +10 AGI, +8 CON | **Ambush** — a brutal opener, far worse if it lands before they are seen |
+| **Assassin** | +4 STR, +14 AGI, +4 CON, +4 INT | **Vanish** — steps out of sight, closes unseen, opens with a five-fold strike |
+
+**Both of these put the bow down.** Mercenary and Assassin fight at arm's length — a
+reach of 15 against the longbow's 116 — and are paid for it in damage (×1.35 and ×1.25)
+and, for the Mercenary, the health to stand there. A ranger's reach is the thing they
+trade away; the dark is what they get instead.
+
+The **Assassin** is barely ever visible: eight tenths of a second out of a fight and they
+are gone again, against the Mercenary's three. And **an assassin will not touch a
+building**. A knife is for throats, not masonry — they will not stand hacking at a camp
+wall while the garrison it belongs to fills up behind them. In a siege they kill what
+comes out of the camp and leave the wall to whoever brought a hammer; with nothing left
+standing outside, they go and find someone else to kill. One alone cannot take a camp at
+all, and that is the trade.
 
 | Wizard | Points | Always | Ability |
 |---|---|---|---|
@@ -412,7 +426,15 @@ else they do.
 | Cleric | Points | Always | Ability |
 |---|---|---|---|
 | **Follower of the Light** | +6 CON, +14 INT | every touch heals 40% more and reaches 30% further | **Radiance** — mends every ally nearby at once, half again as strong as a touch |
-| **Paladin** | +4 STR, +12 CON, +4 INT | takes a fifth less harm; blessings last half again as long; stands closer to the fight | **Battle Hymn** — blesses everyone in earshot at once, and takes half damage for six seconds |
+| **Paladin** | +12 STR, +2 AGI, +14 CON, +4 INT | ×1.7 damage; takes a fifth less harm; blessings last half again as long | **Battle Hymn** — blesses everyone in earshot at once, and takes half damage for six seconds |
+
+**The Paladin is not a support unit.** Every other cleric keeps out of reach, crosses the
+map to whoever is bleeding, and swings a mace only when cornered. A Paladin does none of
+that: they pick fights, hold ground and go where the warriors go, hitting about as hard
+as an Arms warrior with rather more health to do it behind. They sing the hymn from
+inside the line rather than behind it — it is half their own armour, so being in the
+fight is reason enough. They still patch somebody up between swings, at 60% of a
+cleric's touch, but mending is something that happens around them rather than the job.
 
 The wizard's abilities ride the next bolt and go off wherever it lands, so a
 firestorm or a blight is aimed the way every fireball is. A **burn** ticks
@@ -433,7 +455,7 @@ Measured against an unspecialised level 5, on health and on sustained output
 | Protection | ×1.31 | ×1.07 |
 | Longbowman | ×1.00 | ×1.45 |
 | Mercenary | ×1.11 | ×1.20 |
-| Assassin | ×1.00 | ×1.18 |
+| Assassin | ×1.09 | ×1.18 |
 
 The assassin looks weakest here and is not — the number cannot see an opener
 landing at 2.4× on something that never got to swing back, nor a third of the
@@ -644,6 +666,25 @@ three level 3s, and an ogre den wants three level-5 veterans — and still takes
 them. Since heroes no longer inherit a villager's training, rank is the only thing that
 closes that gap, and rank comes from the smaller fights first. Gold buys courage, too: a
 fat enough bounty will talk soldiers into a fight they would otherwise refuse.
+
+### Trouble on the road
+
+A hero marching to a flag used to walk straight past whatever was already swinging at
+them, because a flag worth four hundred gold outscores a rat — and arrived at the camp
+with half its health gone and a tail of monsters behind it. Now anything **within three
+tiles**, or anything that has actually hit them in the last three seconds, gets dealt
+with where it stands.
+
+It is answered, not chased. The spot where the scuffle started is remembered, and once
+the fight has dragged them **nine tiles** from it they break off and get on with the
+errand. Three tiles is deliberately tight: anything that close is already well inside
+its own aggro range and is hitting them anyway, so fighting back is strictly better than
+being hit in the back. Anything further off has not noticed them, and starting a fight
+with it is not self-defence.
+
+One cost worth knowing: a weak party crossing ground thick with monsters now stops and
+fights where it used to slip through, and sometimes dies doing it. `ROADSIDE` in
+`data.js` is the dial.
 
 ### Self-preservation on the road
 

@@ -302,17 +302,29 @@ export const SPECS = {
       rangeMul: 1.35, dmgMul: 1.15,
       desc: 'Reach above all. Outranges everything on the map and opens fire before the enemy knows.'
     },
+    /**
+     * Both of these put the bow down. A ranger's reach is the one thing they
+     * trade away: they work from arm's length, out of the dark, and the
+     * damage multipliers are what they are paid for giving up eighty pixels.
+     */
     {
       id: 'mercenary', name: 'Mercenary', colour: '#c9a227',
-      bonus: { str: 6, agi: 10, con: 4, int: 0 }, ability: 'ambush',
+      bonus: { str: 8, agi: 10, con: 8, int: 0 }, ability: 'ambush',
+      melee: true, range: 15, dmgMul: 1.35,
       stealth: true, stealthIn: 3, openerMul: 1.8,
-      desc: 'Paid to end things quickly. Slips out of sight between fights and opens hard.'
+      desc: 'Paid to end things quickly, up close. Slips out of sight between fights and opens hard.'
     },
     {
       id: 'assassin', name: 'Assassin', colour: '#9b6fff',
-      bonus: { str: 0, agi: 14, con: 0, int: 6 }, ability: 'vanish',
-      stealth: true, stealthIn: 2.5, openerMul: 2.4,
-      desc: 'Walks unseen, kills once, and is gone before the answer comes.'
+      bonus: { str: 4, agi: 14, con: 4, int: 4 }, ability: 'vanish',
+      melee: true, range: 15, dmgMul: 1.25,
+      // Barely ever visible: they are back in the dark a breath after the
+      // blow lands, and being unseen is the whole of their armour.
+      stealth: true, stealthIn: 0.8, openerMul: 2.4,
+      // A knife is for throats. They will not stand hacking at a camp wall
+      // while the garrison it belongs to fills up behind them.
+      unitsOnly: true,
+      desc: 'Walks unseen, kills once, and is gone before the answer comes. Will not touch a building.'
     }
   ],
   /**
@@ -353,14 +365,32 @@ export const SPECS = {
       healMul: 1.4, mendMul: 1.3,
       desc: 'Mending above all: a stronger touch, a longer reach, and a burst of light for when the whole line is bleeding.'
     },
+    /**
+     * The one cleric who is not a cleric. `frontline` takes them out of the
+     * support brain entirely -- they pick fights, they hold ground, and the
+     * mending is something that happens around them rather than the job. The
+     * hymn is what they bring: everyone in earshot blessed at once.
+     */
     {
       id: 'paladin', name: 'Paladin', title: 'Paladin', colour: '#e0c060',
-      bonus: { str: 4, agi: 0, con: 12, int: 4 }, ability: 'hymn',
-      soak: 0.8, blessMul: 1.5, keep: 0.6,
-      desc: 'Plate over the robe. Blessings that last half again as long, a fifth less harm taken, and a hymn that blesses everyone at once.'
+      bonus: { str: 12, agi: 2, con: 14, int: 4 }, ability: 'hymn',
+      frontline: true, dmgMul: 1.7,
+      soak: 0.8, blessMul: 1.5, healMul: 0.6,
+      desc: 'Plate over the robe, and a mace they mean it with. Fights in the line, takes a fifth less harm, and a hymn that blesses everyone at once for half again as long.'
     }
   ]
 };
+
+/**
+ * Trouble on the road. A hero marching to a flag used to walk straight past
+ * whatever was already biting them, because the flag outscored a rat -- and
+ * arrived at the camp with half its health gone and a tail of monsters. Now
+ * anything inside `ROADSIDE` gets dealt with first. `ROAD_LEASH` is what
+ * stops that becoming a chase: drift this far from where the scuffle started
+ * and they break off and get on with the errand.
+ */
+export const ROADSIDE = 3 * 16;       // pixels: close enough to be in the way
+export const ROAD_LEASH = 9 * 16;     // ...and how far they will follow it
 
 /** How long a unit stays unseen after breaking stealth by striking. */
 export const STEALTH_REVEAL = 2.5;

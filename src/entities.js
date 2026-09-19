@@ -502,7 +502,29 @@ export class Unit {
   /** How far they can reach. A longbow reaches a good deal further. */
   get reach() {
     const sp = this.specDef;
+    if (sp && sp.melee) return sp.range || 15;      // put the bow down
     return this.def.range * ((sp && sp.rangeMul) || 1);
+  }
+
+  /**
+   * Does this one shoot? The class says so, but a specialisation can put the
+   * bow down and work from arm's length instead.
+   */
+  get shoots() {
+    const sp = this.specDef;
+    return !!this.def.ranged && !(sp && sp.melee);
+  }
+
+  /**
+   * Is this a thing we are willing to hit? An assassin's trade is throats,
+   * not masonry: they will not stand hacking at a camp while the garrison it
+   * belongs to fills up behind them.
+   */
+  mayAttack(e) {
+    if (!e || e.dead) return false;
+    const sp = this.specDef;
+    if (sp && sp.unitsOnly && e.kindClass !== 'unit') return false;
+    return true;
   }
 
   get critChance() {
@@ -595,12 +617,14 @@ export class Unit {
   canReach(e) { return this.distTo(e) <= this.reach + 2; }
 
   engage(e) {
+    if (!this.mayAttack(e)) return false;
     this.target = e;
+    return true;
   }
 
   fight(dt) {
     const t = this.target;
-    if (!t || t.dead) { this.target = null; return false; }
+    if (!t || t.dead || !this.mayAttack(t)) { this.target = null; return false; }
     const d = this.distTo(t);
     if (d <= this.reach) {
       this.path = null; this.needPath = null; this.moving = false;
@@ -644,7 +668,7 @@ export class Unit {
     if (this.frenzy > 0) this.heal(dmg * 0.25);   // Rampage drinks it back
     const steal = this.gearMod('lifesteal');
     if (steal > 0) this.heal(dmg * steal / 100);
-    if (this.def.ranged) {
+    if (this.shoots) {
       const bolt = this.kind === 'wizard' ? (sp && sp.bolt) || 'fire' : this.def.bolt || 'arrow';
       const p = this.game.spawnProjectile(this, t, dmg, bolt, crit);
       // an armed ability rides this bolt and goes off where it lands

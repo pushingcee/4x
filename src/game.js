@@ -995,13 +995,14 @@ export class Game {
     // Soldier classes are hired at their guild, not grown out of the fields.
     if (m.becomes) return 0;
 
-    // Anyone in the realm can take a calling -- villagers and heroes alike.
-    // A hero put back on a seam loses nothing: the class is what they are,
-    // and the calling is only what they are doing this afternoon.
+    // Callings are villagers' work. A soldier used to be able to take one,
+    // which read as flexibility and played as a second, worse peasant: the
+    // guilds cap how many soldiers exist, so every one of them standing at a
+    // seam was a soldier the realm had paid for and was not using.
     let n = 0, first = null;
     for (const u of units) {
       if (!u || u.dead) continue;
-      if (u.kind !== 'peasant' && !u.isHero) continue;
+      if (u.kind !== 'peasant') continue;
       if (u.job && u.job.type === 'build' && u.job.site) u.job.site.builders--;
       u.mission = missionId;
       u.job = null;
@@ -1116,7 +1117,11 @@ export class Game {
           || this.nearestEnemy(u.x, u.y, 110, 'realm', false);
         if (foe) { u.engage(foe); u.fight(since); return; }
         const lair = this.lairs.find(l => !l.dead && dist(l.x, l.y, f.x, f.y) <= r + 24);
-        if (lair) { u.engage(lair); u.fight(since); return; }
+        // An assassin holds the flag but will not break the wall: somebody
+        // else sees to that, and the bounty is paid to whoever is standing
+        // here when it falls.
+        if (lair && u.mayAttack(lair)) { u.engage(lair); u.fight(since); return; }
+        if (lair) return;
         this.payFlag(f, u, f.bounty);
         break;
       }

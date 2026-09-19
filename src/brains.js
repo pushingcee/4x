@@ -11,6 +11,7 @@ import { canUse, scoreFor } from './items.js';
 import { TILE } from './art.js';
 import {
   RES_RATE, CLASSES, BUILDINGS, MISSIONS, STANCES, MONSTERS, STAT_EFFECT,
+  ROADSIDE, ROAD_LEASH,
   BLESSING, HEAL_COST, MEND_RANGE, MEND_AT, CLERIC_KEEP, CLERIC_TETHER,
   XP_PER_HEAL, XP_PER_BLESSING, WARBAND
 } from './data.js';
@@ -130,7 +131,12 @@ function useAbilityWisely(u, g) {
         if (busy || a.isHero) want++;
       }
       const fight = !!g.nearestEnemy(u.x, u.y, ab.radius + 60, 'realm');
-      return (want >= 2 && fight) ? u.useAbility(null) : false;
+      // A paladin sings from inside the fight rather than behind it: the
+      // hymn is half their own armour, so being in it is reason enough.
+      const front = !!(u.specDef && u.specDef.frontline);
+      const pressed = front
+        && (g.time - (u.lastHit || -99) < 3 || u.hp < u.maxHpNow * 0.8);
+      return ((want >= (front ? 1 : 2) && fight) || pressed) ? u.useAbility(null) : false;
     }
     default:
       return t ? u.useAbility(t) : false;
@@ -343,6 +349,14 @@ function idleAround(u, g, cx, cy, r) {
 // HEROES — they weigh the world and decide for themselves
 // -------------------------------------------------------------------
 
+/**
+ * Who is a support unit and who merely knows first aid. A cleric keeps out
+ * of reach, crosses the map to the wounded and never picks a fight; a
+ * Paladin is a cleric by guild and a soldier by trade, so `frontline` takes
+ * them out of all of that and lets them behave like the warrior they are.
+ */
+const isSupport = (u) => !!u.def.heal && !(u.specDef && u.specDef.frontline);
+
 /** Rough combat strength, used on both sides of every risk assessment. */
 function strength(e) {
   if (e.kindClass !== 'unit') return e.maxHp * 0.35;
@@ -506,7 +520,7 @@ function musterPoint(g, camp, u) {
 function anyoneToWaitFor(g, u) {
   for (const a of g.units) {
     if (a.dead || a === u || a.faction !== 'realm' || !a.isHero) continue;
-    if (a.def.heal || a.stance === 'defend') continue;
+    if (isSupport(a) || a.stance === 'defend') continue;
     return true;
   }
   return false;
@@ -533,7 +547,7 @@ function notionalWarrior() {
  * actually do would be worse than no number at all.
  */
 export function campAssessment(g, camp) {
-  const heroes = g.units.filter(u => !u.dead && u.isHero && !u.def.heal);
+  const heroes = g.units.filter(u => !u.dead && u.isHero && !isSupport(u));
   let threat = 0;
   for (const m of g.units) {
     if (m.dead || m.faction !== 'monster') continue;
@@ -578,18 +592,11 @@ export function heroBrain(u, since) {
   const def = u.def;
   const hpFrac = u.hp / u.maxHpNow;
 
-  // --- 0. a soldier you sent back to work is a worker, first ---------
-  // Knighthood is a layer, not a life sentence: give a veteran a calling and
-  // they go and do it, keeping everything they are. They still fight anything
-  // that comes at them -- doWork falls through to the danger checks below
-  // only when there is no work to be had.
-  const calling = MISSIONS[u.mission];
-  if (calling && (calling.nodes || calling.build) && !u.flagId) {
-    const foe = g.nearestEnemy(u.x, u.y, 72, 'realm');
-    if (!foe) { workShift(u, g, since, calling); return; }
-  }
+  // The anchor belongs to one roadside scuffle and dies with it. Left lying
+  // around it would cancel the next fight the moment they walked anywhere.
+  if (u.roadAnchor && (!u.target || u.target.dead)) u.roadAnchor = null;
 
-  // --- 0b. spend the temper ----------------------------------------
+  // --- 0. spend the temper -----------------------------------------
   if (u.abilityReady) useAbilityWisely(u, g);
 
   // --- 0c. hit, and gone -------------------------------------------
@@ -686,8 +693,8 @@ export function heroBrain(u, since) {
   // hit would otherwise stand and trade blows, which is how the first version
   // of them died in every single test. They are not fighters. They back off,
   // mending and blessing as they go, and only swing when genuinely cornered.
-  if (def.heal) {
-    // a paladin in plate lets them come a good deal closer than a robe does
+  if (isSupport(u)) {
+    // how close a robe lets them come before it backs away
     const keep = CLERIC_KEEP * ((u.specDef && u.specDef.keep) || 1);
     const close = g.nearestEnemy(u.x, u.y, keep, 'realm');
     if (close) {
@@ -714,24 +721,30 @@ export function heroBrain(u, since) {
       const camp = campBehind(g, u.target);
       if (camp && !couldTake(g, u, camp)) u.target = null;
     }
+    // Trouble on the road is answered, not chased. Once a scuffle has pulled
+    // them this far from where it started, the errand wins again.
+    if (u.roadAnchor && dist(u.x, u.y, u.roadAnchor.x, u.roadAnchor.y) > ROAD_LEASH) {
+      u.target = null;
+      u.roadAnchor = null;
+    }
     if (u.target && d < 260) {
       // clerics prefer patching people up mid-fight, and buffing whoever is
       // swinging, over swinging themselves -- a cleric's mace is a last resort
-      if (def.heal && (tryHeal(u, g, since) || tryBless(u, g, since))) return;
+      if (isSupport(u) && (tryHeal(u, g, since) || tryBless(u, g, since))) return;
       u.state = 'fight';
       u.fight(since);
       return;
     }
     u.target = null;
   }
-  if (def.heal && (tryHeal(u, g, since) || tryBless(u, g, since))) return;
+  if (isSupport(u) && (tryHeal(u, g, since) || tryBless(u, g, since))) return;
 
   // --- 2b. a cleric goes looking ------------------------------------
   // The difference between a cleric and a soldier who knows first aid: they
   // cross the map to somebody bleeding instead of mending whoever wanders by.
   // They do it from arm's length, though: a cleric standing in the middle of
   // a melee is a dead cleric, and a dead cleric heals nobody.
-  if (def.heal) {
+  if (isSupport(u)) {
     const patient = findPatient(u, g);
     if (patient) {
       u.target = null;
@@ -761,6 +774,38 @@ export function heroBrain(u, since) {
       if (d > CLERIC_TETHER * 0.45) { u.state = 'follow'; return; }
     }
   }
+
+  // --- 2c. anything already in the way ------------------------------
+  // A hero on an errand used to walk straight past a monster that was
+  // swinging at them, because a flag worth 400 gold outscores a rat, and
+  // arrive at the camp bleeding with a tail of them behind. Whatever is
+  // close enough to be a nuisance gets answered where it stands -- but the
+  // anchor above means answered, not followed.
+  // Only while they are actually going somewhere. At a camp there is always
+  // a defender within three tiles, so without this the rule fires forever and
+  // nobody ever swings at the wall -- a siege that never lands a blow on the
+  // thing it came to break. Standing still, the ordinary scoring below
+  // already weighs whatever is nearby.
+  if (u.path && !u.target && !isSupport(u) && u.fleeing <= 0) {
+    // Whoever is actually biting us counts wherever they are standing; a
+    // bystander has to be genuinely in the way. Answering everything within
+    // sight is not self-defence, it is picking fights, and in a crowded
+    // corner of the map it stops a party ever arriving anywhere.
+    const biter = u.lastAttacker;
+    const bitten = biter && !biter.dead && biter.faction === 'monster'
+      && g.time - (u.lastHit || -99) < 3 && u.distTo(biter) < ROAD_LEASH;
+    const nuisance = bitten ? biter : g.nearestEnemy(u.x, u.y, ROADSIDE, 'realm', false);
+    if (nuisance && u.engage(nuisance)) {
+      u.roadAnchor = { x: u.x, y: u.y };
+      u.state = 'fight';
+      u.fight(since);
+      return;
+    }
+  }
+
+  // A paladin is not a field hospital, but they will not stand beside
+  // somebody bleeding out and do nothing between swings.
+  if (u.def.heal && !isSupport(u) && !u.target) tryHeal(u, g, since);
 
   // --- 3. score the world -------------------------------------------
   const best = chooseGoal(u, g);
@@ -865,6 +910,17 @@ export function heroBrain(u, since) {
           u.path = null;
           g.heroAtFlag(u, f, since);
         }
+        return;
+      }
+      // Somebody who will not hit a building still has a part in the siege:
+      // they kill what comes out of it. With nothing left outside, they have
+      // no business here and the next think-tick sends them elsewhere.
+      if (!u.mayAttack(camp)) {
+        const prey = g.nearestEnemy(camp.x, camp.y, g.lairReach(camp) * TILE, 'realm', false);
+        if (!prey) return heroIdle(u, g);
+        u.engage(prey);
+        u.state = 'fight';
+        u.fight(since);
         return;
       }
       if (u.distTo(camp) <= u.reach) { u.engage(camp); u.fight(since); }
@@ -1036,7 +1092,7 @@ function healerAnchor(u, g) {
   let best = null, bestD = Infinity;
   for (const a of g.units) {
     if (a.dead || a.faction !== 'realm' || a === u) continue;
-    if (!a.isHero || a.def.heal) continue;         // stand with the fighters
+    if (!a.isHero || isSupport(a)) continue;       // stand with the fighters
     const d = dist(a.x, a.y, u.x, u.y);
     if (d < bestD) { bestD = d; best = a; }
   }
@@ -1099,7 +1155,7 @@ function chooseGoal(u, g) {
   // Clerics are not fighters and do not go looking. They keep station with
   // the soldiers and answer flags only to stand where they are wanted --
   // hunting lairs is somebody else's trade.
-  if (def.heal) return null;
+  if (isSupport(u)) return null;
   const opts = [];
   const greed = def.greed;
   const holding = u.stance === 'defend';
@@ -1137,7 +1193,7 @@ function chooseGoal(u, g) {
   // walking at the City Centre, there is no other day and nowhere to come
   // back to, so the sums are off: everybody goes, wherever it is, whatever
   // the odds, and keeps going until it or the realm is finished.
-  if (g.dragon && !g.dragon.dead && !def.heal) {
+  if (g.dragon && !g.dragon.dead && !isSupport(u)) {
     const d = dist(u.x, u.y, g.dragon.x, g.dragon.y);
     opts.push({ kind: 'fight', target: g.dragon, score: 1e6 / (1 + (d / TILE) * 0.02) });
   }
@@ -1156,6 +1212,10 @@ function chooseGoal(u, g) {
    */
   const considerCamp = (camp, key, value, d, bar, brave, nerve, flag) => {
     if (isShy(u, g, key)) return;                    // the road there was too much
+    // A camp is only worth a knife while there is somebody outside it to use
+    // the knife on: the building itself is somebody else's job.
+    if (camp && !u.mayAttack(camp)
+      && !g.nearestEnemy(camp.x, camp.y, g.lairReach(camp) * TILE, 'realm', false)) return;
     const ready = brave >= bar;
     if (!ready) {
       if (!camp || holding || !mayWait || shunned(key)) return;
