@@ -635,7 +635,8 @@ export const MODES = {
   },
   endgame: {
     id: 'endgame', name: 'Endgame', colour: '#ff5a5a', mapSize: 120, far: true, raids: 'waves',
-    blurb: 'A wider realm and five camps past the ogres, each worse than the last -- and their bosses come for you.'
+    finale: true,
+    blurb: 'A wider realm and five camps past the ogres, each worse than the last -- their bosses come for you, and razing the last camp wakes what was sleeping under it.'
   }
 };
 export const MODE_ORDER = ['easy', 'hard', 'endgame'];
@@ -662,6 +663,39 @@ export const BOSS = {
 };
 
 /**
+ * The finale, in Endgame only. Razing the last camp does not win the realm:
+ * it takes the roof off whatever the camps were built over, and it comes for
+ * your City Centre and does not get bored and go home. Everything you did
+ * before this was the preparation.
+ *
+ * Rename it to taste -- this is the only place the name is written.
+ */
+/**
+ * Tuned against parties that actually exist, at the day one actually arrives
+ * on. Eight level-5 heroes in epic loot take it six times in eight and bury
+ * half of them over about forty seconds; the same eight with nothing on take
+ * it three times in eight; six heroes are a coin flip geared and hopeless
+ * bare. So the loot from those fourteen camps is the difference, which is
+ * the point of having gone and got it.
+ *
+ * Damage is the dial, not health: it decides whether the cleric can keep up,
+ * and it is what turns a long fight into a wipe. More `hpMul` makes the
+ * fight longer; more `dmgMul` makes it shorter and lost. Change that one
+ * last, and a tenth at a time.
+ */
+export const DRAGON = {
+  name: 'The Great Wyrm',
+  title: 'the last thing left alive',
+  spawn: 'drake',      // what it is, before the multipliers
+  bonus: 30,           // attribute points over an ordinary drake
+  hpMul: 6, dmgMul: 1.1,
+  goldMul: 12, xpMul: 10,
+  escort: 1,           // a drake comes up with it
+  reward: 6000,        // the realm's purse for killing it
+  drop: { count: 3, bias: 3.0, tier: 'legendary' }
+};
+
+/**
  * Raids grow with the days and, past a point, with the map: once the realm
  * is old enough, the far camps march too, whether or not you have built
  * toward them, and a raid can bring two kinds of monster at once.
@@ -670,7 +704,11 @@ export const RAID = {
   minSize: 2, maxSize: 7, growEvery: 3,   // size = minSize + (days since peace) / growEvery
   mixedDay: 10,        // from this day a raid may draw a second kind from another camp
   farDay: 18,          // from this day any woken camp may raid, near or not
-  farChance: 0.35      // ...this often
+  farChance: 0.35,     // ...this often
+  // A wave that finds nobody to send is not a quiet day earned, it is a wave
+  // wasted: it used to reset the full timer and the realm simply went silent
+  // for three minutes with nothing on screen to say why.
+  retry: 20            // seconds until a wave that found no camp tries again
 };
 
 /**

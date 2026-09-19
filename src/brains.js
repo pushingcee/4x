@@ -1131,6 +1131,17 @@ function chooseGoal(u, g) {
     opts.push({ kind: 'fight', target: m, score: value / (1 + (d / TILE) * 0.16) * fearPenalty(g, m.x, m.y) });
   }
 
+  // (a2) the finale -- and the finale is not a risk assessment.
+  // Everything these instincts protect is a hero's ability to come back and
+  // fight another day. When the last camp is rubble and the thing under it is
+  // walking at the City Centre, there is no other day and nowhere to come
+  // back to, so the sums are off: everybody goes, wherever it is, whatever
+  // the odds, and keeps going until it or the realm is finished.
+  if (g.dragon && !g.dragon.dead && !def.heal) {
+    const d = dist(u.x, u.y, g.dragon.x, g.dragon.y);
+    opts.push({ kind: 'fight', target: g.dragon, score: 1e6 / (1 + (d / TILE) * 0.02) });
+  }
+
   // A hero who walked away from a camp for want of company does not turn
   // straight round and start waiting on it again.
   const shunned = (key) => u.shunKey === key && g.time < u.shunUntil;

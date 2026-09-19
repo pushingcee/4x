@@ -8,7 +8,7 @@ import {
   MISSIONS, MISSION_ORDER, CALLING_ORDER, STATS, STAT_ORDER, MAX_LEVEL,
   STANCES, STANCE_ORDER, SPECS, SPEC_LEVEL, ABILITIES,
   MARKET_SLOTS,
-  GUILD_TIERS, FORTIFY,
+  GUILD_TIERS, FORTIFY, DRAGON,
 } from './data.js';
 import { toTile, toPx } from './world.js';
 import { campAssessment } from './brains.js';
@@ -1447,8 +1447,16 @@ export class UI {
       they are burning), a <b>Wraith Barrow</b> (steel half goes through them), a <b>Blood
       Shrine</b> (cultists throwing blood-fire at range) and a <b>Drake Roost</b> (fire over
       a whole line). Each is a bigger ask than the ogre den and pays like it.</p>
+      <p><b>The thing under the last camp</b> (Endgame). Razing the last camp does not win it:
+      <b>${DRAGON.name}</b> comes up out of the hole, six times a drake's health, and unlike
+      every other raider in the game it never gets bored and goes home. Nor do your soldiers
+      &mdash; there is no next fight to stay alive for, so every one of them goes at it
+      wherever it is, whatever the odds. Kill it and the realm is yours, with three
+      <b>legendaries</b> and 6000 gold for the trouble.</p>
       <p><b>Raids get worse</b> (Hard and Endgame). They grow with the days, from day ten they can bring two
-      kinds of monster at once, and from day eighteen the far camps march too. Every
+      kinds of monster at once, and from day eighteen the far camps march too. Clear every camp
+      that can see you and it is the next ones out that come instead &mdash; razing your
+      neighbours buys better raids, not fewer. Every
       <b>third</b> raid is led by a <b>boss</b>: a named champion of the worst camp that
       has woken, with an escort that stays as long as it does. It wears a crown, it does
       not go home, it always carries a <b>legendary</b> item, and it pulses gold on the
@@ -1493,7 +1501,9 @@ export class UI {
     this.showModal(`
       <h2>${win ? 'The realm is at peace' : 'The realm has fallen'}</h2>
       <p>${win
-        ? 'Every lair is rubble, every road is safe, and your heroes are insufferable about it.'
+        ? (g.mode.finale
+          ? `Every camp is rubble, ${DRAGON.name} is cooling on the grass beside the last of them, and your heroes are insufferable about it.`
+          : 'Every lair is rubble, every road is safe, and your heroes are insufferable about it.')
         : 'Your City Centre is ash. The heroes, predictably, were somewhere else.'}</p>
       <p>Days survived <b>${g.day}</b><br>
       Monsters slain <b>${g.stats.kills}</b><br>

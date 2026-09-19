@@ -13,7 +13,7 @@ import {
   XP_TABLE, MAX_LEVEL, DROPS, LAIR_DROPS, MARKET_SLOTS, MARKET_RESTOCK,
   MISSIONS, RAIDS_ENABLED, CALLING_ORDER, DISTRESS_WINDOW,
   THREAT_PER_DAY, THREAT_CAP, SEPARATION_CAP, SPECS, XP_SHARE_BONUS, XP_SHARE_BONUS_CAP,
-  SUPPORT_SHARE, CREDIT_WINDOW, DEBUFF, BOSS, RAID, MODES, DEFAULT_MODE
+  SUPPORT_SHARE, CREDIT_WINDOW, DEBUFF, BOSS, DRAGON, RAID, MODES, DEFAULT_MODE
 } from './data.js';
 import { makeRng, clamp, dist } from './util.js';
 import { rollItem, scoreFor, canUse, describe, TIERS } from './items.js';
@@ -58,6 +58,7 @@ export class Game {
     this.speed = 1;
     this.paused = false;
     this.over = null;        // 'win' | 'lose'
+    this.dragon = null;      // Endgame's finale, once the last camp is down
     this.stats = { kills: 0, heroesLost: 0, lairsCleared: 0, goldEarned: 0, flagsPaid: 0 };
     this.nextFlagId = 1;
     this.peaceDays = PEACE_DAYS;
@@ -388,7 +389,8 @@ export class Game {
 
     if (u.faction === 'monster') {
       this.stats.kills++;
-      const gold = u.boss ? u.def.gold * BOSS.goldMul : u.def.gold;
+      const gold = u.dragon ? u.def.gold * DRAGON.goldMul
+        : u.boss ? u.def.gold * BOSS.goldMul : u.def.gold;
       if (src && src.kindClass === 'unit' && src.faction === 'realm') {
         src.kills++;
         if (src.isHero) {
@@ -396,8 +398,18 @@ export class Game {
           this.fx.coin(u.x, u.y - 10, gold);
         }
       }
-      this.shareXp(u, src, u.boss ? u.def.xp * BOSS.xpMul : u.def.xp);
-      if (u.boss) {
+      this.shareXp(u, src, u.dragon ? u.def.xp * DRAGON.xpMul
+        : u.boss ? u.def.xp * BOSS.xpMul : u.def.xp);
+      if (u.dragon) {
+        this.stats.bossesSlain = (this.stats.bossesSlain || 0) + 1;
+        this.fx.burst(u.x, u.y - 6, '#ffc94a', 60, 140, 2);
+        this.addResource('gold', DRAGON.reward);
+        this.notify(`${u.name} is slain. The realm is yours. +${DRAGON.reward} gold`, 'good');
+        this.audio.play('crash');
+        this.rollDrop(u, src, DRAGON.drop);
+        this.dragon = null;
+        this.endGame('win');
+      } else if (u.boss) {
         this.stats.bossesSlain = (this.stats.bossesSlain || 0) + 1;
         this.fx.burst(u.x, u.y - 6, '#ffc94a', 30, 90, 1.2);
         this.notify(`${u.name} is slain!`, 'good');
@@ -466,7 +478,48 @@ export class Game {
       this.world.props[i] = { ...p, kind: 'rock', lairId: null };
     }
     this.rebuildDanger();        // the road past it is safe now
-    if (this.lairs.every(x => x.dead)) this.endGame('win');
+    if (this.lairs.every(x => x.dead)) {
+      if (this.mode.finale && !this.dragon) this.summonDragon(l);
+      else if (!this.dragon) this.endGame('win');
+    }
+  }
+
+  /**
+   * Razing the last camp in Endgame does not end it. The camps were the
+   * scabs; this is what they were over. It comes up where the last one stood,
+   * it walks straight at your City Centre, and unlike every other raider in
+   * the game it never gets bored and goes home.
+   */
+  summonDragon(where) {
+    const t = this.world.nearestFree(where.tx, where.ty, 8) || { x: where.tx, y: where.ty };
+    const d = this.spawnBoss(DRAGON.spawn, toPx(t.x), toPx(t.y), null);
+    d.name = DRAGON.name;
+    d.title = DRAGON.title;
+    d.dragon = true;
+    // It arrives as an ordinary boss of its kind, so undo those multipliers
+    // before applying its own rather than stacking the two.
+    for (const k of ['str', 'agi', 'con', 'int']) d.classBonus[k] += DRAGON.bonus - BOSS.bonus;
+    d.maxHp = Math.round(d.maxHp / BOSS.hpMul * DRAGON.hpMul);
+    d.dmg = d.dmg / BOSS.dmgMul * DRAGON.dmgMul;
+    d.radius = 12;
+    d.hp = d.maxHpNow;
+    d.raiding = true;
+    d.raidIn = 0;
+    d.raidLeft = Infinity;       // it does not give up, because there is nothing to go back to
+    this.dragon = d;
+
+    for (let i = 0; i < DRAGON.escort; i++) {
+      const e = this.world.nearestFree(t.x + this.rng.int(-3, 3), t.y + this.rng.int(-3, 3), 8);
+      const m = this.spawnUnit(DRAGON.spawn, toPx(e.x), toPx(e.y), 'monster');
+      m.raiding = true;
+      m.raidIn = 0;
+      m.raidLeft = Infinity;
+    }
+    this.revealAround(d.x, d.y, 10);
+    this.alertAt = { x: d.x, y: d.y, t: this.time };
+    this.notify(`The last camp is rubble — and ${DRAGON.name} was underneath it.`, 'bad');
+    this.fx.text(d.x, d.y - 30, DRAGON.name.toUpperCase(), '#ff5a5a', 40);
+    this.audio.play('warn');
   }
 
   endGame(result) {
@@ -1222,7 +1275,12 @@ export class Game {
     this.waveIn -= dt;
     if (this.waveIn <= 0) {
       this.waveIn = Math.max(80, 200 - this.day * 5);
-      if (this.raidsEnabled && this.day > PEACE_DAYS) this.launchRaid();
+      // A wave that found nobody to send has not bought the player a quiet
+      // spell, it has silently thrown one away -- so it comes round again
+      // shortly rather than resetting the whole timer.
+      if (this.raidsEnabled && this.day > PEACE_DAYS && !this.launchRaid()) {
+        this.waveIn = Math.min(this.waveIn, RAID.retry);
+      }
     }
 
     // sweep the dead
@@ -1338,8 +1396,11 @@ export class Game {
    * mode lives on this.
    */
   launchClassicRaid() {
-    const live = this.lairs.filter(l => !l.dead && l.active && this.lairThreatensUs(l, 26));
-    if (!live.length || !this.monsterBudgetOk()) return;
+    const near = this.lairs.filter(l => !l.dead && l.active && this.lairThreatensUs(l, 26));
+    // Same as above: the near camps are the ones you razed first, and a realm
+    // with none left standing is not a realm that nothing wants to raid.
+    const live = near.length ? near : this.nextCampsOut();
+    if (!live.length || !this.monsterBudgetOk()) return false;
     this.raids++;
     const lair = this.rng.pick(live);
     const size = clamp(1 + Math.floor((this.day - PEACE_DAYS) / 4), 1, 4);
@@ -1355,6 +1416,23 @@ export class Game {
     }
     this.notify(`A ${MONSTERS[kind].name} raid marches on the realm!`, 'bad');
     this.audio.play('warn');
+    return true;
+  }
+
+  /**
+   * The next camps out: the woken survivors closest to the City Centre. This
+   * is who raids once you have cleared everyone who could see you -- near
+   * enough to be the natural next neighbour, rather than whatever the far
+   * side of the map happens to be keeping.
+   */
+  nextCampsOut(n = 3) {
+    const home = this.palace && !this.palace.dead
+      ? this.palace : this.buildings.find(b => !b.dead);
+    const live = this.lairs.filter(l => !l.dead && l.active);
+    if (!home) return live;                    // nothing left to march on anyway
+    return live
+      .sort((a, b) => dist(a.x, a.y, home.x, home.y) - dist(b.x, b.y, home.x, home.y))
+      .slice(0, n);
   }
 
   /**
@@ -1386,8 +1464,14 @@ export class Game {
     const near = this.lairs.filter(l => !l.dead && l.active && this.lairThreatensUs(l, 26));
     const far = this.day >= RAID.farDay && this.rng.chance(RAID.farChance)
       ? this.lairs.filter(l => !l.dead && l.active && !near.includes(l)) : [];
-    const pool = far.length ? far : near;
-    if (!pool.length || !this.monsterBudgetOk()) return;
+    // Raiders came only from camps built close enough to have noticed you --
+    // which are the first camps a player clears, so playing well turned the
+    // raids off and the realm went quiet exactly when it should have been
+    // getting worse. With nothing near left standing the next ones out come
+    // instead: the NEAREST survivors, not a free pick of the whole map, or
+    // razing your neighbours on day six hands the drake roost an invitation.
+    const pool = far.length ? far : (near.length ? near : this.nextCampsOut());
+    if (!pool.length || !this.monsterBudgetOk()) return false;
     this.raids++;
     const boss = this.raids % BOSS.every === 0;
     // a boss wave is an event: it comes from the worst camp that has woken
@@ -1433,5 +1517,6 @@ export class Game {
       this.fx.text(leader.x, leader.y - 24, leader.name.toUpperCase(), '#ff5a5a', 30);
     } else this.notify(`A ${what} raid marches on the realm!`, 'bad');
     this.audio.play('warn');
+    return true;
   }
 }

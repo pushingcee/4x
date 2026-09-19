@@ -545,6 +545,9 @@ boss waves are not the default game. The boot screen asks once:
 | **Hard** | 96 tiles | the same | grow to seven, mixed kinds, a **boss** every third |
 | **Endgame** | 120 tiles | the same plus the five far camps below | the same, and the far camps march too |
 
+In **Easy** and **Hard**, razing the last camp wins the realm. In **Endgame** it
+does not — see *The thing under the last camp* below.
+
 `?mode=easy`, `?mode=hard` or `?mode=endgame` in the address skips the
 question, and the last answer is remembered as the highlighted default.
 
@@ -586,9 +589,45 @@ gold and rank, and always drops a **legendary** item plus one more from the
 good end of the table. It also pulses gold on the minimap from the moment
 it sets out, fog or no fog, so you can watch it come.
 
-Raids are on. After a few days of peace, lairs close enough to your buildings send
-parties at whatever building is **nearest to them** — so expanding toward a nest is what
-makes it hostile, and a forward outpost is what it finds first. Build a Barracks and
+### The thing under the last camp (Endgame)
+
+Clearing the map is not the win condition in Endgame. Raze the last camp and
+**The Great Wyrm** comes up out of the hole it left: six times a drake's health,
+thirty attribute points over one, one drake for company, and — unlike every
+other raider in the game — it never gets bored and goes home. It walks at your
+City Centre and it does not stop.
+
+Nor do your heroes. Every instinct they have for self-preservation exists to
+keep them alive for the next fight; there isn't one, so the sums are off. Every
+soldier in the realm goes at it wherever it is, whatever the odds, until it or
+the realm is finished. Killing it wins, pays 6000 gold and drops **three**
+legendaries.
+
+It is tuned to be a real fight rather than a formality. Eight level-5 heroes in
+epic loot take it about six times in eight and bury half of them over roughly
+forty seconds; eight heroes carrying nothing take it three times in eight; six
+heroes are a coin flip well-equipped and hopeless otherwise. The loot from
+those fourteen camps is the difference — which is rather the point of having
+gone and got it. One constant, `DRAGON` in `data.js`, holds all of it, its name
+included.
+
+### Raids
+
+Raids are on. After a few days of peace, lairs send parties at whatever building
+is **nearest to them** — so expanding toward a nest is what makes it hostile, and
+a forward outpost is what it finds first.
+
+Only camps within about 26 tiles of something you built can raid you, and those
+are exactly the camps you clear first — so clearing them used to switch the raids
+off, and the wave that found nobody to send threw away its whole timer in silence.
+A typical game saw fewer than two raids in thirty days. Now, when nothing near you
+is left standing, the **nearest surviving camps** march instead, and a wave with
+nobody to send tries again shortly rather than going quiet for three minutes.
+Clearing your neighbours buys better raids, not fewer.
+
+Raids still only begin after the first four days, so a very fast opening can
+genuinely outrun the first wave — that part is the peace timer doing its job, not
+a fault. `PEACE_DAYS` in `data.js` is the dial if you want them sooner. Build a Barracks and
 warriors will meet them in the field; build nothing and your peasants get picked off
 around day 17 and the City Centre erodes from there.
 
