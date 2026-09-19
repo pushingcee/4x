@@ -2,18 +2,21 @@
 // ui.js — DOM HUD, pointer input, and every player-facing command.
 // Designed thumb-first: one-finger pan, tap to select, big buttons.
 // ===================================================================
-import { TILE, buildingSprite, unitSprite, propSprite, flagSprite, makeCanvas, PAL, hasSpecSprite } from './art.js';
+import {
+  TILE, buildingSprite, unitSprite, propSprite, flagSprite, itemSprite, itemArtKey,
+  makeCanvas, PAL, hasSpecSprite
+} from './art.js';
 import {
   BUILDINGS, BUILD_ORDER, CLASSES, FLAGS, MONSTERS, LAIRS, RES_RATE, RESURRECT_COST,
   MISSIONS, MISSION_ORDER, CALLING_ORDER, STATS, STAT_ORDER, MAX_LEVEL,
   STANCES, STANCE_ORDER, SPECS, SPEC_LEVEL, ABILITIES,
   MARKET_SLOTS,
-  GUILD_TIERS, FORTIFY, DRAGON,
+  GUILD_TIERS, FORTIFY, DRAGON, REST,
 } from './data.js';
 import { toTile, toPx } from './world.js';
 import { campAssessment } from './brains.js';
 import {
-  SLOT_KEYS, SLOTS, slotOf, describe, tierColour, TIERS, canUse, scoreFor
+  SLOT_KEYS, SLOTS, slotOf, describe, TIERS, WEAPONS, canUse, scoreFor
 } from './items.js';
 import { fmt, clamp, dist } from './util.js';
 
@@ -36,15 +39,58 @@ const buildIcon = (id) => {
 };
 const unitIcon = (kind) => spriteEl(unitSprite(kind, 0, 1), 16, 16, 26);
 
+/**
+ * The three resources, as icons rather than as the letters g/w/s. The word
+ * is still there -- it is the tooltip, and the screen-reader label -- but a
+ * cost now reads at a glance instead of being parsed.
+ */
+const RES_NAME = { gold: 'Gold', wood: 'Wood', stone: 'Stone' };
+const resIcon = (k) =>
+  `<span class="ico ico-sm ico-${k}" role="img" title="${RES_NAME[k]}" aria-label="${RES_NAME[k]}"></span>`;
+/** A number of one resource: icon, amount, and the name on hover. */
+const resAmt = (k, n, cls = '') =>
+  `<span class="cost ${cls}" title="${n} ${RES_NAME[k].toLowerCase()}">${resIcon(k)}${n}</span>`;
+/** Gold on its own turns up everywhere -- prices, bounties, wages. */
+const goldAmt = (n, cls = '') => resAmt('gold', n, cls);
+
 function costText(cost, game) {
   const bits = [];
   for (const k of ['gold', 'wood', 'stone']) {
     if (!cost[k]) continue;
-    const short = { gold: 'g', wood: 'w', stone: 's' }[k];
-    const lack = game.res[k] < cost[k];
-    bits.push(`<span class="${lack ? 'no' : ''}">${cost[k]}${short}</span>`);
+    bits.push(resAmt(k, cost[k], game.res[k] < cost[k] ? 'no' : ''));
   }
-  return bits.join(' ') || 'free';
+  return bits.join('') || 'free';
+}
+
+/**
+ * The icon for a piece of loot, framed in the colour of its tier. Hovering
+ * it gives the whole item in words, so nothing is lost by shrinking it.
+ */
+function itemIcon(key, tier, title) {
+  const [kind, t] = key.split(':');
+  const box = document.createElement('span');
+  box.className = `ibox t-${tier || t}`;
+  box.style.setProperty('--ic', TIERS[tier || t].colour);
+  if (title) box.title = title;
+  const src = itemSprite(kind, t);
+  const c = makeCanvas(16, 16);
+  c.getContext('2d').drawImage(src, 0, 0);
+  box.appendChild(c);
+  return box;
+}
+
+/** Everything an item is, in one line -- the tooltip behind its icon. */
+function itemTitle(it) {
+  const t = TIERS[it.tier];
+  const what = it.weapon ? WEAPONS[it.weapon].name : SLOTS[it.slot].name;
+  return [`${it.name} — ${t.name} ${what}`, describe(it), it.flavour]
+    .filter(Boolean).join('\n');
+}
+
+/** Swap every `data-item` placeholder in a subtree for its framed icon. */
+function hydrateItems(el) {
+  el.querySelectorAll('[data-item]').forEach(s =>
+    s.replaceWith(itemIcon(s.dataset.item, s.dataset.tier, s.dataset.tip || '')));
 }
 
 /** Everything above the baseline of 5: class, rank and specialisation. */
@@ -113,7 +159,7 @@ function marketBlock(b) {
     rows.push(`<div class="gearrow ${it ? '' : 'empty'}">
       <span class="gslot">${i + 1}</span>
       <span class="grow2">${it
-        ? itemLine(it, `<span class="iprice">${it.value}g</span>`)
+        ? itemLine(it, `<span class="iprice">${goldAmt(it.value)}</span>`)
         : '<span class="istat">empty &mdash; something will turn up</span>'}</span>
     </div>`);
   }
@@ -122,14 +168,22 @@ function marketBlock(b) {
     ${rows.join('')}</div>`;
 }
 
+/** Somebody's item name in an attribute is still somebody's item name. */
+const esc = (t) => String(t).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+
+/** The placeholder a `hydrateItems` pass turns into a framed icon. */
+const itemSlug = (it) =>
+  `<span data-item="${itemArtKey(it)}" data-tier="${it.tier}" data-tip="${esc(itemTitle(it))}"></span>`;
+
 /** One line of loot: what it is, what it gives, and what it is worth. */
 function itemLine(it, extra = '') {
   if (!it) return '';
   const t = TIERS[it.tier];
-  return `<span class="iname" style="--ic:${t.colour}">${it.name}</span>
-    <span class="istat">${describe(it)}</span>
-    ${it.flavour ? `<span class="iflav">&ldquo;${it.flavour}&rdquo;</span>` : ''}
-    ${extra}`;
+  return `<span class="iwrap">${itemSlug(it)}<span class="itext">
+      <span class="iname" style="--ic:${t.colour}">${it.name}<i class="itier">${t.name}</i></span>
+      <span class="istat">${describe(it)}</span>
+      ${it.flavour ? `<span class="iflav">&ldquo;${it.flavour}&rdquo;</span>` : ''}
+      ${extra}</span></span>`;
 }
 
 /** Everything a hero is wearing, plus whatever they are hauling to market. */
@@ -144,8 +198,8 @@ function gearBlock(u) {
   }).join('');
   const bag = u.bag && u.bag.length
     ? `<div class="gearrow bag"><span class="gslot">Bag</span><span class="grow2">
-        ${u.bag.map(it => `<span class="iname" style="--ic:${tierColour(it)}">${it.name}</span>`).join(', ')}
-        <span class="istat">carried to market</span></span></div>`
+        <span class="ibag">${u.bag.map(itemSlug).join('')}</span>
+        <span class="istat">${u.bag.length} carried to market</span></span></div>`
     : '';
   return `<div class="gear" data-live="gear">
     <div class="head">EQUIPMENT</div>${rows}${bag}</div>`;
@@ -577,7 +631,7 @@ export class UI {
 
   unitJobText(u) {
     // what is on their back beats what they are heading toward
-    if (u.state === 'deliver' && u.carry > 0 && u.carryRes) return `hauling ${u.carryRes}`;
+    if (u.state === 'deliver' && u.carry > 0 && u.carryRes) return `hauling ${resIcon(u.carryRes)}`;
     if (u.state === 'defend') return 'fighting back';
     if (u.state === 'rescue') return 'to the rescue';
     if (u.state === 'guard') return 'on watch';
@@ -590,7 +644,8 @@ export class UI {
     if (u.job && u.job.type === 'build') return 'building';
     if (u.job && u.job.type === 'harvest' && u.job.node) {
       const k = u.job.node.kind;
-      return `${u.state === 'deliver' ? 'hauling' : 'working'} ${k === 'goldmine' ? 'gold' : k === 'quarry' ? 'stone' : 'wood'}`;
+      const res = k === 'goldmine' ? 'gold' : k === 'quarry' ? 'stone' : 'wood';
+      return `${u.state === 'deliver' ? 'hauling' : 'working'} ${resIcon(res)}`;
     }
     if (u.job && u.job.type === 'build') return 'building';
     return u.state;
@@ -623,7 +678,7 @@ export class UI {
         <span>KILLS <b>${u.kills}</b></span>
         ${u.potions ? `<span>POTIONS <b>${u.potions}</b></span>` : ''}
         ${u.upgrades ? `<span>WEAPON <b>+${u.upgrades}</b></span>` : ''}` : ''}
-        ${u.carry > 0 ? `<span>CARRYING <b>${Math.floor(u.carry)} ${u.carryRes}</b></span>` : ''}
+        ${u.carry > 0 ? `<span>CARRYING <b>${resAmt(u.carryRes, Math.floor(u.carry))}</b></span>` : ''}
       </div>
       ${isMine && u.kind === 'peasant' ? missionPicker(u.mission) : ''}
       ${u.isHero ? `${specBlock(u)}${gearBlock(u)}${stancePicker(u.stance)}` : ''}
@@ -639,6 +694,7 @@ export class UI {
     el.querySelector('.pic').replaceWith(spriteEl(unitSprite(u.sprite, 0, 1), 16, 16, 36));
     // the picker shows what each choice will look like on the map
     el.querySelectorAll('.specbtn [data-unit]').forEach(s => s.replaceWith(unitIcon(s.dataset.unit)));
+    hydrateItems(el);
     this.wireSelActions(el, u);
     // keep the live numbers moving without touching the buttons
     this.selRefresh = () => {
@@ -650,7 +706,7 @@ export class UI {
         bar.className = f > 0.5 ? '' : f > 0.25 ? 'mid' : 'low';
       }
       const meta = el.querySelector('[data-live="meta"]');
-      if (meta) meta.textContent = `${u.title}${u.isHero ? ` · level ${u.level}/${MAX_LEVEL}` : ''} · ${this.unitJobText(u)}`;
+      if (meta) meta.innerHTML = `${u.title}${u.isHero ? ` · level ${u.level}/${MAX_LEVEL}` : ''} · ${this.unitJobText(u)}`;
       const attrs = el.querySelector('[data-live="attrs"]');
       if (attrs) {
         const st = u.stats;
@@ -666,7 +722,7 @@ export class UI {
           `MANA <b>${u.isCaster ? Math.round(u.mana) + '/' : ''}${u.maxMana}</b>`,
           `CRIT <b>${Math.round(u.critChance * 100)}%</b>`];
         if (u.isHero) bits.push(`GOLD <b>${Math.floor(u.gold)}</b>`, `XP <b>${Math.floor(u.xp)}</b>`, `KILLS <b>${u.kills}</b>`);
-        if (u.carry > 0) bits.push(`CARRYING <b>${Math.floor(u.carry)} ${u.carryRes}</b>`);
+        if (u.carry > 0) bits.push(`CARRYING <b>${resAmt(u.carryRes, Math.floor(u.carry))}</b>`);
         stats.innerHTML = bits.map(b => `<span>${b}</span>`).join('');
       }
     };
@@ -681,16 +737,16 @@ export class UI {
       if (def.recruit) {
         for (const k of def.recruit) {
           const c = CLASSES[k];
-          actions += `<button class="btn small primary" data-recruit="${k}">Hire ${c.name} (${c.cost.gold}g)</button>`;
+          actions += `<button class="btn small primary" data-recruit="${k}">Hire ${c.name} ${goldAmt(c.cost.gold)}</button>`;
         }
       }
       if (def.guild) {
         const c = CLASSES[def.guild];
-        actions += `<button class="btn small primary" data-recruit="${def.guild}">Hire ${c.name} (${c.cost.gold}g) ${g.guildRoll(b, def.guild)}/${b.maxHeroes}</button>`;
+        actions += `<button class="btn small primary" data-recruit="${def.guild}">Hire ${c.name} ${goldAmt(c.cost.gold)} ${g.guildRoll(b, def.guild)}/${b.maxHeroes}</button>`;
         const next = GUILD_TIERS[b.tier];
-        if (next) actions += `<button class="btn small" data-act="train" title="${next.desc}">Drill: ${next.name} (${next.cost}g)</button>`;
+        if (next) actions += `<button class="btn small" data-act="train" title="${next.desc}">Drill: ${next.name} ${goldAmt(next.cost)}</button>`;
       }
-      if (!b.fortified) actions += `<button class="btn small" data-act="fortify" title="${FORTIFY.desc}">Fortify (${g.fortifyCost(b)}g)</button>`;
+      if (!b.fortified) actions += `<button class="btn small" data-act="fortify" title="${FORTIFY.desc}">Fortify ${goldAmt(g.fortifyCost(b))}</button>`;
     }
     const status = b.complete
       ? ['operational', b.tierDef && b.tierDef.name.toLowerCase(), b.fortified && 'fortified'].filter(Boolean).join(' &middot; ')
@@ -708,6 +764,7 @@ export class UI {
         <span>HP <b>${Math.ceil(b.hp)}/${b.maxHp}</b></span>
         ${def.pop ? `<span>POP <b>+${def.pop}</b></span>` : ''}
         ${def.tax ? `<span>TAX <b>+${def.tax}</b></span>` : ''}
+        ${def.shop === 'rest' ? `<span>HEARTH <b>${REST.radius} tiles</b></span>` : ''}
         ${def.guild ? `<span>HEROES <b>${g.units.filter(u => !u.dead && u.homeId === b.id).length}/${b.maxHeroes}</b></span>` : ''}
         ${b.tierDef ? `<span>RECRUITS <b>level ${b.tierDef.level}</b></span>` : ''}
       </div>
@@ -719,6 +776,7 @@ export class UI {
         <button class="btn small" data-act="clear">Close</button>
       </div>`;
     el.querySelector('.pic').replaceWith(buildIcon(b.defId));
+    hydrateItems(el);
     this.wireSelActions(el, b);
     this.selRefresh = () => {
       if (b.dead) { this.renderSelection(true); return; }
@@ -757,10 +815,10 @@ export class UI {
         </div>
       </div>
       <div class="statline"><span>HP <b data-live="hpnum">${Math.ceil(l.hp)}/${l.maxHp}</b></span>
-      <span>BOUNTY <b>${l.def.reward}g</b></span>
+      <span>BOUNTY <b>${goldAmt(l.def.reward)}</b></span>
       <span>NEEDS <b data-live="need">${need(a)}</b></span></div>
       <div class="hint">${m.desc} Destroy every lair to win. Your heroes gather before they go in &mdash;
-      right now <span data-live="massing">${massing}</span>. A bounty of about <b data-live="price">${a.price}g</b>
+      right now <span data-live="massing">${massing}</span>. A bounty of about <b data-live="price">${goldAmt(a.price)}</b>
       on an attack flag here buys one in on their own, whatever the odds.</div>
       <div class="acts">
         <button class="btn small primary" data-act="flaghere">Attack flag here</button>
@@ -782,7 +840,7 @@ export class UI {
       set('hpnum', `${Math.ceil(l.hp)}/${l.maxHp}`);
       set('need', need(now));
       set('massing', who(now));
-      set('price', `${now.price}g`);
+      set('price', goldAmt(now.price));
     };
   }
 
@@ -797,7 +855,7 @@ export class UI {
         <span class="pic"></span>
         <div class="grow">
           <h3>${label}</h3>
-          <div class="meta" data-live="meta">yields ${info.res} &middot; ${Math.ceil(n.amount)} left</div>
+          <div class="meta" data-live="meta">yields ${resAmt(info.res, Math.ceil(n.amount))} left</div>
           <div class="hp"><i data-live="hp" style="width:${(n.amount / n.max) * 100}%"></i></div>
         </div>
       </div>
@@ -815,7 +873,7 @@ export class UI {
     this.selRefresh = () => {
       if (n.amount <= 0 || n.removed) { this.renderSelection(true); return; }
       const meta = el.querySelector('[data-live="meta"]');
-      if (meta) meta.innerHTML = `yields ${info.res} &middot; ${Math.ceil(n.amount)} left`;
+      if (meta) meta.innerHTML = `yields ${resAmt(info.res, Math.ceil(n.amount))} left`;
       const bar = el.querySelector('[data-live="hp"]');
       if (bar) bar.style.width = (n.amount / n.max) * 100 + '%';
       const stats = el.querySelector('[data-live="stats"]');
@@ -835,7 +893,7 @@ export class UI {
         <span class="pic"></span>
         <div class="grow">
           <h3>${def.name}</h3>
-          <div class="meta">${f.bounty ? `${Math.round(f.bounty - f.paid)} gold still offered` : 'no reward'}</div>
+          <div class="meta">${f.bounty ? `${goldAmt(Math.round(f.bounty - f.paid))} still offered` : 'no reward'}</div>
         </div>
       </div>
       <div class="statline"><span>HEROES ON IT <b>${interested}</b></span></div>
@@ -1024,7 +1082,7 @@ export class UI {
           <span class="grow"><b class="cn">${def.name}</b><span class="cd">${def.desc}</span></span>
         </div>
         ${key === 'fear' ? '' : `<div class="seg">${def.presets.map(p =>
-        `<button data-b="${p}" class="${p === cur ? 'on' : ''}">${p}g</button>`).join('')}</div>`}
+        `<button data-b="${p}" class="${p === cur ? 'on' : ''}">${goldAmt(p)}</button>`).join('')}</div>`}
         <button class="btn small primary" data-place style="width:100%">Place flag</button>`;
       card.querySelector('.pic').replaceWith(spriteEl(flagSprite(key, 0), 16, 20, 30));
       card.querySelectorAll('[data-b]').forEach(b => b.addEventListener('click', () => {
@@ -1092,8 +1150,8 @@ export class UI {
       <div class="hint">Tap a name to select that crew. <b>+</b> moves one villager onto that calling.</div>
       <div class="mrow">
         <div class="grow"><span class="nm">Peasants</span>
-        <span class="sub">${peasants.length} of ${g.popCap} housed &middot; ${g.res.gold} gold in the treasury</span></div>
-        <button class="btn small primary" data-hire ${canHire ? '' : 'disabled'}>Hire ${cost}g</button>
+        <span class="sub">${peasants.length} of ${g.popCap} housed &middot; ${goldAmt(g.res.gold)} in the treasury</span></div>
+        <button class="btn small primary" data-hire ${canHire ? '' : 'disabled'}>Hire ${goldAmt(cost)}</button>
       </div>`;
 
     for (const id of MISSION_ORDER) {
@@ -1188,7 +1246,7 @@ export class UI {
       }
       for (const p of peasants) {
         const el = body.querySelector(`[data-who-sub="${p.id}"]`);
-        if (el) el.textContent = this.peasantLine(p);
+        if (el) el.innerHTML = this.peasantLine(p);
       }
       for (const id of soldierKinds) {
         const el = body.querySelector(`[data-troopstatus="${id}"]`);
@@ -1245,7 +1303,7 @@ export class UI {
       const f = clamp(h.hp / h.maxHpNow, 0, 1);
       html += `<div class="row" data-focus="${h.id}"><span class="pic" data-unit="${h.sprite}"></span>
         <div class="grow"><span class="nm">${h.name} <span style="color:var(--gold)">L${h.level}</span></span>
-        <span class="sub">${h.title} &middot; ${h.state}${h.goalKind ? ' (' + h.goalKind + ')' : ''} &middot; ${Math.floor(h.gold)}g</span>
+        <span class="sub">${h.title} &middot; ${h.state}${h.goalKind ? ' (' + h.goalKind + ')' : ''} &middot; ${goldAmt(Math.floor(h.gold))}</span>
         <span class="hp"><i class="${f > .5 ? '' : f > .25 ? 'mid' : 'low'}" style="width:${f * 100}%"></i></span></div></div>`;
     }
     if (guards.length) {
@@ -1259,7 +1317,7 @@ export class UI {
         const price = Math.round(CLASSES[gr.kind].cost.gold * RESURRECT_COST * (temple ? 0.5 : 1));
         html += `<div class="row"><span class="pic" data-unit="${gr.kind}"></span>
           <div class="grow"><span class="nm">${gr.name}</span><span class="sub">${CLASSES[gr.kind].name} &middot; level ${gr.level}</span></div>
-          <button class="btn small primary" data-raise="${i}">Raise ${price}g</button></div>`;
+          <button class="btn small primary" data-raise="${i}">Raise ${goldAmt(price)}</button></div>`;
       });
     }
     const mining = peasants.filter(p => p.mission !== 'none').length;
@@ -1299,7 +1357,7 @@ export class UI {
     this.game.placing = { type: 'flag', flagType: type, bounty };
     this.closeDrawer();
     $('#placebar').hidden = false;
-    $('#placemsg').innerHTML = `Tap the map to raise the <b>${FLAGS[type].name}</b>${bounty ? ` (${bounty}g)` : ''}`;
+    $('#placemsg').innerHTML = `Tap the map to raise the <b>${FLAGS[type].name}</b>${bounty ? ` ${goldAmt(bounty)}` : ''}`;
     $('#selpanel').hidden = true;
   }
   cancelPlace() {

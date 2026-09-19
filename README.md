@@ -29,6 +29,12 @@ Keyboard, if you are at a desk: `B` peasants, `K` realm, `P` select peasants,
 `M` full map, `C` follow the selected unit, `space` pause, arrows pan, `+`/`-` zoom,
 shift-drag to box-select.
 
+**Gold, wood and stone are icons, not letters.** A build cost, a price, a
+bounty, a bag of ore on a peasant's back and a seam's remaining yield all read
+as a coin, a log or a block with a number beside it, rather than `130g 70w
+20s`. The word is still there -- it is the tooltip, and the label a screen
+reader announces -- so nothing is lost by not spelling it out on a phone.
+
 ## Callings
 
 A calling is permanent until you change it, and it is a *standing instruction*, not a
@@ -196,6 +202,29 @@ out level-3 warriors, two ranks up the ladder before their first fight.
 
 The readout beside your gold shows what the buildings bring in each payday.
 
+### The Inn
+
+The hearth mends **anyone of the realm within seven tiles of a finished inn**,
+coin or no coin, at 9% of their health a second -- three times what they
+recover standing in a field, and it stacks with it. A hero with gold takes a
+bed instead: 25 gold for 45% of their health outright, and you tax that the
+way you tax every other deal.
+
+The building used to be a place heroes only ever reached by *fleeing past
+it*. Nothing pulled them in: the errand that sent a hero to a shop was gated
+on having 50 gold to spend, so the one soldier who most needed to sit down --
+the one who had just emptied their purse at the blacksmith -- was the one who
+never went. Now a wound is an errand in its own right. Below **75% health** a
+hero starts weighing the walk to the inn against everything else they could
+be doing, and the more serious the wound the more it outweighs; a soldier
+**holding the line** weighs it higher still and walks further for it, because
+between waves there is nowhere better for them to be.
+
+It does not drag them off a fight. The pull is small while they are barely
+scratched, and a monster near your buildings still outscores it several times
+over -- they go when the shouting stops, which is exactly when you want them
+topping up.
+
 The economy was last measured with wages still in; the table below is that
 measurement and will read high on gold left unspent until it is redone:
 
@@ -328,6 +357,15 @@ legendaries carry a line of flavour.
 
 They wear it if it beats what is in that slot by their own reckoning, and
 carry it to market if it does not.
+
+**Loot has a face.** Every item draws as a 16x16 icon -- one silhouette per
+kind of thing, so a sword reads as a sword whatever it is worth -- inside a
+frame in the colour of its tier: **grey common, blue rare, purple epic,
+orange legendary**, with a glow on the last two. The tier is deliberately not
+in the silhouette: a legendary sword is the same sword, only better kept,
+brighter metal and a live stone in it. Hovering an icon gives the whole item
+in words -- name, tier, what it does, its flavour -- so shrinking it to an
+icon costs nothing. `?sprites=1` shows every kind against every tier.
 
 ### The Marketplace
 
@@ -745,7 +783,7 @@ lot to ask before trying a specialisation out. So:
 | `?test=1` | three level-5 warriors and three level-5 rangers outside the City Centre, plus 1500 gold to build with |
 | `?heroes=warrior:2,cleric:1,wizard:1` | whatever you name, in whatever numbers |
 | `?test=1&level=3` | the same party at a different rank |
-| `?sprites=1` | a contact sheet of every hero and specialisation sprite, at size; tap to dismiss |
+| `?sprites=1` | a contact sheet of every hero and specialisation sprite, at size, plus every item icon against every tier; tap to dismiss |
 | `?mode=endgame` | skip the mode question (`easy`, `hard` or `endgame`) |
 
 They arrive at full health on walkable ground, ranked high enough that the
@@ -773,7 +811,7 @@ src/
   render.js         camera, depth-sorted drawing, pixel font, minimap
   ui.js             DOM panels and all pointer input
   art.js            every sprite, generated at runtime from code
-  sheet.js          the ?sprites=1 contact sheet of hero and specialisation art
+  sheet.js          the ?sprites=1 contact sheet of hero, specialisation and loot art
   audio.js          WebAudio chiptune SFX and music
   data.js           missions, buildings, classes, and every balance number
   fx.js             particles and floating text

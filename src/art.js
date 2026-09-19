@@ -1034,6 +1034,213 @@ export function propSprite(kind, variant = 0) {
   return c;
 }
 
+// ---------------------------------------------------------------
+// items: one 16x16 icon per kind of thing a hero can wear or swing,
+// on the same char-grid template the little folk are built from.
+//
+// The tier is deliberately NOT in the silhouette -- a legendary sword is
+// the same sword, only better kept: brighter metal and a live stone in it.
+// The rarity itself is carried by the border the HUD draws around the
+// icon, so the two readings never fight each other.
+// ---------------------------------------------------------------
+const ITEM_TIER = {
+  common: { metal: PAL.metalD, metalL: PAL.metal, gem: '#c9c2d8', gemL: '#f2eefb' },
+  rare: { metal: PAL.metalD, metalL: PAL.metal, gem: '#6fb6ff', gemL: '#cce6ff' },
+  epic: { metal: PAL.metal, metalL: '#e2e8f2', gem: '#b46fff', gemL: '#e6ccff' },
+  legendary: { metal: PAL.goldD, metalL: PAL.gold, gem: '#ffa030', gemL: '#ffe6a8' }
+};
+
+/** o outline · m/l metal · g/G stone · w/W/d wood · y/Y gold */
+const itemMap = (t) => ({
+  o: PAL.outline, m: t.metal, l: t.metalL, g: t.gem, G: t.gemL,
+  w: PAL.wood, W: PAL.woodL, d: PAL.woodD, y: PAL.gold, Y: PAL.goldD
+});
+
+const ITEM_GRIDS = {
+  sword: [
+    '......ollo......',
+    '.....ollmmo.....',
+    '.....ollmmo.....',
+    '.....ollmmo.....',
+    '.....ollmmo.....',
+    '.....ollmmo.....',
+    '.....ollmmo.....',
+    '.....ollmmo.....',
+    '.....ollmmo.....',
+    '.....ollmmo.....',
+    '..oyyyyyyyyyyo..',
+    '..oYYYYYYYYYYo..',
+    '......oddo......',
+    '......oddo......',
+    '.....oGgggo.....',
+    '......oooo......'
+  ],
+  axe: [
+    '.........owdo...',
+    '....oooooowdo...',
+    '..ooolllmowdo...',
+    '.oollllmmowdo...',
+    'ollllmmmmowdo...',
+    'ollllmmmmowdo...',
+    'ollllmmmmowdo...',
+    'ollllmmmmowdo...',
+    '.oollllmmowdo...',
+    '..ooolllmowdo...',
+    '....oooooowdo...',
+    '.........owdo...',
+    '.........owdo...',
+    '.........owdo...',
+    '.........oGgo...',
+    '.........oooo...'
+  ],
+  dagger: [
+    '................',
+    '................',
+    '................',
+    '................',
+    '.......oo.......',
+    '......olmo......',
+    '......olmo......',
+    '......olmo......',
+    '......olmo......',
+    '......olmo......',
+    '.....oyyyyo.....',
+    '......oddo......',
+    '......oddo......',
+    '.....oGgggo.....',
+    '......oooo......',
+    '................'
+  ],
+  staff: [
+    '.....oooooo.....',
+    '....oGGggggo....',
+    '.G..oGgggggo....',
+    '....oggggggo....',
+    '....oggggggo..G.',
+    '.....oooooo.....',
+    '......owdo......',
+    '......owdo......',
+    '......owdo......',
+    '......owdo......',
+    '......owdo......',
+    '......owdo......',
+    '......owdo......',
+    '......owdo......',
+    '......owdo......',
+    '......oooo......'
+  ],
+  wand: [
+    '...........G....',
+    '...G............',
+    '.....oooooo.....',
+    '.....oGgggo.....',
+    '.....oggggo..G..',
+    '.....oggggo.....',
+    '.....oooooo.....',
+    '......odwo......',
+    '......odwo......',
+    '......odwo......',
+    '......odwo......',
+    '......odwo......',
+    '......odwo......',
+    '......odwo......',
+    '......odwo......',
+    '......oooo......'
+  ],
+  chest: [
+    '................',
+    '................',
+    '...ollo..ollo...',
+    '..ollmmmmmmllo..',
+    '..ollmmmmmmllo..',
+    '..ollmmmmmmllo..',
+    '...olmmmmmmlo...',
+    '...olmlmmmmlo...',
+    '...olmlmmmmlo...',
+    '...olmlmmmmlo...',
+    '...oddddddddo...',
+    '...odddggdddo...',
+    '....oooooooo....',
+    '................',
+    '................',
+    '................'
+  ],
+  neck: [
+    '................',
+    '..mmmmmmmmmmmm..',
+    '..m..........m..',
+    '..m..........m..',
+    '...m........m...',
+    '...m........m...',
+    '....m......m....',
+    '.....m....m.....',
+    '....oooooooo....',
+    '....oGGggggo....',
+    '....oGgggggo....',
+    '....oggggggo....',
+    '....oggggggo....',
+    '.....oggggo.....',
+    '......oooo......',
+    '................'
+  ],
+  ear: [
+    '................',
+    '.....lmmmmm.....',
+    '....mm....mm....',
+    '....m......m....',
+    '....m......m....',
+    '....m......m....',
+    '....mm....mm....',
+    '.....mmmmmm.....',
+    '.......mm.......',
+    '......oooo......',
+    '.....oGgggo.....',
+    '.....oggggo.....',
+    '.....oggggo.....',
+    '......oggo......',
+    '.......oo.......',
+    '................'
+  ],
+  ring: [
+    '................',
+    '.......oo.......',
+    '......oGgo......',
+    '......oggo......',
+    '......oggo......',
+    '.....oooooo.....',
+    '....ollmmllo....',
+    '...olloooollo...',
+    '...oll....llo...',
+    '...olm....mlo...',
+    '...olm....mlo...',
+    '...omm....mmo...',
+    '...ommoooommo...',
+    '....ommmmmmo....',
+    '.....oooooo.....',
+    '................'
+  ]
+};
+
+const itemCache = new Map();
+
+/**
+ * The icon for a piece of loot. `kind` is the weapon type where there is
+ * one and the slot otherwise, which is all the silhouette depends on.
+ */
+export function itemSprite(kind, tier = 'common') {
+  const key = `i:${kind}:${tier}`;
+  let c = itemCache.get(key);
+  if (c) return c;
+  c = makeCanvas(TILE, TILE);
+  const t = ITEM_TIER[tier] || ITEM_TIER.common;
+  paint(c.getContext('2d'), ITEM_GRIDS[kind] || ITEM_GRIDS.ring, itemMap(t));
+  itemCache.set(key, c);
+  return c;
+}
+
+/** `sword:legendary` -- enough to draw the thing, small enough for an attribute. */
+export const itemArtKey = (it) => `${it.weapon || it.slot}:${it.tier}`;
+
 /** Reward flag banner. type: attack | explore | defend | fear */
 export function flagSprite(type, frame = 0) {
   const key = `f:${type}:${frame}`;

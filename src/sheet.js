@@ -3,8 +3,9 @@
 // `?sprites=1`. Not part of the game: it exists so the art can be
 // judged side by side, at size, without levelling anyone to see it.
 // ===================================================================
-import { unitSprite, makeCanvas, SPEC_SPRITES, PAL } from './art.js';
+import { unitSprite, itemSprite, makeCanvas, SPEC_SPRITES, PAL } from './art.js';
 import { CLASSES, HERO_CLASSES, SPECS } from './data.js';
+import { TIERS, TIER_ORDER } from './items.js';
 
 const SCALE = 5;
 const CELL = 16 * SCALE + 12;
@@ -18,10 +19,17 @@ const nameOf = (kind, spec) => {
   return sp ? sp.name : NAMES[spec] || spec;
 };
 
+/** Every kind of thing a hero can wear or swing, in the order it reads. */
+const ITEM_KINDS = ['sword', 'axe', 'dagger', 'staff', 'wand', 'chest', 'neck', 'ear', 'ring'];
+const LOOT_CELL = 16 * 3 + 10;
+const LOOT_ROWS = TIER_ORDER.length * LOOT_CELL + LABEL + 28;
+
 /** Draw the sheet onto a fresh canvas and return it. */
 export function drawSpriteSheet() {
   const cols = 1 + Math.max(...HERO_CLASSES.map(k => (SPEC_SPRITES[k] || []).length));
-  const c = makeCanvas(cols * CELL + 90, HERO_CLASSES.length * ROW + 10);
+  const c = makeCanvas(
+    Math.max(cols * CELL + 90, ITEM_KINDS.length * LOOT_CELL + 90),
+    HERO_CLASSES.length * ROW + LOOT_ROWS + 10);
   const ctx = c.getContext('2d');
   ctx.imageSmoothingEnabled = false;
   ctx.fillStyle = '#2a2036';
@@ -45,6 +53,29 @@ export function drawSpriteSheet() {
       });
       ctx.fillStyle = i ? PAL.white : PAL.stoneL;
       ctx.fillText(i ? nameOf(kind, key.slice(kind.length + 1)) : 'base', x0, y0 + CELL * 2 + 2);
+    });
+  });
+
+  // the loot, every kind against every tier: the icon is the same silhouette
+  // throughout, so this is really a check on the metal and the stone
+  const ly = 10 + HERO_CLASSES.length * ROW + 14;
+  ctx.fillStyle = PAL.gold;
+  ctx.fillText('LOOT', 8, ly - 12);
+  ITEM_KINDS.forEach((kind, i) => {
+    const x0 = 90 + i * LOOT_CELL;
+    ctx.fillStyle = PAL.stoneL;
+    ctx.fillText(kind, x0, ly - 12);
+    TIER_ORDER.forEach((tier, r) => {
+      const y = ly + r * LOOT_CELL;
+      ctx.fillStyle = TIERS[tier].colour;
+      ctx.fillRect(x0, y, 16 * 3 + 4, 16 * 3 + 4);
+      ctx.fillStyle = '#241a38';
+      ctx.fillRect(x0 + 2, y + 2, 16 * 3, 16 * 3);
+      ctx.drawImage(itemSprite(kind, tier), x0 + 2, y + 2, 16 * 3, 16 * 3);
+      if (!i) {
+        ctx.fillStyle = TIERS[tier].colour;
+        ctx.fillText(TIERS[tier].name, 8, y + 16);
+      }
     });
   });
   return c;

@@ -105,9 +105,9 @@ canvas{image-rendering:pixelated;image-rendering:crisp-edges}
 /* pixel icons drawn with gradients */
 .ico{width:15px;height:15px;display:inline-block;flex:none;
   background-size:contain;background-repeat:no-repeat;background-position:center;image-rendering:pixelated}
-.ico-gold{background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 8' shape-rendering='crispEdges'><path d='M1 1h6v1H1zM0 2h8v4H0zM1 6h6v1H1z' fill='%23ffc94a'/><path d='M1 3h2v2H1z' fill='%23fff3c0'/></svg>")}
-.ico-wood{background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 8' shape-rendering='crispEdges'><path d='M0 2h8v4H0z' fill='%23b4753a'/><path d='M0 3h8v1H0z' fill='%238a5526'/><path d='M0 2h2v4H0z' fill='%23d79a5c'/></svg>")}
-.ico-stone{background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 8' shape-rendering='crispEdges'><path d='M1 3h6v4H1zM2 2h4v1H2z' fill='%239fa8b8'/><path d='M2 3h2v2H2z' fill='%23d3dae6'/></svg>")}
+.ico-gold{background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' shape-rendering='crispEdges'><path d='M4 4h8v1H4zM3 5h10v3H3zM4 8h8v1H4z' fill='%23b8801c'/><path d='M5 8h8v1H5zM4 9h10v4H4zM5 13h8v1H5z' fill='%23ffc94a'/><path d='M6 10h3v2H6z' fill='%23fff3c0'/><path d='M5 6h3v1H5z' fill='%23d79a2c'/></svg>")}
+.ico-wood{background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' shape-rendering='crispEdges'><path d='M1 3h14v4H1z' fill='%238a5526'/><path d='M1 3h4v4H1z' fill='%23b4753a'/><path d='M2 4h2v2H2z' fill='%235e3c1e'/><path d='M2 9h13v4H2z' fill='%23b4753a'/><path d='M2 9h4v4H2z' fill='%23d79a5c'/><path d='M3 10h2v2H3z' fill='%238a5526'/></svg>")}
+.ico-stone{background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' shape-rendering='crispEdges'><path d='M4 3h8v4H4z' fill='%239fa8b8'/><path d='M5 4h3v2H5z' fill='%23d3dae6'/><path d='M2 8h12v6H2z' fill='%237f8896'/><path d='M3 9h4v2H3z' fill='%23d3dae6'/><path d='M8 8h1v6H8zM2 11h12v1H2z' fill='%235e6473'/></svg>")}
 .ico-pop{background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 8' shape-rendering='crispEdges'><path d='M3 1h2v2H3zM2 4h4v3H2z' fill='%237fd8a0'/></svg>")}
 .ico-day{background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 8' shape-rendering='crispEdges'><path d='M2 2h4v4H2zM3 0h2v1H3zM3 7h2v1H3zM0 3h1v2H0zM7 3h1v2H7z' fill='%23ffe9a0'/></svg>")}
 .ico-hammer{background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 8' shape-rendering='crispEdges'><path d='M1 1h5v2H1z' fill='%239fa8b8'/><path d='M3 3h2v4H3z' fill='%23b4753a'/></svg>")}
@@ -351,8 +351,39 @@ canvas{image-rendering:pixelated;image-rendering:crisp-edges}
 .gearrow .grow2{flex:1;min-width:0}
 .gearrow.empty .gslot{opacity:.5}
 .gearrow.bag .gslot{color:var(--gold)}
+.iwrap{display:flex;gap:7px;align-items:flex-start}
+.itext{flex:1;min-width:0}
 .iname{display:block;color:var(--ic,#f2e9ff)}
+.itier{font-style:normal;font-size:9px;letter-spacing:.09em;text-transform:uppercase;
+  color:var(--ic,#c9c2d8);opacity:.7;margin-left:5px}
 .istat{display:block;font-size:10.5px;color:var(--good)}
 .gearrow.empty .istat{color:var(--txt-dim);opacity:.6}
 .iflav{display:block;font-size:10px;color:var(--txt-dim);font-style:italic;line-height:1.35}
 .iprice{display:inline-block;font-size:10.5px;color:var(--gold)}
+
+/* The rarity frame. The icon says what the thing is, the border says how
+   badly you want it: grey common, blue rare, purple epic, orange legendary. */
+.ibox{
+  flex:none;width:30px;height:30px;position:relative;
+  display:grid;place-items:center;
+  background:#241a38;
+  border:2px solid var(--ic,#c9c2d8);
+  box-shadow:inset 0 0 0 1px rgba(0,0,0,.6),0 0 0 1px var(--edge-dk);
+}
+.ibox canvas{display:block;width:24px;height:24px}
+/* epics and legendaries are worth a little light of their own */
+.ibox.t-epic{box-shadow:inset 0 0 0 1px rgba(0,0,0,.6),0 0 5px -1px var(--ic)}
+.ibox.t-legendary{box-shadow:inset 0 0 0 1px rgba(0,0,0,.6),0 0 7px 0 var(--ic)}
+.gearrow.empty .ibox{border-color:var(--edge-lt);opacity:.45}
+.gearrow .grow2{padding-top:1px}
+.ibag{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:3px}
+.ibag .ibox{width:24px;height:24px}
+.ibag .ibox canvas{width:18px;height:18px}
+
+/* a cost or a price: the icon carries the meaning, the word is on hover */
+.ico-sm{width:12px;height:12px;vertical-align:-2px;margin-right:2px}
+/* a gold coin on a gold button is invisible; darken the icon to match the ink */
+.seg button.on .ico,.btn.primary .ico,.card:active .ico{filter:brightness(.42) contrast(1.7)}
+.cost{white-space:nowrap}
+.cost+.cost{margin-left:7px}
+.cost.no{color:var(--bad)}

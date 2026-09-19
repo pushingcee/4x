@@ -12,7 +12,7 @@ import { TILE } from './art.js';
 import {
   RES_RATE, CLASSES, BUILDINGS, MISSIONS, STANCES, MONSTERS, STAT_EFFECT,
   ROADSIDE, ROAD_LEASH,
-  BLESSING, HEAL_COST, MEND_RANGE, MEND_AT, CLERIC_KEEP, CLERIC_TETHER,
+  BLESSING, HEAL_COST, MEND_RANGE, MEND_AT, CLERIC_KEEP, CLERIC_TETHER, REST,
   XP_PER_HEAL, XP_PER_BLESSING, WARBAND
 } from './data.js';
 import { dist, clamp } from './util.js';
@@ -1271,6 +1271,25 @@ function chooseGoal(u, g) {
     considerCamp(l, key, value, d, 1.15 - def.courage, brave, nerve, null);
   }
 
+  // (c2) the hearth — carrying a wound is its own errand
+  // This sits outside the shopping below on purpose. An inn is not a
+  // purchase: the fire mends anybody who sits by it, so a hero with an
+  // empty purse is not only allowed to go, they are the likeliest to need
+  // to. Nothing here drags them off a fight -- the pull is small while they
+  // are barely scratched and only becomes worth crossing town for as the
+  // wound gets serious -- but between jobs it is where they now drift, and
+  // a soldier holding the line goes sooner and walks further, because
+  // between waves there is nowhere better for them to be.
+  const hurt = 1 - clamp(u.hp / u.maxHpNow, 0, 1);
+  if (hurt > 1 - REST.seek) {
+    for (const b of g.buildings) {
+      if (b.dead || !b.complete || b.def.shop !== 'rest') continue;
+      const d = dist(u.x, u.y, b.x, b.y);
+      const pull = (holding ? REST.holdPull : REST.pull) * hurt * hurt;
+      opts.push({ kind: 'shop', building: b, score: pull / (1 + (d / TILE) * 0.12) });
+    }
+  }
+
   // (d) spend the loot — heroes are terrible savers, and your taxes love it
   // A full bag is its own reason to walk into town, whatever the purse says.
   const hauling = u.bag && u.bag.length > 0;
@@ -1279,7 +1298,7 @@ function chooseGoal(u, g) {
       if (!b.complete || !b.def.shop) continue;
       if (b.def.shop === 'weapon' && u.gold < g.smithPrice(u)) continue;
       if (b.def.shop === 'potion' && u.potions >= 2) continue;
-      if (b.def.shop === 'rest' && u.hp > u.maxHpNow * 0.9) continue;
+      if (b.def.shop === 'rest') continue;          // scored above, on the wound
       if (b.def.shop === 'market' && !hauling && !marketHasBetter(u, b)) continue;
       const d = dist(u.x, u.y, b.x, b.y);
       const value = b.def.shop === 'market'

@@ -13,7 +13,7 @@ import {
   XP_TABLE, MAX_LEVEL, DROPS, LAIR_DROPS, MARKET_SLOTS, MARKET_RESTOCK,
   MISSIONS, RAIDS_ENABLED, CALLING_ORDER, DISTRESS_WINDOW,
   THREAT_PER_DAY, THREAT_CAP, SEPARATION_CAP, SPECS, XP_SHARE_BONUS, XP_SHARE_BONUS_CAP,
-  SUPPORT_SHARE, CREDIT_WINDOW, DEBUFF, BOSS, DRAGON, RAID, MODES, DEFAULT_MODE
+  SUPPORT_SHARE, CREDIT_WINDOW, DEBUFF, BOSS, DRAGON, RAID, REST, MODES, DEFAULT_MODE
 } from './data.js';
 import { makeRng, clamp, dist } from './util.js';
 import { rollItem, scoreFor, canUse, describe, TIERS } from './items.js';
@@ -54,6 +54,7 @@ export class Game {
     this.raids = 0;            // raids launched so far; every third is led by a boss
     this.dangerIn = 0;         // seconds until the danger map is redrawn
     this.wildIn = 25;
+    this.hearthIn = REST.tick; // seconds until the inns mend whoever is near them
     this.pathBudget = 0;
     this.speed = 1;
     this.paused = false;
@@ -315,6 +316,24 @@ export class Game {
       if (dist(b.x, b.y, x, y) <= b.def.radius * TILE) boost += add;
     }
     return boost;
+  }
+
+  /**
+   * The hearth. Anyone of the realm within reach of a finished inn mends,
+   * whether or not they have the coin for a bed -- which is what makes the
+   * inn somewhere a hurt soldier walks TO rather than somewhere they are
+   * only ever carried past while running away.
+   */
+  hearthTick(step) {
+    for (const b of this.buildings) {
+      if (b.dead || !b.complete || b.def.shop !== 'rest') continue;
+      const reach = REST.radius * TILE;
+      for (const u of this.units) {
+        if (u.dead || u.faction !== 'realm' || u.hp >= u.maxHpNow) continue;
+        if (dist(u.x, u.y, b.x, b.y) > reach) continue;
+        u.heal(u.maxHpNow * REST.aura * step);
+      }
+    }
   }
 
   healBuilding(x, y) {
@@ -1185,9 +1204,12 @@ export class Game {
       u.bonusDmg += 4;
       this.fx.text(b.x, b.y - 18, 'weapon +' + u.upgrades, '#ffc94a', 20);
     } else if (kind === 'rest') {
-      price = 25;
-      if (u.gold < price || u.hp > u.maxHpNow * 0.92) { u.state = 'idle'; return; }
-      u.heal(u.maxHpNow * 0.45);
+      if (u.hp >= u.maxHpNow * REST.leave) { u.state = 'idle'; return; }
+      price = REST.price;
+      // No coin for a bed is not a reason to be put back on the road: they
+      // sit by the fire on the hearth's terms instead, and stay sitting.
+      if (u.gold < price) return;
+      u.heal(u.maxHpNow * REST.bed);
     } else return;
 
     u.gold -= price;
@@ -1260,6 +1282,9 @@ export class Game {
     // the ground the realm has learned to avoid, redrawn now and then
     this.dangerIn -= dt;
     if (this.dangerIn <= 0) { this.dangerIn = 1.5; this.rebuildDanger(); }
+
+    this.hearthIn -= dt;
+    if (this.hearthIn <= 0) { this.hearthTick(REST.tick - this.hearthIn); this.hearthIn = REST.tick; }
 
     for (const b of this.buildings) if (!b.dead) b.update(dt);
     for (const l of this.lairs) if (!l.dead) l.update(dt);

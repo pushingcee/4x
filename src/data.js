@@ -179,6 +179,33 @@ export const CLERIC_KEEP = 52;
 export const MEND_AT = 0.72;
 
 /**
+ * The inn.
+ *
+ * The hearth mends anyone of the realm standing near it, purse or no purse:
+ * an inn is a place, not a transaction, and a soldier who has just spent
+ * everything at the smith is exactly the one who most needs to sit down.
+ * The bed upstairs is what costs, and that is where the innkeeper's cut --
+ * and your tax on it -- comes from.
+ *
+ * `seek` is the whole point of the building. Wounded heroes used to reach an
+ * inn only by fleeing past it; now anyone under this much health will walk
+ * there of their own accord once nothing more urgent is shouting, and a
+ * soldier holding the line walks further to do it, because between waves
+ * there is nowhere better for them to be.
+ */
+export const REST = {
+  radius: 7,        // tiles the hearth reaches
+  aura: 0.09,       // share of max health mended per second, just for being near
+  tick: 0.4,        // how often the hearth is worked out, in seconds
+  bed: 0.45,        // what a paid rest restores outright
+  price: 25,
+  seek: 0.75,       // hurt below this and they go and sit down
+  pull: 130,        // how badly, at death's door; a defender pulls harder still
+  holdPull: 210,
+  leave: 0.97       // and they are up again at this
+};
+
+/**
  * ===================================================================
  * SPECIALISATIONS -- chosen once, at the rank cap, and permanent.
  * ===================================================================
@@ -452,7 +479,7 @@ export const BUILDINGS = {
     id: 'inn', name: 'Inn', fw: 2, fh: 2, hp: 360,
     cost: { gold: 120, wood: 80, stone: 0 }, build: 11, needs: ['palace'],
     tax: 7, shop: 'rest',
-    desc: 'Heroes drink, boast, and heal fast. Idle heroes drift here between jobs.'
+    desc: 'The hearth mends anyone of the realm standing near it, coin or no coin, and wounded soldiers now come here of their own accord. Those with gold take a bed and heal outright — and you tax that.'
   },
   barracks: {
     id: 'barracks', name: 'Barracks', fw: 2, fh: 2, hp: 560,
