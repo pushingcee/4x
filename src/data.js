@@ -725,9 +725,25 @@ export const MONSTERS = {
    * to break line of sight, heal it off, or kill the thing casting it. The
    * reach is now shorter than a bow, so a ranger out-ranges it -- that is the
    * counterplay the old one never had.
+   *
+   * The first pass overshot, so they were asked for 25% more -- and the
+   * obvious dial turned out to be the wrong one. Raising the damage 25% (22
+   * to 27.5) changed nothing measurable: paired against four rank-capped
+   * heroes, fifty fights an arm, the party came out on 3.80 survivors and
+   * 84% health against 3.78 and 85%. The fight is decided by how fast the
+   * cultists DIE, not by how hard each bolt hits; five of them last about
+   * fourteen seconds either way, and a quarter more on a bolt is lost in the
+   * cleric's throughput.
+   *
+   * What does move it is how OFTEN they cast, because that multiplies the
+   * number of bolts landed inside that same fourteen seconds. The rate went
+   * from 2.1 to 1.68 -- 25% more volleys -- and the same paired test gives
+   * 2.74 survivors on 52% health against 1.96 on 36%, with fights the party
+   * walks away from clean dropping from 14 in 50 to 3. Same bolt, same burn,
+   * same reach, same counterplay; simply more of it.
    */
   cultist: {
-    id: 'cultist', name: 'Blood Cultist', hp: 280, dmg: 22, rate: 2.1, range: 64, speed: 30,
+    id: 'cultist', name: 'Blood Cultist', hp: 280, dmg: 22, rate: 1.68, range: 64, speed: 30,
     sight: 11, gold: 150, xp: 140, sprite: 'cultist', aggro: 280, raid: true,
     ranged: true, bolt: 'blood', splash: 14,
     burn: { frac: 0.5, lasts: 4 },

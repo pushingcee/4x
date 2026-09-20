@@ -541,10 +541,24 @@ mana, no cooldown, and nothing to micromanage. The Battle Hymn deepens it to
 That is the counterplay the game was missing. Splash damage punishes a clumped
 party; the ward pays a clumped party back, so where your soldiers stand becomes
 a decision instead of an accident — and killing the Paladin becomes the thing
-the monsters ought to be doing. Measured against five cultists: a Light cleric
-in the party loses it once in sixteen fights, a Paladin loses it **none**, and
-the survivors come out at 3.5 of 4 rather than 3.1. A gold pip left of the
-health bar shows who is currently sheltering under one.
+the monsters ought to be doing. A gold pip left of the health bar shows who is
+currently sheltering under one.
+
+**What the ward is worth**, measured by running the identical Paladin party
+against five cultists with the ward switched on and off, 48 fights each way
+and in both orders:
+
+| | Nobody died | Survivors | Party health |
+|---|---|---|---|
+| Ward off | 0/48 | 3.9 of 5 | 52% |
+| Ward on | 15–28/48 | 4.3–4.6 of 5 | 70–73% |
+
+Worth roughly **+0.5 of a survivor and +18 points of party health**, which is
+the difference between a fight you walk away from and one you bury people
+after. It does *not* dominate the other cleric: swapping the Paladin for a
+**Follower of the Light** in the same party comes out level (14 vs 15 fights
+with no losses in 48), because a stronger heal answers the same damage a
+different way. Two builds, both worth taking.
 
 The wizard's abilities ride the next bolt and go off wherever it lands, so a
 firestorm or a blight is aimed the way every fireball is. A **burn** ticks
@@ -689,40 +703,60 @@ question, and the last answer is remembered as the highlighted default.
 
 Three of the far monsters were not hard, they were arithmetic the player could
 not win, and the only counterplay was buying bodies with reward flags until
-the wave ran out. Measured by putting **four rank-capped heroes carrying no
-equipment at all** (two warriors, a ranger, a cleric) against five of one kind
-at day 30, sixteen times each:
+the wave ran out.
 
-| Five of | Party wiped, before | Party wiped, after | Monsters left alive, before → after |
-|---|---|---|---|
-| Goblin | 0/16 | 0/16 | 0 → 0 |
-| Skeleton | 0/16 | 0/16 | 0 → 0 |
-| Ogre | 0/16 | 0/16 | 0.1 → 0 |
-| Demon | 5/16 | 4/16 | 1.6 → 1.0 |
-| **Spider** | **15/16** | **0/16** | 3.5 → 0 |
-| Troll | 8/16 | 4/16 | 3.5 → 1.9 |
-| **Wraith** | **14/16** | **2/16** | 4.1 → 0.6 |
-| **Blood Cultist** | **16/16** | **2/16** | 4.9 → 0.5 |
+**How these are measured.** Four rank-capped heroes carrying no equipment at
+all — an Arms warrior, a Protection warrior, a Longbowman and a Follower of
+the Light — against five of one kind at day 30, in an arena emptied of
+everything else. The two stat blocks are run **alternately inside one session**,
+fifty fights each, so drift and run-order cancel out. This matters more than it
+sounds: the hero AI uses unseeded randomness, and an earlier unpaired harness
+gave 2, 6, 8, 15 and 16 wipes out of 24 for the *same* configuration. Wipe rate
+is the noisiest thing to quote; **surviving party health is the stable one.**
 
-The cultist is the headline: five of them wiped the party **every single time**
-and the party killed, on average, one twentieth of one of them. Three things
-were wrong and all three were the same mistake -- a monster whose *gimmick*
-was supposed to be the threat was also quietly carrying top-of-the-table
-damage:
+| Five of | Wipes before → after | Party health before → after |
+|---|---|---|
+| **Blood Cultist** | 49/50 → 10/50 | 2% → 45% |
+| **Wraith** | 44/50 → 32/50 | 9% → 24% |
+| **Giant Spider** | 13/50 → 0/50 | 48% → 74% |
+
+The cultist is the headline: five of them wiped the party **49 times in 50**
+and the party killed, on average, a fifth of one of them. Three things were
+wrong and all three were the same mistake — a monster whose *gimmick* was
+supposed to be the threat was also quietly carrying top-of-the-table damage:
 
 - **The cultist** threw 40 a bolt every 1.7 seconds, splashing, from a reach
-  of 92 -- longer than a ranger's bow, so nothing could answer it. It now
-  throws 22 every 2.1 seconds from a reach of 64, and **half of that arrives
-  as a fire that burns over four seconds** rather than a blow that lands. A
-  bow out-ranges it, a cleric can heal through it, and killing the caster
-  stops it. It is still the most expensive ordinary monster in the game to
-  fight -- the party ends on 64% health, worse than anything else on the list.
+  of 92 — longer than a ranger's bow, so nothing could answer it. It now
+  throws 22 from a reach of 64, and **half of that arrives as a fire that
+  burns over four seconds** rather than a blow that lands. A bow out-ranges
+  it, a cleric can heal through it, and killing the caster stops it.
 - **The wraith** hit for 42 every 1.1 seconds, the highest damage per second
   in the game, while also being faster than anything could walk away from. Now
   30 every 1.35. The 70% soak, which is the actual trick, is untouched.
 - **The spider** bit for 26 every 0.75 seconds on the fastest legs in the
   game, against a party its own venom had already slowed. Now 22 every 1.0.
   The venom is untouched.
+
+**The wraith is still the hardest thing on this list** — a bare four-hero party
+loses to five of them about two thirds of the time. That is a deliberate stop:
+they are a far-reaches monster and a party that has actually been to the far
+reaches is carrying equipment. It is the next thing to look at if they read
+wrong in play.
+
+**Damage is not always the dial.** Asked to make the cultists 25% stronger, the
+obvious change — 25% more damage, 22 to 27.5 — did **nothing measurable**: 3.80
+survivors on 84% health against 3.78 on 85%. The fight is decided by how fast
+the cultists die, not by how hard each bolt hits; five of them last about
+fourteen seconds either way and a quarter more per bolt vanishes into the
+cleric's throughput. What moved it was **casting 25% more often** (rate 2.1 to
+1.68), which multiplies the bolts landed inside that same fourteen seconds:
+2.74 survivors on 52% health becomes 1.96 on 36%, and fights the party walks
+away from unscathed drop from 14 in 50 to 3. Same bolt, same burn, same reach,
+same counterplay — simply more of it.
+
+A full five-hero party with a wizard barely notices any of it (84% health,
+never wiped in 50). That is the intended shape: the raid punishes an
+under-strength garrison, not a realm that built its guilds.
 
 The drake is left exactly as it was. Five at once wipes the party, but a Drake
 Roost garrisons two, and two is a real fight the party wins with 70% of its
