@@ -9,8 +9,8 @@ import {
   STAT_ORDER, STAT_EFFECT, RUSH_SPEED, LAIR_ALARM_RATE, LAIR_ALARM_TIME,
   SPECS, SPEC_LEVEL, POWERS, ABILITIES, STEALTH_REVEAL, DEBUFF,
   GARRISON_NEAR, GARRISON_PER_RING, GARRISON_EXTRA_CAP,
-  BLESSING, MANA_REGEN, MANA_REST, MANA_REGEN_PER_INT, XP_PER_HEAL, XP_PER_BLESSING, CREDIT_WINDOW,
-  GUILD_TIERS, FORTIFY
+  BLESSING, WARD, MANA_REGEN, MANA_REST, MANA_REGEN_PER_INT, XP_PER_HEAL, XP_PER_BLESSING, CREDIT_WINDOW,
+  GUILD_TIERS, DEPOT_TIERS, FORTIFY
 } from './data.js';
 import { clamp, dist, heroName, peasantName } from './util.js';
 import { SLOT_KEYS, slotOf, canUse, scoreFor } from './items.js';
@@ -107,16 +107,30 @@ export class Building extends Structure {
     this.builders = 0;
     this.spawnCool = 0;
     this.recruitQueue = [];
-    this.tier = 0;          // guild training, see GUILD_TIERS
+    this.tier = 0;          // guild drilling or depot plant, see tierLadder
     this.fortified = false;
     this.occupy();
   }
 
   get name() { return this.def.name; }
+  /** A depot upgrades along its own ladder; everything else along the guild one. */
+  get tierLadder() { return this.def.boost ? DEPOT_TIERS : GUILD_TIERS; }
   /** How many heroes this guild holds, drilling included. */
-  get maxHeroes() { return (this.def.maxHeroes || 0) + (this.tier ? GUILD_TIERS[this.tier - 1].slots : 0); }
-  /** The training bought so far, if any. */
-  get tierDef() { return this.tier ? GUILD_TIERS[this.tier - 1] : null; }
+  get maxHeroes() {
+    const t = this.def.guild ? this.tierDef : null;
+    return (this.def.maxHeroes || 0) + (t ? t.slots : 0);
+  }
+  /** The training or the plant bought so far, if any. */
+  get tierDef() { return this.tier ? this.tierLadder[this.tier - 1] : null; }
+  /** What this depot's speed bonus is worth, once its upgrades are counted. */
+  get boostMul() { const t = this.def.boost ? this.tierDef : null; return t ? t.boostMul : 1; }
+  /** How far the depot reaches, once its upgrades are counted. */
+  get boostRadius() {
+    const t = this.def.boost ? this.tierDef : null;
+    return (this.def.radius || 0) + (t ? t.radius : 0);
+  }
+  /** What it pays the treasury each payday, upgrades included. */
+  get taxNow() { return (this.def.tax || 0) + (this.tierDef && this.tierDef.tax ? this.tierDef.tax : 0); }
 
   addProgress(amount) {
     if (this.complete) return;
@@ -309,6 +323,9 @@ export class Unit {
     this.stealthIn = 0;        // countdown to slipping out of sight again
     this.withdraw = 0;         // breaking off after a strike from the dark
     this.blessed = 0;          // seconds left of a cleric's blessing
+    this.hymnFor = 0;          // seconds left of a paladin leaning into the ward
+    this.warded = 0;           // seconds left inside a paladin's ward
+    this.wardSoak = 1;         // how much of a blow the ward lets through
     this.gear = {};            // slot key -> item worn
     this.bag = [];             // picked up, not worn: sold at the market
     this.strikeMul = 0;        // a charged blow waiting to land
@@ -689,7 +706,10 @@ export class Unit {
    * it was aimed at; splash victims get the mark but do not feed the leech.
    */
   spellLanded(v, dmg, primary) {
-    const sp = this.specDef;
+    // A monster's mark comes off its kind; a hero's off their specialisation.
+    // Both land the same way, which is what lets a cultist's blood-fire keep
+    // burning the way a fire wizard's does.
+    const sp = this.specDef || this.def;
     if (!sp) return;
     if (v.kindClass === 'unit') {
       if (sp.burn) v.ignite(dmg * sp.burn.frac, sp.burn.lasts, this);
@@ -902,14 +922,16 @@ export class Unit {
         break;
       }
       case 'hymn': {
-        // a blessing on everyone in earshot, and a shield for the singer
+        // The ward is always on; the hymn is the paladin leaning into it.
+        // Everyone already sheltering takes nearly half again less for its
+        // duration, and the singer gets a shield of their own on top.
         this.guarded = ab.lasts;
+        this.hymnFor = ab.lasts;
         let n = 0;
         for (const a of g.units) {
           if (a.dead || a.faction !== 'realm' || a === this) continue;
           if (dist(a.x, a.y, this.x, this.y) > ab.radius) continue;
-          a.blessed = Math.max(a.blessed, BLESSING.lasts * (sp.blessMul || 1));
-          g.fx.ring(a.x, a.y - 6, BLESSING.colour, 11);
+          g.fx.ring(a.x, a.y - 6, WARD.colour, 11);
           n++;
         }
         if (n) { this.gainXp(XP_PER_BLESSING * n); this.lastSupport = g.time; }
@@ -934,6 +956,7 @@ export class Unit {
     if (src && src.kindClass === 'unit' && src.faction === 'monster'
       && this.faction === 'realm' && src.creditHit) src.creditHit(this);
     if (this.guarded > 0) n *= 0.5;         // Shield Wall, or a paladin's hymn
+    if (this.warded > 0) n *= this.wardSoak; // standing inside a paladin's ward
     if (this.blessed > 0) n *= BLESSING.soak;
     const sp = this.specDef;
     if (sp && sp.soak) n *= sp.soak;        // plate over the robe
@@ -967,6 +990,10 @@ export class Unit {
       this.hp = Math.min(this.maxHpNow, this.hp + this.def.regen * dt);
     }
     if (this.blessed > 0) this.blessed -= dt;
+    // The ward is refreshed by the paladin's own sweep; walking out of it,
+    // or the paladin going down, simply lets it run out.
+    if (this.warded > 0) { this.warded -= dt; if (this.warded <= 0) this.wardSoak = 1; }
+    if (this.hymnFor > 0) this.hymnFor -= dt;
     // Mana pays for mending and blessing, so it has to refill -- faster when
     // they are standing about than when they are working a fight.
     if (this.maxMana > 0 && this.mana < this.maxMana) {

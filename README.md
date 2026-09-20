@@ -24,10 +24,38 @@ work themselves.
 - Cover an outpost with a **Guard House** or a **Watch Tower**, because raiders go for
   whatever building is nearest and that is now yours.
 - **Build** a Barracks and **hire** a warrior, then raise a **Flag** to tempt them somewhere.
+- The build menu **opens up as you play**. Day one offers four things — hut,
+  lumberyard, mining camp, barracks — and each one you finish unlocks the next
+  rung. Everything except the blacksmith used to be available immediately,
+  because almost every building was gated on the City Centre and you start
+  with one, so the opening was eleven cards and no guidance.
+
+| Finish this | and this unlocks |
+|---|---|
+| *(nothing — day one)* | Peasant Hut, Lumberyard, Mining Camp, Barracks |
+| Peasant Hut | Marketplace |
+| Barracks | Guard House, Rangers Guild |
+| Mining Camp | Watch Tower |
+| Marketplace | Inn, Blacksmith, Wizards Guild |
+| Inn | Temple |
+
+The **Warriors Guild is gone.** It was a second Barracks with a different name
+and forty more gold on the price, it was never in the build menu to begin
+with, and drilling a Barracks now covers everything it was for.
 
 Keyboard, if you are at a desk: `B` peasants, `K` realm, `P` select peasants,
 `M` full map, `C` follow the selected unit, `space` pause, arrows pan, `+`/`-` zoom,
 shift-drag to box-select.
+
+**Every soldier wears their bars.** Anyone who fights for the realm keeps a
+health bar and a **rank bar** over them at all times — not only when hurt — so
+you can see who is close to a promotion without opening a sheet. Casters keep
+their mana bar and anyone with an ability keeps its charge bar on the same
+stack. Workers stay clean: a field of peasants with furniture over every one
+of them is unreadable. Heroes who reach the **rank cap** get a **name** over
+them in the colour of their specialisation, because level five is the one
+permanent thing that happens to a hero and from then on they are somebody you
+know by name rather than another figure in the crowd.
 
 **Gold, wood and stone are icons, not letters.** A build cost, a price, a
 bounty, a bag of ore on a peasant's back and a seam's remaining yield all read
@@ -63,10 +91,25 @@ nothing a level ever grants is rounded away.
 
 | Attribute | Effect |
 |---|---|
-| **Strength** | +2.2% melee damage per point |
+| **Strength** | +4% melee damage per point |
 | **Agility** | +1.6% attack speed per point |
 | **Constitution** | +7 health per point |
-| **Intelligence** | +4 mana per point, and +0.8% critical chance per point (capped at 45%) |
+| **Intelligence** | +4 mana per point, +0.22 mana a second, and +0.8% critical chance per point (capped at 45%) |
+
+**Strength used to buy 2.2% a point and it was not enough.** A rank-capped
+warrior did 26 damage a swing; a day-30 raider did 51 and had more health than
+the warrior did. Veterans were not meaningfully better than recruits and no
+party could out-damage a monster with a defensive trick -- trolls regenerated
+faster than four heroes could cut, wraiths soaked more than they could
+replace, and cultists simply could not be reached. At 4% a point a capped
+warrior hits for 36 and a fresh one for 16, so rank is worth something and a
+gimmick is an obstacle rather than a wall.
+
+Monsters get the same deal with one exception. The day's **threat** used to
+buy a raider all four attributes at full rate, which at 4% a point would have
+made a late raid unsurvivable. Time now makes a monster **harder to put down
+rather than quicker to kill you**: constitution, agility and intelligence
+climb at the full rate and strength at half it (`THREAT_STR_SHARE`).
 
 Peasants sit at 5 across the board and stay there — they are workers, not projects.
 Hero classes arrive lopsided, and that is the whole class system: a warrior is strong
@@ -196,6 +239,16 @@ standing still:
 | **Drill a guild: Drilled** | 220 | recruits arrive at **level 2**; the guild holds one more hero |
 | **Drill a guild: Veteran** | 520 | recruits arrive at **level 3**; the guild holds two more |
 | **Fortify a building** | a quarter of its health + 40 (a tower 150, a guard house 190, the City Centre 640) | **half again** the health, repaired to full; a tower hits 40% harder; a guard house keeps a fourth guard |
+| **Upgrade a depot: Yard** | 200 | a lumberyard or mining camp works **×1.55** as fast over **3 more tiles**, and pays 3 more tax |
+| **Upgrade a depot: Works** | 460 | **×2.2** as fast over **6 more tiles**, and pays 8 more tax |
+
+A depot used to be a thing you put down once and never thought about again: as
+good on day forty as on day nine, so the only way to gather faster was to put
+down another one. Upgrading one is the same decision drilling a guild is —
+gold, spent once, on something you already own, to make the ground you already
+hold worth more than the ground you would have to go and take. A **Works**
+lumberyard reaches seventeen tiles and more than doubles what its woodcutters
+bring in.
 
 Drilling is what closes the gap the far camps open: a Veteran barracks turns
 out level-3 warriors, two ranks up the ladder before their first fight.
@@ -289,9 +342,12 @@ within three tiles, mending and blessing as they retreat. They swing only when
 genuinely cornered.
 
 Mana comes back faster the cleverer they are: a flat rate everyone gets, plus
-a share per point of intelligence over five. A cleric at INT 23 regenerates
-3.4/second working; at INT 43, 5.8/second, out of a pool nearly twice the
-size. Putting a *quarrier* through the Temple is worth doing.
+a share per point of intelligence over five. **Both parts were roughly doubled**
+— 2.0 a second flat and 0.22 per point of INT, from 1.2 and 0.12 — because a
+cleric in a hard fight spent the whole fight waiting on the pool rather than
+deciding what to spend it on. A cleric at INT 23 now regenerates 5.9/second
+working (was 3.4); at INT 43, 10.4/second (was 5.8), out of a pool nearly
+twice the size. Putting a *quarrier* through the Temple is worth doing.
 
 Both cost **mana**, which is what intelligence has been quietly buying all
 along: 4 per point of INT, refilling slowly while they work and faster while
@@ -464,7 +520,7 @@ all, and that is the trade.
 | Cleric | Points | Always | Ability |
 |---|---|---|---|
 | **Follower of the Light** | +6 CON, +14 INT | every touch heals 40% more and reaches 30% further | **Radiance** — mends every ally nearby at once, half again as strong as a touch |
-| **Paladin** | +12 STR, +2 AGI, +14 CON, +4 INT | ×1.7 damage; takes a fifth less harm; blessings last half again as long | **Battle Hymn** — blesses everyone in earshot at once, and takes half damage for six seconds |
+| **Paladin** | +12 STR, +2 AGI, +14 CON, +4 INT | ×1.7 damage; takes a fifth less harm; **everyone standing near them takes a fifth less too** | **Battle Hymn** — deepens the ward to nearly half of all harm for six seconds, and takes half damage on top |
 
 **The Paladin is not a support unit.** Every other cleric keeps out of reach, crosses the
 map to whoever is bleeding, and swings a mace only when cornered. A Paladin does none of
@@ -473,6 +529,22 @@ as an Arms warrior with rather more health to do it behind. They sing the hymn f
 inside the line rather than behind it — it is half their own armour, so being in the
 fight is reason enough. They still patch somebody up between swings, at 60% of a
 cleric's touch, but mending is something that happens around them rather than the job.
+
+**The ward replaced the blessing.** A blessing is cast on one person at a time,
+and against a wave of casters that is no answer at all: by the time the fourth
+ally is blessed the first three are dead. A Paladin no longer blesses anybody.
+They stand there and **everyone of the realm within six tiles takes 22% less
+harm**, for as long as they are near and the Paladin is alive — no cast, no
+mana, no cooldown, and nothing to micromanage. The Battle Hymn deepens it to
+45% for six seconds instead of handing out buffs.
+
+That is the counterplay the game was missing. Splash damage punishes a clumped
+party; the ward pays a clumped party back, so where your soldiers stand becomes
+a decision instead of an accident — and killing the Paladin becomes the thing
+the monsters ought to be doing. Measured against five cultists: a Light cleric
+in the party loses it once in sixteen fights, a Paladin loses it **none**, and
+the survivors come out at 3.5 of 4 rather than 3.1. A gold pip left of the
+health bar shows who is currently sheltering under one.
 
 The wizard's abilities ride the next bolt and go off wherever it lands, so a
 firestorm or a blight is aimed the way every fireball is. A **burn** ticks
@@ -605,11 +677,57 @@ boss waves are not the default game. The boot screen asks once:
 | **Hard** | 96 tiles | the same | grow to seven, mixed kinds, a **boss** every third |
 | **Endgame** | 120 tiles | the same plus the five far camps below | the same, and the far camps march too |
 
-In **Easy** and **Hard**, razing the last camp wins the realm. In **Endgame** it
-does not — see *The thing under the last camp* below.
+In **Easy**, razing the last camp wins the realm. In **Hard** and **Endgame**
+it does not — see *The thing under the last camp* below. Hard used to end on a
+cleared map, which meant the finale existed but two thirds of the players who
+went looking for it never saw it.
 
 `?mode=easy`, `?mode=hard` or `?mode=endgame` in the address skips the
 question, and the last answer is remembered as the highlighted default.
+
+### What a raid actually costs you
+
+Three of the far monsters were not hard, they were arithmetic the player could
+not win, and the only counterplay was buying bodies with reward flags until
+the wave ran out. Measured by putting **four rank-capped heroes carrying no
+equipment at all** (two warriors, a ranger, a cleric) against five of one kind
+at day 30, sixteen times each:
+
+| Five of | Party wiped, before | Party wiped, after | Monsters left alive, before → after |
+|---|---|---|---|
+| Goblin | 0/16 | 0/16 | 0 → 0 |
+| Skeleton | 0/16 | 0/16 | 0 → 0 |
+| Ogre | 0/16 | 0/16 | 0.1 → 0 |
+| Demon | 5/16 | 4/16 | 1.6 → 1.0 |
+| **Spider** | **15/16** | **0/16** | 3.5 → 0 |
+| Troll | 8/16 | 4/16 | 3.5 → 1.9 |
+| **Wraith** | **14/16** | **2/16** | 4.1 → 0.6 |
+| **Blood Cultist** | **16/16** | **2/16** | 4.9 → 0.5 |
+
+The cultist is the headline: five of them wiped the party **every single time**
+and the party killed, on average, one twentieth of one of them. Three things
+were wrong and all three were the same mistake -- a monster whose *gimmick*
+was supposed to be the threat was also quietly carrying top-of-the-table
+damage:
+
+- **The cultist** threw 40 a bolt every 1.7 seconds, splashing, from a reach
+  of 92 -- longer than a ranger's bow, so nothing could answer it. It now
+  throws 22 every 2.1 seconds from a reach of 64, and **half of that arrives
+  as a fire that burns over four seconds** rather than a blow that lands. A
+  bow out-ranges it, a cleric can heal through it, and killing the caster
+  stops it. It is still the most expensive ordinary monster in the game to
+  fight -- the party ends on 64% health, worse than anything else on the list.
+- **The wraith** hit for 42 every 1.1 seconds, the highest damage per second
+  in the game, while also being faster than anything could walk away from. Now
+  30 every 1.35. The 70% soak, which is the actual trick, is untouched.
+- **The spider** bit for 26 every 0.75 seconds on the fastest legs in the
+  game, against a party its own venom had already slowed. Now 22 every 1.0.
+  The venom is untouched.
+
+The drake is left exactly as it was. Five at once wipes the party, but a Drake
+Roost garrisons two, and two is a real fight the party wins with 70% of its
+health left. It is the apex monster at the far edge of the map and it is
+supposed to be the wall.
 
 ### The far reaches (Endgame)
 
@@ -622,7 +740,7 @@ ogres, each with a monster that does something an ogre does not:
 | **Spider Hollow** | Giant Spider | fast, bites often, and the venom **slows** whoever it bites | 1500 |
 | **Troll Warren** | Troll | **regenerates** 5 a second -- unless it is burning | 1700 |
 | **Wraith Barrow** | Wraith | only **70%** of any blow gets through; hits like a nightmare | 1900 |
-| **Blood Shrine** | Blood Cultist | a **ranged caster** whose bolt splashes, like a wizard's | 2100 |
+| **Blood Shrine** | Blood Cultist | a **ranged caster** whose bolt **burns** where it splashes | 2100 |
 | **Drake Roost** | Drake | 560 health, breathes **fire over a line** at short range | 2900 |
 
 They sleep until day twenty to thirty, or until somebody pokes them, and

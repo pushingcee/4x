@@ -12,8 +12,8 @@ import {
   GUILD_TIERS, FORTIFY,
   XP_TABLE, MAX_LEVEL, DROPS, LAIR_DROPS, MARKET_SLOTS, MARKET_RESTOCK,
   MISSIONS, RAIDS_ENABLED, CALLING_ORDER, DISTRESS_WINDOW,
-  THREAT_PER_DAY, THREAT_CAP, SEPARATION_CAP, SPECS, XP_SHARE_BONUS, XP_SHARE_BONUS_CAP,
-  SUPPORT_SHARE, CREDIT_WINDOW, DEBUFF, BOSS, DRAGON, RAID, REST, MODES, DEFAULT_MODE
+  THREAT_PER_DAY, THREAT_CAP, THREAT_STR_SHARE, SEPARATION_CAP, SPECS, XP_SHARE_BONUS, XP_SHARE_BONUS_CAP,
+  SUPPORT_SHARE, CREDIT_WINDOW, DEBUFF, BOSS, DRAGON, RAID, REST, WARD, MODES, DEFAULT_MODE
 } from './data.js';
 import { makeRng, clamp, dist } from './util.js';
 import { rollItem, scoreFor, canUse, describe, TIERS } from './items.js';
@@ -55,6 +55,7 @@ export class Game {
     this.dangerIn = 0;         // seconds until the danger map is redrawn
     this.wildIn = 25;
     this.hearthIn = REST.tick; // seconds until the inns mend whoever is near them
+    this.wardIn = WARD.tick;   // seconds until the paladins re-cast their ward
     this.pathBudget = 0;
     this.speed = 1;
     this.paused = false;
@@ -134,7 +135,9 @@ export class Game {
       // of time: later monsters are simply bigger, faster and harder to kill
       const t = this.threat;
       if (t > 0) {
-        u.classBonus = { str: t, agi: t, con: t, int: t };
+        u.classBonus = {
+          str: Math.round(t * THREAT_STR_SHARE), agi: t, con: t, int: t
+        };
         u.hp = u.maxHpNow;
       }
     }
@@ -313,7 +316,7 @@ export class Game {
       if (b.dead || !b.complete || !b.def.boost) continue;
       const add = b.def.boost[res];
       if (!add) continue;
-      if (dist(b.x, b.y, x, y) <= b.def.radius * TILE) boost += add;
+      if (dist(b.x, b.y, x, y) <= b.boostRadius * TILE) boost += add * b.boostMul;
     }
     return boost;
   }
@@ -332,6 +335,30 @@ export class Game {
         if (u.dead || u.faction !== 'realm' || u.hp >= u.maxHpNow) continue;
         if (dist(u.x, u.y, b.x, b.y) > reach) continue;
         u.heal(u.maxHpNow * REST.aura * step);
+      }
+    }
+  }
+
+  /**
+   * The paladin's ward. Swept rather than checked on every blow: a paladin
+   * marks everyone of the realm standing near them, and the mark is what the
+   * damage path reads, so being hit stays O(1) however many paladins there
+   * are. The mark outlives the sweep by a hair so it does not flicker between
+   * them, and simply runs out if you walk away or the paladin goes down.
+   */
+  wardTick() {
+    for (const u of this.units) {
+      if (u.dead || u.faction !== 'realm') continue;
+      const sp = u.specDef;
+      if (!sp || !sp.ward) continue;
+      const soak = u.hymnFor > 0 ? WARD.hymnSoak : WARD.soak;
+      for (const a of this.units) {
+        if (a.dead || a.faction !== 'realm') continue;
+        if (dist(a.x, a.y, u.x, u.y) > WARD.range) continue;
+        // the deepest ward in reach is the one that counts
+        if (a.warded > 0) a.wardSoak = Math.min(a.wardSoak, soak);
+        else a.wardSoak = soak;
+        a.warded = WARD.tick * 1.6;
       }
     }
   }
@@ -577,8 +604,8 @@ export class Game {
   taxDue() {
     let total = 0;
     for (const b of this.buildings) {
-      if (b.dead || !b.complete || !b.def.tax) continue;
-      total += b.def.tax;
+      if (b.dead || !b.complete || !b.taxNow) continue;
+      total += b.taxNow;
     }
     return total;
   }
@@ -641,16 +668,24 @@ export class Game {
    * them: the way to field a stronger army is to pay for it up front, once,
    * rather than to be billed for it forever.
    */
+  /**
+   * Buy the next step up for a building: drilling for a guild, plant for a
+   * depot. Both ladders work the same way -- gold, once, on something you
+   * already own -- so they share the one path.
+   */
   trainGuild(b) {
-    if (!b || b.dead || !b.complete || !b.def.guild) return false;
-    const next = GUILD_TIERS[b.tier];
-    if (!next) { this.notify(`${b.name} is as drilled as it gets`, 'bad'); return false; }
-    if (this.res.gold < next.cost) { this.notify(`Need ${next.cost} gold to drill ${b.name}`, 'bad'); return false; }
+    if (!b || b.dead || !b.complete) return false;
+    if (!b.def.guild && !b.def.boost) return false;
+    const next = b.tierLadder[b.tier];
+    if (!next) { this.notify(`${b.name} is as good as it gets`, 'bad'); return false; }
+    if (this.res.gold < next.cost) { this.notify(`Need ${next.cost} gold to upgrade ${b.name}`, 'bad'); return false; }
     this.res.gold -= next.cost;
     b.tier++;
     this.fx.ring(b.x, b.y - 8, '#ffc94a', 16);
     this.fx.text(b.x, b.y - 24, next.name.toUpperCase(), '#ffc94a', 26);
-    this.notify(`${b.name} is ${next.name.toLowerCase()}: recruits arrive at level ${next.level}`, 'good');
+    this.notify(b.def.guild
+      ? `${b.name} is ${next.name.toLowerCase()}: recruits arrive at level ${next.level}`
+      : `${b.name} is now a ${next.name}: faster work over more ground`, 'good');
     this.audio.play('level');
     return true;
   }
@@ -1285,6 +1320,9 @@ export class Game {
 
     this.hearthIn -= dt;
     if (this.hearthIn <= 0) { this.hearthTick(REST.tick - this.hearthIn); this.hearthIn = REST.tick; }
+
+    this.wardIn -= dt;
+    if (this.wardIn <= 0) { this.wardIn = WARD.tick; this.wardTick(); }
 
     for (const b of this.buildings) if (!b.dead) b.update(dt);
     for (const l of this.lairs) if (!l.dead) l.update(dt);

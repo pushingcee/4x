@@ -9,7 +9,7 @@ import {
 } from './art.js';
 import { toPx, toTile } from './world.js';
 import { clamp } from './util.js';
-import { BUILDINGS, FLAGS, MISSIONS } from './data.js';
+import { BUILDINGS, FLAGS, MISSIONS, XP_TABLE, MAX_LEVEL, WARD } from './data.js';
 
 /** Bolt colours by kind: body, then the hot centre. */
 const SPELL_BOLT = {
@@ -333,6 +333,7 @@ export class Renderer {
       if (u.faction === 'monster' && !w.visible(u.tx, u.ty)) continue;
       if (u.faction === 'realm' && !w.seen(u.tx, u.ty)) continue;
       this.drawUnitBar(ctx, u);
+      this.drawNameplate(ctx, u);
     }
     for (const b of g.buildings) {
       if (!b.dead && w.seen(b.tx, b.ty)) this.drawStructureBar(ctx, b);
@@ -506,6 +507,18 @@ export class Renderer {
     ctx.restore();
   }
 
+  /**
+   * How far along the current rank a hero is, 0..1 -- or null for anyone who
+   * does not rank up at all, and for those who have run out of ranks.
+   */
+  xpFraction(u) {
+    if (!u.isHero || u.level >= MAX_LEVEL) return null;
+    const from = XP_TABLE[u.level - 1] || 0;
+    const to = XP_TABLE[u.level];
+    if (!(to > from)) return null;
+    return clamp((u.xp - from) / (to - from), 0, 1);
+  }
+
   drawUnitBar(ctx, u) {
     const hurt = u.hp < u.maxHpNow - 0.5;
     const pw = u.chargeDef;
@@ -513,11 +526,16 @@ export class Renderer {
     // (a caster's is their mana bar, drawn below)
     const showCharge = pw && !pw.mana && (u.abilityReady || u.charge > u.maxCharge * 0.5);
     const showMana = u.isCaster && u.maxMana > 0;
-    if (!hurt && !u.selected && !showCharge && !showMana && !u.boss) return;
+    // Everyone who fights for the realm keeps their bars up at all times. Only
+    // the workers stay clean: a field of peasants with furniture floating over
+    // every one of them is unreadable, and their health is not a decision you
+    // make anything out of anyway.
+    const soldier = u.faction === 'realm' && u.kind !== 'peasant';
+    if (!soldier && !hurt && !u.selected && !showCharge && !showMana && !u.boss) return;
     // clear the mission badge when there is one
     const badged = u.mission && u.mission !== 'none' && (u.kind === 'peasant' || u.isHero);
     const w = 12, x = Math.round(u.x - w / 2), y = Math.round(u.y - (badged ? 25 : 19));
-    if (hurt || u.selected) {
+    if (hurt || u.selected || soldier) {
       ctx.fillStyle = '#120c1c'; ctx.fillRect(x - 1, y - 1, w + 2, 4);
       const f = clamp(u.hp / u.maxHpNow, 0, 1);
       ctx.fillStyle = u.faction === 'monster' ? '#e05050'
@@ -525,6 +543,8 @@ export class Renderer {
       ctx.fillRect(x, y, Math.max(1, Math.round(w * f)), 2);
     }
     if (u.isHero) drawText(ctx, String(u.level), x + w + 2, y - 2, '#ffc94a');
+    // a pip on the left for anyone sheltering under a paladin's ward
+    if (u.warded > 0) { ctx.fillStyle = WARD.colour; ctx.fillRect(x - 3, y, 1, 2); }
     // rage or focus, so you can see an ability coming
     let row = y + 2;
     if (showCharge) {
@@ -540,7 +560,41 @@ export class Renderer {
       ctx.fillStyle = '#120c1c'; ctx.fillRect(x - 1, row, w + 2, 3);
       ctx.fillStyle = '#6fb6ff';
       ctx.fillRect(x, row + 1, Math.max(1, Math.round(w * mf)), 1);
+      row += 3;
     }
+    // the rank bar, always up, so you can see who is close to a promotion
+    // without opening anybody's sheet
+    const xf = this.xpFraction(u);
+    if (xf != null) {
+      ctx.fillStyle = '#120c1c'; ctx.fillRect(x - 1, row, w + 2, 3);
+      ctx.fillStyle = '#c9a227';
+      ctx.fillRect(x, row + 1, Math.max(1, Math.round(w * xf)), 1);
+    }
+  }
+
+  /**
+   * A name over the heroes who made it to the rank cap. Reaching level five
+   * is the one permanent thing that happens to a hero -- it is where the
+   * specialisation is chosen -- so from then on they are somebody you know by
+   * name on the map rather than another figure in the crowd.
+   */
+  drawNameplate(ctx, u) {
+    if (!u.isHero || u.level < MAX_LEVEL) return;
+    const sp = u.specDef;
+    // The given name only. Heroes are called things like "Gwyn the Bold" and
+    // "Hale of Thornhold", and eight of those at close zoom is a wall of text
+    // that hides the game under it -- a first name is enough to know who you
+    // are looking at, and narrow enough to sit over one person.
+    const name = u.name.split(' ')[0];
+    const tw = textWidth(name);
+    const x = Math.round(u.x - tw / 2);
+    const badged = u.mission && u.mission !== 'none';
+    const y = Math.round(u.y - (badged ? 34 : 28));
+    ctx.fillStyle = 'rgba(18,12,28,0.72)';
+    ctx.fillRect(x - 2, y - 2, tw + 4, 9);
+    ctx.fillStyle = sp ? sp.colour : '#ffc94a';
+    ctx.fillRect(x - 2, y + 7, tw + 4, 1);
+    drawText(ctx, name, x, y, sp ? sp.colour : '#ffc94a');
   }
 
   drawStructureBar(ctx, b) {

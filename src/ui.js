@@ -743,8 +743,14 @@ export class UI {
       if (def.guild) {
         const c = CLASSES[def.guild];
         actions += `<button class="btn small primary" data-recruit="${def.guild}">Hire ${c.name} ${goldAmt(c.cost.gold)} ${g.guildRoll(b, def.guild)}/${b.maxHeroes}</button>`;
-        const next = GUILD_TIERS[b.tier];
-        if (next) actions += `<button class="btn small" data-act="train" title="${next.desc}">Drill: ${next.name} ${goldAmt(next.cost)}</button>`;
+      }
+      // a guild drills; a depot gets plant. Same ladder, same button.
+      if (def.guild || def.boost) {
+        const next = b.tierLadder[b.tier];
+        if (next) {
+          actions += `<button class="btn small" data-act="train" title="${next.desc}">`
+            + `${def.guild ? 'Drill' : 'Upgrade'}: ${next.name} ${goldAmt(next.cost)}</button>`;
+        }
       }
       if (!b.fortified) actions += `<button class="btn small" data-act="fortify" title="${FORTIFY.desc}">Fortify ${goldAmt(g.fortifyCost(b))}</button>`;
     }
@@ -763,10 +769,12 @@ export class UI {
       <div class="statline">
         <span>HP <b>${Math.ceil(b.hp)}/${b.maxHp}</b></span>
         ${def.pop ? `<span>POP <b>+${def.pop}</b></span>` : ''}
-        ${def.tax ? `<span>TAX <b>+${def.tax}</b></span>` : ''}
+        ${b.taxNow ? `<span>TAX <b>+${b.taxNow}</b></span>` : ''}
+        ${def.boost ? `<span>REACH <b>${b.boostRadius} tiles</b></span>`
+          + `<span>SPEED <b>+${Math.round(Object.values(def.boost)[0] * b.boostMul * 100)}%</b></span>` : ''}
         ${def.shop === 'rest' ? `<span>HEARTH <b>${REST.radius} tiles</b></span>` : ''}
         ${def.guild ? `<span>HEROES <b>${g.units.filter(u => !u.dead && u.homeId === b.id).length}/${b.maxHeroes}</b></span>` : ''}
-        ${b.tierDef ? `<span>RECRUITS <b>level ${b.tierDef.level}</b></span>` : ''}
+        ${def.guild && b.tierDef ? `<span>RECRUITS <b>level ${b.tierDef.level}</b></span>` : ''}
       </div>
       ${def.market ? marketBlock(b) : ''}
       <div class="hint">${def.desc}</div>
@@ -1323,7 +1331,7 @@ export class UI {
     const mining = peasants.filter(p => p.mission !== 'none').length;
     html += `<div class="hint" style="margin-top:8px">
       <b>Where the money comes from.</b> ${mining} peasant${mining === 1 ? '' : 's'} on a calling,
-      plus ${g.buildings.filter(b => !b.dead && b.complete && b.def.tax).length} building's taxes
+      plus ${g.buildings.filter(b => !b.dead && b.complete && b.taxNow).length} building's taxes
       every ${12} seconds. Assign callings in the <b>Peasants</b> tab.</div>`;
 
     body.innerHTML = html;

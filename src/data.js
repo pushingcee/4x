@@ -11,7 +11,7 @@ export const COST_KEYS = ['gold', 'wood', 'stone'];
  */
 export const STATS = {
   str: { key: 'str', name: 'Strength', short: 'STR', colour: '#e07a50',
-    desc: '+2.2% melee damage per point' },
+    desc: '+4% melee damage per point' },
   agi: { key: 'agi', name: 'Agility', short: 'AGI', colour: '#7fd8a0',
     desc: '+1.6% attack speed per point' },
   con: { key: 'con', name: 'Constitution', short: 'CON', colour: '#ff9db0',
@@ -56,7 +56,7 @@ export const DISTRESS_WINDOW = 5;   // seconds a cry for help stays live
  * point now moves the needle, and moves it further.
  */
 export const STAT_EFFECT = {
-  dmgPerPoint: 0.022,     // strength, counted above the baseline of 5
+  dmgPerPoint: 0.040,     // strength, counted above the baseline of 5
   speedPerPoint: 0.016,   // agility
   hpPerPoint: 7,          // constitution
   manaPerPoint: 4,        // intelligence
@@ -133,6 +133,32 @@ export const BLESSING = {
 export const CLERIC_TETHER = 120;
 
 /**
+ * THE PALADIN'S WARD.
+ *
+ * A blessing is a thing you cast on one person at a time, and against a wave
+ * of casters that is no answer at all: by the time the fourth ally is blessed
+ * the first three are dead. The paladin no longer blesses. They stand there
+ * and everyone near them takes less harm, for as long as they are near and
+ * the paladin is alive.
+ *
+ * That is the counterplay the game was missing. Splash damage punishes a
+ * clumped party; the ward pays a clumped party back. Where you stand becomes
+ * a decision instead of an accident, and killing the paladin becomes the
+ * thing the monsters ought to do.
+ *
+ * `soak` is the share of damage that still gets through, so lower is better.
+ * The Battle Hymn deepens it to `hymnSoak` for its duration rather than
+ * handing out blessings.
+ */
+export const WARD = {
+  range: 92,          // pixels -- about six tiles, a tight formation
+  soak: 0.78,         // a fifth of the harm turned aside, always on
+  hymnSoak: 0.55,     // and nearly half of it while the hymn is up
+  tick: 0.3,          // seconds between sweeps; the mark lasts a little longer
+  colour: '#e0c060'
+};
+
+/**
  * What a caster's mana is actually for. It regenerates slowly on its own and
  * faster standing still, so intelligence buys both a deeper pool and more of
  * the things that come out of it.
@@ -143,9 +169,9 @@ export const CLERIC_TETHER = 120;
  * INT buys both a deeper pool and a faster one -- which is the whole reason
  * to put a quarrier through the temple rather than a woodcutter.
  */
-export const MANA_REGEN = 1.2;          // per second, working
-export const MANA_REST = 3.0;           // per second, standing about
-export const MANA_REGEN_PER_INT = 0.12; // added to both, per point over five
+export const MANA_REGEN = 2.0;          // per second, working
+export const MANA_REST = 4.2;           // per second, standing about
+export const MANA_REGEN_PER_INT = 0.22; // added to both, per point over five
 export const HEAL_COST = 12;
 
 /**
@@ -299,7 +325,7 @@ export const ABILITIES = {
   hymn: {
     id: 'hymn', name: 'Battle Hymn', power: 'mana', cost: 45, cd: 16, lasts: 6,
     radius: 110,
-    desc: 'Blesses everyone within earshot at once, and the paladin takes half damage for six seconds.'
+    desc: 'Deepens the ward to nearly half of all harm for six seconds, and the paladin takes half damage on top of it.'
   }
 };
 
@@ -402,8 +428,8 @@ export const SPECS = {
       id: 'paladin', name: 'Paladin', title: 'Paladin', colour: '#e0c060',
       bonus: { str: 12, agi: 2, con: 14, int: 4 }, ability: 'hymn',
       frontline: true, dmgMul: 1.7,
-      soak: 0.8, blessMul: 1.5, healMul: 0.6,
-      desc: 'Plate over the robe, and a mace they mean it with. Fights in the line, takes a fifth less harm, and a hymn that blesses everyone at once for half again as long.'
+      soak: 0.8, ward: true, healMul: 0.6,
+      desc: 'Plate over the robe, and a mace they mean it with. Fights in the line, takes a fifth less harm, and everyone standing near them takes a fifth less too.'
     }
   ]
 };
@@ -435,6 +461,24 @@ export const CALLING_ORDER = ['miner', 'woodcutter', 'quarrier', 'builder', 'war
 /**
  * Buildings. `fw/fh` footprint in tiles. `needs` gates the build menu.
  * `role` drives behaviour: depot, guild, shop, defence, housing.
+ *
+ * THE TECH TREE. Every building except the blacksmith used to be available
+ * on the first day, because almost all of them were gated on `['palace']`
+ * and the palace is what you start with -- so the opening menu was eleven
+ * cards, most of them unaffordable, and the order you built in never came
+ * out of the game telling you anything. Each prerequisite now names
+ * something you have actually done:
+ *
+ *     day one   hut, lumberyard, mining camp, barracks
+ *     a hut     -> marketplace          (people before commerce)
+ *     barracks  -> guard house, rangers guild
+ *     camp      -> watch tower          (the stone comes from somewhere)
+ *     market    -> inn, blacksmith, wizards guild
+ *     inn       -> temple
+ *
+ * The Warriors Guild is gone. It was a second barracks with a different
+ * name and forty more gold on the price, it was never in the build menu, and
+ * drilling a barracks now covers everything it was for.
  */
 export const BUILDINGS = {
   palace: {
@@ -455,17 +499,17 @@ export const BUILDINGS = {
     id: 'lumberyard', name: 'Lumberyard', fw: 2, fh: 2, hp: 320,
     cost: { gold: 70, wood: 20, stone: 10 }, build: 9,
     depot: true, boost: { wood: 0.6 }, radius: 11, tax: 4,
-    desc: 'Drop-off for timber. Woodcutters within eleven tiles fell 60% faster.'
+    desc: 'Drop-off for timber, and every woodcutter working within its reach fells faster. Upgrade it for more of both.'
   },
   mining_camp: {
     id: 'mining_camp', name: 'Mining Camp', fw: 2, fh: 2, hp: 340,
     cost: { gold: 70, wood: 40, stone: 0 }, build: 9,
     depot: true, boost: { gold: 0.5, stone: 0.5 }, radius: 11, tax: 4,
-    desc: 'Drop-off for ore and stone. Miners and quarriers within eleven tiles work 50% faster.'
+    desc: 'Drop-off for ore and stone, and every miner and quarrier within its reach works faster. Upgrade it for more of both.'
   },
   marketplace: {
     id: 'marketplace', name: 'Marketplace', fw: 2, fh: 2, hp: 380,
-    cost: { gold: 130, wood: 70, stone: 20 }, build: 12,
+    cost: { gold: 130, wood: 70, stone: 20 }, build: 12, needs: ['hut'],
     tax: 10, shop: 'market', market: true,
     desc: 'Five shelves of arms and trinkets. Heroes sell you what they cannot use and buy what beats what they are wearing -- and you tax both ends of every deal.'
   },
@@ -477,7 +521,7 @@ export const BUILDINGS = {
   },
   inn: {
     id: 'inn', name: 'Inn', fw: 2, fh: 2, hp: 360,
-    cost: { gold: 120, wood: 80, stone: 0 }, build: 11, needs: ['palace'],
+    cost: { gold: 120, wood: 80, stone: 0 }, build: 11, needs: ['marketplace'],
     tax: 7, shop: 'rest',
     desc: 'The hearth mends anyone of the realm standing near it, coin or no coin, and wounded soldiers now come here of their own accord. Those with gold take a bed and heal outright — and you tax that.'
   },
@@ -487,39 +531,33 @@ export const BUILDINGS = {
     guild: 'warrior', maxHeroes: 3, sight: 9,
     desc: 'Hires Warriors. They patrol, explore and answer reward flags -- but they pick their own fights.'
   },
-  warriors_guild: {
-    id: 'warriors_guild', name: 'Warriors Guild', fw: 2, fh: 2, hp: 620,
-    cost: { gold: 170, wood: 90, stone: 40 }, build: 16, needs: ['palace'],
-    guild: 'warrior', maxHeroes: 3,
-    desc: 'Recruits Warriors: tough, brave, cheap to please. They charge anything.'
-  },
   rangers_guild: {
     id: 'rangers_guild', name: 'Rangers Guild', fw: 2, fh: 2, hp: 520,
-    cost: { gold: 160, wood: 110, stone: 10 }, build: 15, needs: ['palace'],
+    cost: { gold: 160, wood: 110, stone: 10 }, build: 15, needs: ['barracks'],
     guild: 'ranger', maxHeroes: 3, sight: 10,
     desc: 'Hires Rangers: fast, sharp-eyed, deadly at range and never where you left them.'
   },
   wizards_guild: {
     id: 'wizards_guild', name: 'Wizards Guild', fw: 2, fh: 2, hp: 500,
-    cost: { gold: 240, wood: 80, stone: 90 }, build: 20,
+    cost: { gold: 240, wood: 80, stone: 90 }, build: 20, needs: ['marketplace'],
     guild: 'wizard', maxHeroes: 2, sight: 9,
     desc: 'Hires Wizards: fire at range that lands on a whole pack at once, wrapped in nothing but a robe.'
   },
   temple: {
     id: 'temple', name: 'Temple', fw: 2, fh: 2, hp: 560,
-    cost: { gold: 220, wood: 90, stone: 70 }, build: 19,
+    cost: { gold: 220, wood: 90, stone: 70 }, build: 19, needs: ['inn'],
     guild: 'cleric', maxHeroes: 2, resurrect: 0.5, sight: 9,
     desc: 'Hires Clerics, who go looking for the hurt and the outnumbered instead of waiting for them. Also halves the cost of raising the dead.'
   },
   guardhouse: {
     id: 'guardhouse', name: 'Guard House', fw: 2, fh: 2, hp: 600,
-    cost: { gold: 110, wood: 60, stone: 40 }, build: 12, needs: ['palace'],
+    cost: { gold: 110, wood: 60, stone: 40 }, build: 12, needs: ['barracks'],
     garrison: 3, garrisonRange: 150, tax: 2,
     desc: 'Three guards patrol nearby and never wander off. Unlike heroes, they obey.'
   },
   tower: {
     id: 'tower', name: 'Watch Tower', fw: 1, fh: 1, hp: 440,
-    cost: { gold: 90, wood: 20, stone: 80 }, build: 10, needs: ['palace'],
+    cost: { gold: 90, wood: 20, stone: 80 }, build: 10, needs: ['mining_camp'],
     attack: { dmg: 20, range: 100, rate: 1.2 }, sight: 10,
     desc: 'Shoots bolts at anything hostile in range. Also lifts the fog around it.'
   }
@@ -643,7 +681,15 @@ export const MONSTERS = {
   // harm that gets through; `venom` slows whoever it bites for that long;
   // `ranged` + `bolt` + `splash` make a caster of it.
   spider: {
-    id: 'spider', name: 'Giant Spider', hp: 300, dmg: 26, rate: 0.75, range: 14, speed: 42,
+    /**
+     * The spider's trick is the venom, not the raw output -- but at 26 a bite
+     * every three quarters of a second it quietly had the second highest
+     * damage per second in the game, on the fastest legs, against a party it
+     * had already slowed so they could not walk away from it. Five of them
+     * wiped a rank-capped party fifteen times in sixteen. It now bites for a
+     * shade less, a third less often, and the venom does the work.
+     */
+    id: 'spider', name: 'Giant Spider', hp: 300, dmg: 22, rate: 1.0, range: 14, speed: 42,
     sight: 9, gold: 110, xp: 100, sprite: 'spider', aggro: 240, raid: true, venom: 3,
     desc: 'Fast, and bites often. The venom slows whoever it gets its fangs into.'
   },
@@ -652,16 +698,40 @@ export const MONSTERS = {
     sight: 9, gold: 130, xp: 120, sprite: 'troll', aggro: 240, raid: true, big: true, regen: 5,
     desc: 'Knits itself back together as you cut it. Fire stops that.'
   },
+  /**
+   * The wraith's trick is supposed to be that steel goes THROUGH it. It was
+   * also quietly carrying the highest damage per second in the game -- 42 a
+   * blow every 1.1 seconds, faster than anything could walk away from -- so
+   * five of them wiped a rank-capped party fourteen times in sixteen. The
+   * soak is the point and stays; the damage comes down to a shade over an
+   * ogre's, which is still a nightmare without being a formality.
+   */
   wraith: {
-    id: 'wraith', name: 'Wraith', hp: 260, dmg: 42, rate: 1.1, range: 16, speed: 38,
+    id: 'wraith', name: 'Wraith', hp: 260, dmg: 30, rate: 1.35, range: 16, speed: 38,
     sight: 11, gold: 140, xp: 130, sprite: 'wraith', aggro: 260, raid: true, soak: 0.7,
-    desc: 'Half here. Steel goes through it as often as into it, and it hits like a nightmare.'
+    desc: 'Half here. Steel goes through it as often as into it, and it is quicker than you.'
   },
+  /**
+   * The blood cultist was the worst thing in the game and not in a good way.
+   * At day 30 it carried more health than a rank-capped warrior, twice the
+   * damage, splash that hit the whole party at once, and a reach of 92 --
+   * longer than a ranger's bow. Five of them deleted a full party in twenty
+   * seconds and the party could not kill a single one. The only counterplay
+   * was throwing gold at reward flags until enough bodies arrived.
+   *
+   * It is still the caster that punishes a clumped party, but the damage now
+   * arrives as a fire that BURNS rather than a blow that lands: about a third
+   * of the old hit up front and the rest over four seconds, which is a window
+   * to break line of sight, heal it off, or kill the thing casting it. The
+   * reach is now shorter than a bow, so a ranger out-ranges it -- that is the
+   * counterplay the old one never had.
+   */
   cultist: {
-    id: 'cultist', name: 'Blood Cultist', hp: 280, dmg: 40, rate: 1.7, range: 92, speed: 30,
+    id: 'cultist', name: 'Blood Cultist', hp: 280, dmg: 22, rate: 2.1, range: 64, speed: 30,
     sight: 11, gold: 150, xp: 140, sprite: 'cultist', aggro: 280, raid: true,
-    ranged: true, bolt: 'blood', splash: 22,
-    desc: 'Throws blood-fire from a distance, and it lands on everyone standing together.'
+    ranged: true, bolt: 'blood', splash: 14,
+    burn: { frac: 0.5, lasts: 4 },
+    desc: 'Throws blood-fire that sticks and keeps burning, and it lands on everyone standing together. Out-ranged by a bow.'
   },
   drake: {
     id: 'drake', name: 'Drake', hp: 560, dmg: 46, rate: 1.9, range: 46, speed: 34,
@@ -684,11 +754,12 @@ export const MONSTERS = {
 export const MODES = {
   easy: {
     id: 'easy', name: 'Easy', colour: '#7fd8a0', mapSize: 96, far: false, raids: 'classic',
-    blurb: 'The realm as it was. Four kinds of camp, the ogre den at the far end, and raids you can meet in the field.'
+    blurb: 'The realm as it was. Four kinds of camp, the ogre den at the far end, and raids you can meet in the field. Clear the map and the realm is yours.'
   },
   hard: {
     id: 'hard', name: 'Hard', colour: '#ffc94a', mapSize: 96, far: false, raids: 'waves',
-    blurb: 'The same map, but the raids mean it: bigger, mixed, and every third one led by a boss with an escort.'
+    finale: true,
+    blurb: 'The same map, but the raids mean it: bigger, mixed, and every third one led by a boss with an escort -- and razing the last camp wakes what was sleeping under it.'
   },
   endgame: {
     id: 'endgame', name: 'Endgame', colour: '#ff5a5a', mapSize: 120, far: true, raids: 'waves',
@@ -720,7 +791,7 @@ export const BOSS = {
 };
 
 /**
- * The finale, in Endgame only. Razing the last camp does not win the realm:
+ * The finale, on Hard and Endgame. Razing the last camp does not win the realm:
  * it takes the roof off whatever the camps were built over, and it comes for
  * your City Centre and does not get bored and go home. Everything you did
  * before this was the preparation.
@@ -852,6 +923,17 @@ export const LAIR_ALARM_TIME = 25;
  */
 export const THREAT_PER_DAY = 0.45;
 export const THREAT_CAP = 22;
+/**
+ * How much of the day's threat a monster spends on STRENGTH.
+ *
+ * Threat used to buy all four attributes at full rate, which -- once damage
+ * per point of strength was raised to make a veteran hero feel like one --
+ * made a day-30 raider hit harder than anything could survive. The passage
+ * of time now makes a monster harder to PUT DOWN rather than quicker to kill
+ * you: constitution, agility and intelligence climb at the full rate, and
+ * strength at this share of it.
+ */
+export const THREAT_STR_SHARE = 0.5;
 
 export const FLAGS = {
   attack: {
@@ -909,6 +991,26 @@ export const GUILD_TIERS = [
   { name: 'Veteran', cost: 520, level: 3, slots: 2,
     desc: 'Recruits arrive at level 3, and the guild holds two more.' }
 ];
+/**
+ * DEPOT UPGRADES.
+ *
+ * A lumberyard or a mining camp used to be a thing you put down once and
+ * then never thought about again: it was as good on day forty as on day
+ * nine, so the only way to gather faster was to put down another one. These
+ * are the same decision a guild's drilling is -- gold, spent once, on a
+ * building you already own, to make the ground you already hold worth more
+ * than the ground you would have to go and take.
+ *
+ * `boostMul` multiplies whatever the depot's own `boost` is, `radius` adds
+ * tiles to its reach, and `tax` is added to what it pays every payday.
+ */
+export const DEPOT_TIERS = [
+  { name: 'Yard', cost: 200, boostMul: 1.55, radius: 3, tax: 3,
+    desc: 'Half again the speed, three tiles further, and it pays more tax.' },
+  { name: 'Works', cost: 460, boostMul: 2.2, radius: 6, tax: 8,
+    desc: 'More than double the speed, six tiles further, and a serious income.' }
+];
+
 export const FORTIFY = {
   hpMul: 1.5,         // max health, and repaired to full
   towerDmgMul: 1.4,   // a fortified tower also hits harder
