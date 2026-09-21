@@ -1457,7 +1457,7 @@ export class UI {
       <b>Watch Tower</b> shoots at anything hostile and lifts the fog around it. Both cost the
       stone you went out there to cut.</p>
       <p><b>The treasury.</b> Buildings pay <b>tax</b> every twelve seconds &mdash; a
-      Marketplace 10, an Inn or Blacksmith 7, a hut or an outpost 3 or 4 &mdash; and a
+      Marketplace 10, an Inn or Blacksmith 7, an outpost 4 &mdash; and a
       gold seam pays far less than it used to. Building is how you get rich; mining only
       gets you started.</p>
       <p><b>What gold is for.</b> An army draws no wage. Spend the treasury instead on

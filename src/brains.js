@@ -20,6 +20,13 @@ import { dist, clamp } from './util.js';
 const tileDist = (a, b) => dist(a.x, a.y, b.x, b.y) / TILE;
 
 /**
+ * How far a defender drifts from the inn it is posted at, in tiles. Kept
+ * comfortably inside REST.radius so that waiting there always means being
+ * mended, rather than sometimes wandering out of the hearth's reach.
+ */
+const INN_POST = 3;
+
+/**
  * Distance from a unit to the nearest edge of a tile footprint, in pixels.
  * Centre-distance lies about diagonals and leaves workers pacing forever.
  */
@@ -1344,6 +1351,24 @@ function chooseGoal(u, g) {
  */
 function standWatch(u, g) {
   const home = g.buildings.find(b => b.id === u.homeId && !b.dead) || g.palace;
+
+  // THE INN IS THE HUB. A soldier holding the realm with nothing in sight
+  // waits by the fire rather than walking a beat, because the hearth mends
+  // whoever stands near it: the garrison is topped up when the next wave
+  // lands instead of meeting it on whatever health the last one left them.
+  //
+  // Nothing about leaving changes. A monster, a worker screaming, a flag --
+  // all of them score far above standing here, so the moment there is
+  // something to go for they go, and they drift back when it is done. The
+  // beat below is what they do when there is no inn to wait at.
+  const inn = g.nearestBuilding(u.x, u.y, b => b.complete && b.def.shop === 'rest');
+  if (inn) {
+    u.post = inn;
+    idleAround(u, g, inn.x, inn.y, INN_POST);
+    u.state = 'guard';
+    return;
+  }
+
   u.postFor = (u.postFor || 0) - 0.3;
   if (!u.post || u.post.dead || u.postFor <= 0) {
     const anchors = [

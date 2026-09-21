@@ -469,8 +469,8 @@ export const CALLING_ORDER = ['miner', 'woodcutter', 'quarrier', 'builder', 'war
  * out of the game telling you anything. Each prerequisite now names
  * something you have actually done:
  *
- *     day one   hut, lumberyard, mining camp, barracks
- *     a hut     -> marketplace          (people before commerce)
+ *     day one   lumberyard, mining camp, barracks
+ *     lumberyard -> marketplace         (the market is built out of timber)
  *     barracks  -> guard house, rangers guild
  *     camp      -> watch tower          (the stone comes from somewhere)
  *     market    -> inn, blacksmith, wizards guild
@@ -489,6 +489,16 @@ export const BUILDINGS = {
     recruit: ['peasant'],
     desc: 'Heart of the realm. Hires peasants, stores every resource, pays the taxes.'
   },
+  /**
+   * SHELVED, TEMPORARILY. The hut is not in BUILD_ORDER, so it cannot be put
+   * down, but everything about it is left intact -- put `'hut'` back at the
+   * front of BUILD_ORDER and it returns exactly as it was.
+   *
+   * Note what goes with it while it is gone: this is the ONLY building other
+   * than the City Centre that raises the population cap, so the realm is held
+   * at the palace's fourteen for the whole game. Heroes cost no population,
+   * so that is fourteen peasants and as many soldiers as the guilds hold.
+   */
   hut: {
     id: 'hut', name: 'Peasant Hut', fw: 2, fh: 2, hp: 260,
     cost: { gold: 35, wood: 25, stone: 0 }, build: 7,
@@ -509,7 +519,7 @@ export const BUILDINGS = {
   },
   marketplace: {
     id: 'marketplace', name: 'Marketplace', fw: 2, fh: 2, hp: 380,
-    cost: { gold: 130, wood: 70, stone: 20 }, build: 12, needs: ['hut'],
+    cost: { gold: 130, wood: 70, stone: 20 }, build: 12, needs: ['lumberyard'],
     tax: 10, shop: 'market', market: true,
     desc: 'Five shelves of arms and trinkets. Heroes sell you what they cannot use and buy what beats what they are wearing -- and you tax both ends of every deal.'
   },
@@ -572,7 +582,7 @@ export const BUILDINGS = {
  * now: the rich ground is the far ground, and the far ground is where the
  * lairs are.
  */
-export const BUILD_ORDER = ['hut', 'lumberyard', 'mining_camp', 'guardhouse', 'tower',
+export const BUILD_ORDER = ['lumberyard', 'mining_camp', 'guardhouse', 'tower',
   'marketplace', 'inn', 'blacksmith', 'barracks', 'rangers_guild', 'wizards_guild', 'temple'];
 
 /** Kept as an alias: nothing is switched off behind a flag any more. */

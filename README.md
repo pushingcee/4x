@@ -24,7 +24,7 @@ work themselves.
 - Cover an outpost with a **Guard House** or a **Watch Tower**, because raiders go for
   whatever building is nearest and that is now yours.
 - **Build** a Barracks and **hire** a warrior, then raise a **Flag** to tempt them somewhere.
-- The build menu **opens up as you play**. Day one offers four things — hut,
+- The build menu **opens up as you play**. Day one offers three things —
   lumberyard, mining camp, barracks — and each one you finish unlocks the next
   rung. Everything except the blacksmith used to be available immediately,
   because almost every building was gated on the City Centre and you start
@@ -32,8 +32,8 @@ work themselves.
 
 | Finish this | and this unlocks |
 |---|---|
-| *(nothing — day one)* | Peasant Hut, Lumberyard, Mining Camp, Barracks |
-| Peasant Hut | Marketplace |
+| *(nothing — day one)* | Lumberyard, Mining Camp, Barracks |
+| Lumberyard | Marketplace |
 | Barracks | Guard House, Rangers Guild |
 | Mining Camp | Watch Tower |
 | Marketplace | Inn, Blacksmith, Wizards Guild |
@@ -42,6 +42,14 @@ work themselves.
 The **Warriors Guild is gone.** It was a second Barracks with a different name
 and forty more gold on the price, it was never in the build menu to begin
 with, and drilling a Barracks now covers everything it was for.
+
+The **Peasant Hut is shelved, temporarily.** It is out of the build menu but
+everything about it is intact in `src/data.js` — put `'hut'` back at the front
+of `BUILD_ORDER` and it returns exactly as it was. Note what goes with it
+while it is away: the hut is the only building besides the City Centre that
+raises the **population cap**, so the realm sits at the palace's fourteen for
+the whole game. Heroes cost no population, so that is fourteen peasants and
+as many soldiers as your guilds will hold.
 
 Keyboard, if you are at a desk: `B` peasants, `K` realm, `P` select peasants,
 `M` full map, `C` follow the selected unit, `space` pause, arrows pan, `+`/`-` zoom,
@@ -219,7 +227,7 @@ economy.
 | Building | Tax |
 |---|---|
 | City Centre | 4 |
-| Peasant Hut | 3 |
+| Peasant Hut *(shelved)* | 3 |
 | Lumberyard / Mining Camp | 4 each |
 | Guard House | 2 |
 | Marketplace | 10 |
@@ -277,6 +285,19 @@ It does not drag them off a fight. The pull is small while they are barely
 scratched, and a monster near your buildings still outscores it several times
 over -- they go when the shouting stops, which is exactly when you want them
 topping up.
+
+**And the inn is where a garrison waits.** A soldier on the **Defend** stance
+with nothing in sight now posts at the nearest inn rather than walking a beat
+around the buildings and the workers. Standing there means standing in the
+hearth, so the garrison meets the next wave topped up instead of on whatever
+health the last one left it with -- measured, six defenders converge inside
+ten seconds, hold about two tiles out, and go from 60% health to full.
+
+Nothing about leaving changes. A monster, a worker screaming, a flag: all of
+them outscore standing at the inn by a wide margin. Four goblins landing
+twenty-two tiles away pulled half the garrison out within six seconds, and
+they were all back at the fire within a minute of the last one dying. With no
+inn built, they walk the old beat exactly as before.
 
 The economy was last measured with wages still in; the table below is that
 measurement and will read high on gold left unspent until it is redone:
@@ -669,7 +690,7 @@ hurt. A lone peasant can see off a rat; anything larger needs a warrior.
 
 ## Current scope
 
-Everything defined in `src/data.js` is now buildable: City Centre, Peasant Hut,
+Everything defined in `src/data.js` is buildable except the shelved Peasant Hut: City Centre,
 Lumberyard, Mining Camp, Guard House, Watch Tower, Marketplace, Inn, Blacksmith,
 Barracks, Rangers Guild, Wizards Guild and Temple — with peasants, four hero classes
 and flags. Nothing is switched off behind a flag any more.

@@ -977,7 +977,7 @@ export class Game {
     const cls = CLASSES[kind];
     if (!cls || !building || building.dead) return null;
     if (!building.complete) { this.notify(`${building.name} is not finished yet`, 'bad'); return null; }
-    if (this.pop + (cls.pop || 0) > this.popCap) { this.notify('Population cap reached — build huts', 'bad'); return null; }
+    if (this.pop + (cls.pop || 0) > this.popCap) { this.notify('Population cap reached', 'bad'); return null; }
     if (building.def.guild) {
       const alive = this.units.filter(u => !u.dead && u.homeId === building.id).length;
       if (alive >= building.maxHeroes) { this.notify(`${building.name} is full`, 'bad'); return null; }
